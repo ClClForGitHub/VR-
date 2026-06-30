@@ -4,6 +4,7 @@ from agent_runtime.state import (
     ArtifactRecord,
     ArtifactType,
     Asset3DRecord,
+    BlenderAssemblyPlan,
     BlenderObjectRecord,
     BlenderSceneState,
     CameraSpec,
@@ -13,6 +14,7 @@ from agent_runtime.state import (
     LightingSpec,
     ReferenceBinding,
     ReviewPatch,
+    Scene3DRecord,
     SceneSpec,
     StyleSpec,
     SubjectSpec,
@@ -183,6 +185,48 @@ def test_controller_waits_for_blender_preview_approval() -> None:
     assert plan.requires_user is True
     assert plan.actions[0].action_type == "await_user_approval"
     assert plan.actions[0].payload["viewer_scene_id"] == "viewer_scene_001"
+
+
+def test_controller_executes_existing_blender_assembly_plan_with_import_scene_asset() -> None:
+    state = AgentProjectState(
+        project_id="project_001",
+        thread_id="thread_001",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=_scene_spec(),
+        blender_assembly_plan=BlenderAssemblyPlan(
+            plan_id="assembly_plan_001",
+            placement_plans=[{"subject_id": "subject_robot", "target_region": "front_right"}],
+        ),
+        subject_assets=[
+            Asset3DRecord(
+                asset_id="asset_robot",
+                subject_id="subject_robot",
+                source_image_id="artifact_preview_001",
+                glb_uri="/tmp/robot.glb",
+                status="succeeded",
+            )
+        ],
+        scene_asset=Scene3DRecord(
+            scene_asset_id="scene_asset_001",
+            service="hy_world",
+            raw_output_type="mesh",
+            adapted_artifact_ids=["scene_glb_001"],
+            blender_import_mode="mesh_import",
+            status="adapted",
+        ),
+    )
+
+    plan = build_controller_plan(state)
+
+    assert plan.next_phase == WorkflowPhase.BLENDER_PREVIEW
+    assert [action.node_name for action in plan.actions if action.node_name] == []
+    assert plan.actions[0].domain_tool_name == "import_scene_asset"
+    assert plan.actions[0].payload == {
+        "assembly_plan_id": "assembly_plan_001",
+        "scene_asset_id": "scene_asset_001",
+        "subject_id": "subject_robot",
+        "subject_asset_id": "asset_robot",
+    }
 
 
 def test_controller_schedules_planned_blender_edit_before_preview_refresh() -> None:

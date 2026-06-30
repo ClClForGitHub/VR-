@@ -13,12 +13,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from agent_runtime.artifacts import utc_now_iso
-from agent_runtime.state import AgentProjectState, SceneSpec, SubjectSpec
+from agent_runtime.state import AgentProjectState, BlenderAssemblyPlan, CameraSpec, RenderSettings, SceneSpec, SubjectSpec
 
 
 class ComposeScenePlan(BaseModel):
     plan_id: str
-    planner: Literal["deterministic_v1"] = "deterministic_v1"
+    planner: Literal["deterministic_v1", "llm_bridge_v1"] = "deterministic_v1"
     created_at: str = Field(default_factory=utc_now_iso)
     subject_id: str | None = None
     scene_asset_id: str | None = None
@@ -72,6 +72,79 @@ def build_compose_scene_plan(
     )
 
 
+def build_compose_scene_plan_from_blender_assembly_plan(
+    state: AgentProjectState,
+    assembly_plan: BlenderAssemblyPlan,
+    *,
+    scene_asset_id: str = "workflow_scene_glb",
+    subject_asset_id: str = "workflow_subject_glb",
+) -> ComposeScenePlan:
+    """Normalize an LLM `BlenderAssemblyPlan` into the compose-script contract."""
+
+    base = build_compose_scene_plan(state, scene_asset_id=scene_asset_id, subject_asset_id=subject_asset_id)
+    subject_id = base.subject_id
+    placement = _select_placement_plan(assembly_plan, subject_id)
+    target_region = base.target_region
+    normalized = base.target_region_normalized
+    placement_reason = base.placement_reason
+    if placement is not None:
+        placement_text = " ".join(
+            str(part)
+            for part in [
+                placement.target_region,
+                placement.relation,
+                placement.composition_notes,
+            ]
+            if part
+        )
+        target_region, normalized, placement_reason = _placement_from_text(
+            placement_text,
+            fallback=(target_region, normalized, f"BlenderAssemblyPlan placement fallback from {base.target_region}."),
+        )
+
+    height_ratio = base.target_height_ratio
+    scale_reason = _scale_reason_from_assembly_plan(assembly_plan, subject_id)
+    scale_estimate = _select_scale_estimate(assembly_plan, subject_id)
+    if scale_estimate is not None:
+        if scale_estimate.scale_factor_hint is not None:
+            height_ratio = _clamp(float(scale_estimate.scale_factor_hint), 0.05, 1.5)
+            scale_reason = f"BlenderAssemblyPlan scale_factor_hint={height_ratio}."
+        elif scale_estimate.relative_scale_description:
+            height_ratio, scale_reason = _height_ratio_from_text(scale_estimate.relative_scale_description)
+
+    camera_direction = base.camera_direction
+    distance = base.camera_distance_multiplier
+    ortho = base.camera_ortho_scale_factor
+    camera_reason = base.camera_reason
+    if assembly_plan.camera_plan is not None:
+        camera_direction, distance, ortho, camera_reason = _camera_from_camera_spec(assembly_plan.camera_plan)
+    render_resolution = _render_resolution_from_render_plan(assembly_plan.render_plan) or (
+        _render_resolution_from_camera_spec(assembly_plan.camera_plan)
+        if assembly_plan.camera_plan is not None
+        else base.render_resolution
+    )
+    camera_target = _camera_target_from_placement(state.scene_spec, normalized)
+    notes = "; ".join(part for part in [assembly_plan.notes, scale_reason, base.notes] if part)
+    return ComposeScenePlan(
+        plan_id=assembly_plan.plan_id,
+        planner="llm_bridge_v1",
+        subject_id=subject_id,
+        scene_asset_id=scene_asset_id,
+        subject_asset_id=subject_asset_id,
+        target_region=target_region,
+        target_region_normalized=normalized,
+        target_height_ratio=height_ratio,
+        camera_direction=camera_direction,
+        camera_target_normalized=camera_target,
+        camera_distance_multiplier=distance,
+        camera_ortho_scale_factor=ortho,
+        render_resolution=render_resolution,
+        placement_reason=placement_reason,
+        camera_reason=_append_camera_target_reason(camera_reason, camera_target),
+        notes=notes or None,
+    )
+
+
 def _primary_subject(scene_spec: SceneSpec | None) -> SubjectSpec | None:
     if scene_spec is None or not scene_spec.subjects:
         return None
@@ -96,6 +169,15 @@ def _placement_from_scene(
                 if part
             )
     text = " ".join(text_parts).lower()
+    return _placement_from_text(text, fallback=("front_left", (-0.18, 0.18), "No explicit placement hint; using front-left composition."))
+
+
+def _placement_from_text(
+    text: str,
+    *,
+    fallback: tuple[str, tuple[float, float], str],
+) -> tuple[str, tuple[float, float], str]:
+    text = text.lower()
     wants_front = any(token in text for token in ["front", "foreground", "前景", "靠前", "in_front_of"])
     wants_back = any(token in text for token in ["behind", "back", "background", "rear", "后方", "背景"])
     wants_right = any(token in text for token in ["right", "右"])
@@ -120,17 +202,16 @@ def _placement_from_scene(
         return "back_center", (0.0, 0.24), "SceneSpec requests background placement."
     if any(token in text for token in ["near", "beside", "旁边", "附近"]):
         return "near_scene_focus", (-0.12, 0.12), "SceneSpec requests nearby placement."
-    return "front_left", (-0.18, 0.18), "No explicit placement hint; using front-left composition."
+    return fallback
 
 
 def _height_ratio_from_subject(subject: SubjectSpec | None) -> tuple[float, str]:
     if subject is None:
         return 0.42, "No subject spec; using default target height ratio 0.42."
     text = " ".join(str(part) for part in [subject.scale_hint, subject.category, subject.priority] if part).lower()
-    if any(token in text for token in ["tiny", "small", "mini", "小"]):
-        return 0.24, "Subject scale hint suggests a small asset."
-    if any(token in text for token in ["large", "giant", "tall", "huge", "大"]):
-        return 0.50, "Subject scale hint suggests a large asset."
+    ratio, reason = _height_ratio_from_text(text)
+    if reason:
+        return ratio, reason
     if subject.priority == "background":
         return 0.20, "Background subject uses a smaller height ratio."
     if subject.priority == "hero":
@@ -138,6 +219,14 @@ def _height_ratio_from_subject(subject: SubjectSpec | None) -> tuple[float, str]
     if subject.category in {"prop", "furniture"}:
         return 0.30, "Prop/furniture subject uses a moderate height ratio."
     return 0.38, "Important subject uses a balanced height ratio."
+
+
+def _height_ratio_from_text(text: str) -> tuple[float, str | None]:
+    if any(token in text for token in ["tiny", "small", "mini", "小"]):
+        return 0.24, "Subject scale hint suggests a small asset."
+    if any(token in text for token in ["large", "giant", "tall", "huge", "大"]):
+        return 0.50, "Subject scale hint suggests a large asset."
+    return 0.38, None
 
 
 def _camera_from_scene(scene_spec: SceneSpec | None) -> tuple[tuple[float, float, float], float, float, str]:
@@ -153,10 +242,23 @@ def _camera_from_scene(scene_spec: SceneSpec | None) -> tuple[tuple[float, float
         ]
         if part
     ).lower()
+    return _camera_from_text(text, default_reason="SceneSpec camera mapped to medium three-quarter orthographic preview.")
+
+
+def _camera_from_camera_spec(camera: CameraSpec) -> tuple[tuple[float, float, float], float, float, str]:
+    text = " ".join(
+        str(part)
+        for part in [camera.shot_type, camera.angle, camera.framing, camera.lens_hint]
+        if part
+    ).lower()
+    return _camera_from_text(text, default_reason="BlenderAssemblyPlan camera mapped to orthographic preview.")
+
+
+def _camera_from_text(text: str, *, default_reason: str) -> tuple[tuple[float, float, float], float, float, str]:
     direction = (1.25, -1.55, 0.85)
     distance = 2.8
     ortho = 1.55
-    reason = "SceneSpec camera mapped to medium three-quarter orthographic preview."
+    reason = default_reason
     if any(token in text for token in ["close", "portrait", "特写", "近景"]):
         distance = 2.25
         ortho = 1.18
@@ -219,6 +321,30 @@ def _render_resolution_from_scene(scene_spec: SceneSpec | None) -> tuple[int, in
         ]
         if part
     ).lower()
+    return _render_resolution_from_text(text)
+
+
+def _render_resolution_from_camera_spec(camera: CameraSpec) -> tuple[int, int]:
+    text = " ".join(
+        str(part)
+        for part in [camera.shot_type, camera.framing, camera.lens_hint]
+        if part
+    ).lower()
+    return _render_resolution_from_text(text)
+
+
+def _render_resolution_from_render_plan(render_plan: RenderSettings | None) -> tuple[int, int] | None:
+    if render_plan is None:
+        return None
+    if render_plan.resolution_x > 0 and render_plan.resolution_y > 0:
+        return (
+            int(_clamp(render_plan.resolution_x, 320, 4096)),
+            int(_clamp(render_plan.resolution_y, 240, 4096)),
+        )
+    return None
+
+
+def _render_resolution_from_text(text: str) -> tuple[int, int]:
     if any(token in text for token in ["square", "1:1", "正方形"]):
         return (1200, 1200)
     if any(token in text for token in ["vertical", "portrait", "9:16", "竖版", "竖图", "手机"]):
@@ -226,6 +352,29 @@ def _render_resolution_from_scene(scene_spec: SceneSpec | None) -> tuple[int, in
     if any(token in text for token in ["wide", "landscape", "16:9", "panorama", "横版", "全景", "广角"]):
         return (1600, 900)
     return (1400, 900)
+
+
+def _select_placement_plan(assembly_plan: BlenderAssemblyPlan, subject_id: str | None):
+    if subject_id is not None:
+        for plan in assembly_plan.placement_plans:
+            if plan.subject_id == subject_id:
+                return plan
+    return assembly_plan.placement_plans[0] if assembly_plan.placement_plans else None
+
+
+def _select_scale_estimate(assembly_plan: BlenderAssemblyPlan, subject_id: str | None):
+    if subject_id is not None:
+        for estimate in assembly_plan.scale_estimates:
+            if estimate.subject_id == subject_id:
+                return estimate
+    return assembly_plan.scale_estimates[0] if assembly_plan.scale_estimates else None
+
+
+def _scale_reason_from_assembly_plan(assembly_plan: BlenderAssemblyPlan, subject_id: str | None) -> str | None:
+    estimate = _select_scale_estimate(assembly_plan, subject_id)
+    if estimate is None:
+        return None
+    return estimate.reasoning_summary or estimate.relative_scale_description
 
 
 def _append_camera_target_reason(camera_reason: str, camera_target: tuple[float, float]) -> str:

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from agent_runtime.agent_prompts import OUTPUT_MODELS_BY_NODE
 from agent_runtime.artifacts import FileArtifactStore, utc_now_iso
+from agent_runtime.blender_assembly_planner import build_compose_scene_plan_from_blender_assembly_plan
 from agent_runtime.blender_mcp import build_safe_blender_mcp_operation_plan
 from agent_runtime.blender_mcp import BlenderLabSocketRawToolCaller
 from agent_runtime.domain_tools import allowed_tool_names
@@ -37,7 +38,7 @@ from agent_runtime.runtime_dispatch import (
     read_runtime_dispatch_plan,
 )
 from agent_runtime.runtime_jobs import RuntimeJobSpec
-from agent_runtime.state import AgentProjectState, ArtifactType, ViewerSceneState, WorkflowPhase
+from agent_runtime.state import AgentProjectState, ArtifactType, BlenderSceneState, ViewerSceneState, WorkflowPhase
 from agent_runtime.state_views import (
     MissingStateContextError,
     apply_state_updates,
@@ -108,7 +109,7 @@ class RuntimeExecutionStepResult(BaseModel):
 
 
 HANDLED_STATUSES = {"completed"}
-RUNTIME_SCRIPT_DOMAIN_TOOLS = {"export_viewer_scene", "render_preview"}
+RUNTIME_SCRIPT_DOMAIN_TOOLS = {"import_scene_asset", "export_viewer_scene", "render_preview"}
 
 
 def execute_next_runtime_job(
@@ -744,6 +745,34 @@ def _runtime_script_tool_arguments(
 ) -> tuple[dict[str, Any], str | Path | None]:
     arguments = dict(job.tool_arguments)
     blender_path = arguments.pop("blender_path", None)
+    if job.domain_tool_name == "import_scene_asset":
+        scene_glb = arguments.get("scene_glb") or _resolve_scene_asset_glb_path(state, arguments.get("scene_asset_id"))
+        asset_glb = arguments.get("asset_glb") or _resolve_subject_asset_glb_path(
+            state,
+            subject_asset_id=arguments.get("subject_asset_id"),
+            subject_id=arguments.get("subject_id"),
+        )
+        if scene_glb is None:
+            raise ValueError("import_scene_asset requires scene_glb or a state.scene_asset/artifact GLB")
+        if asset_glb is None:
+            raise ValueError("import_scene_asset requires asset_glb or a state.subject_assets GLB")
+        compose_dir = run_dir / "compose"
+        compose_dir.mkdir(parents=True, exist_ok=True)
+        arguments.setdefault("scene_glb", str(scene_glb))
+        arguments.setdefault("asset_glb", str(asset_glb))
+        arguments.setdefault("preview_png", str(compose_dir / "composed_preview.png"))
+        arguments.setdefault("output_blend", str(compose_dir / "composed_scene.blend"))
+        if not arguments.get("assembly_plan_json") and state.blender_assembly_plan is not None:
+            assembly_plan_json = compose_dir / "runtime_assembly_plan.json"
+            compose_plan = build_compose_scene_plan_from_blender_assembly_plan(
+                state,
+                state.blender_assembly_plan,
+                scene_asset_id=str(arguments.get("scene_asset_id") or "workflow_scene_glb"),
+                subject_asset_id=str(arguments.get("subject_asset_id") or "workflow_subject_glb"),
+            )
+            _write_json(assembly_plan_json, _model_to_dict(compose_plan))
+            arguments["assembly_plan_json"] = str(assembly_plan_json)
+        return arguments, blender_path
     if job.domain_tool_name == "export_viewer_scene":
         input_blend = arguments.get("input_blend") or _resolve_blend_file_path(state)
         if input_blend is None:
@@ -778,7 +807,14 @@ def _persist_runtime_script_domain_tool_outputs(
 ) -> tuple[AgentProjectState, StateCheckpointRecord]:
     updated = state
     artifact_store = FileArtifactStore(run_dir / "artifacts")
-    if job.domain_tool_name == "export_viewer_scene":
+    if job.domain_tool_name == "import_scene_asset":
+        updated = _apply_import_scene_asset_outputs(
+            state=updated,
+            artifact_store=artifact_store,
+            arguments=arguments,
+            execution_id=execution_id,
+        )
+    elif job.domain_tool_name == "export_viewer_scene":
         updated = _apply_export_viewer_outputs(
             state=updated,
             artifact_store=artifact_store,
@@ -813,9 +849,63 @@ def _persist_runtime_script_domain_tool_outputs(
     _write_json(run_dir / "summary.json", summary_payload)
     _write_json(run_dir / "frontend_status.json", _model_to_dict(build_frontend_status(state=updated, summary=summary_payload)))
     _write_json(run_dir / "delivery_handoff.json", _model_to_dict(build_delivery_handoff(updated)))
-    if job.domain_tool_name == "render_preview":
+    if job.domain_tool_name in {"import_scene_asset", "render_preview"}:
         build_and_save_runtime_dispatch_plan(run_dir)
     return updated, checkpoint
+
+
+def _apply_import_scene_asset_outputs(
+    *,
+    state: AgentProjectState,
+    artifact_store: FileArtifactStore,
+    arguments: dict[str, Any],
+    execution_id: str,
+) -> AgentProjectState:
+    output_blend = Path(arguments["output_blend"]).expanduser().resolve()
+    preview_png = Path(arguments["preview_png"]).expanduser().resolve()
+    if not output_blend.is_file():
+        raise FileNotFoundError(f"composed Blender file was not produced: {output_blend}")
+    if not preview_png.is_file():
+        raise FileNotFoundError(f"composed preview PNG was not produced: {preview_png}")
+    blend_artifact = artifact_store.register_file(
+        output_blend,
+        ArtifactType.BLENDER_FILE,
+        artifact_id=f"runtime_{execution_id}_composed_blend",
+        semantic_role="composed_blender_scene",
+        metadata={
+            "stage": "runtime_import_scene_asset",
+            "execution_id": execution_id,
+            "assembly_plan_json": arguments.get("assembly_plan_json"),
+        },
+    )
+    preview_artifact = artifact_store.register_file(
+        preview_png,
+        ArtifactType.BLENDER_PREVIEW_RENDER,
+        artifact_id=f"runtime_{execution_id}_composed_preview_png",
+        semantic_role="composed_blender_preview",
+        metadata={
+            "stage": "runtime_import_scene_asset",
+            "execution_id": execution_id,
+            "assembly_plan_json": arguments.get("assembly_plan_json"),
+        },
+    )
+    scene_asset_id = arguments.get("scene_asset_id") or (state.scene_asset.scene_asset_id if state.scene_asset else None)
+    blender_scene = BlenderSceneState(
+        blender_scene_id=f"blender_scene_{execution_id}",
+        blend_file_artifact_id=blend_artifact.artifact_id,
+        preview_image_id=preview_artifact.artifact_id,
+        camera=state.blender_assembly_plan.camera_plan if state.blender_assembly_plan is not None else None,
+        lighting=state.blender_assembly_plan.lighting_plan if state.blender_assembly_plan is not None else None,
+        render_settings=state.blender_assembly_plan.render_plan if state.blender_assembly_plan is not None else None,
+        scene_asset_id=str(scene_asset_id) if scene_asset_id is not None else None,
+        last_synced_at=utc_now_iso(),
+    )
+    state.artifacts = [*state.artifacts, blend_artifact, preview_artifact]
+    return apply_state_updates(
+        state,
+        node_name="BlenderCommandExecutor",
+        updates={"blender_scene": blender_scene},
+    )
 
 
 def _apply_export_viewer_outputs(
@@ -961,11 +1051,19 @@ def _save_runtime_script_domain_tool_checkpoint(
 ) -> StateCheckpointRecord:
     store = FileStateCheckpointStore(run_dir / "checkpoints")
     latest = store.latest_checkpoint(project_id=state.project_id, thread_id=state.thread_id)
-    stage = "runtime_export_viewer" if job.domain_tool_name == "export_viewer_scene" else "runtime_render_preview"
+    stage = {
+        "import_scene_asset": "runtime_import_scene_asset",
+        "export_viewer_scene": "runtime_export_viewer",
+        "render_preview": "runtime_render_preview",
+    }.get(job.domain_tool_name, "runtime_script_domain_tool")
     return store.save_checkpoint(
         state,
         reason=f"{stage}_completed" if dispatch_result.ok else f"{stage}_failed",
-        node_name="ScenePreviewExporter" if job.domain_tool_name == "export_viewer_scene" else "BlenderPreviewRenderer",
+        node_name={
+            "import_scene_asset": "BlenderCommandExecutor",
+            "export_viewer_scene": "ScenePreviewExporter",
+            "render_preview": "BlenderPreviewRenderer",
+        }.get(job.domain_tool_name, "RuntimeScriptTool"),
         parent_checkpoint_id=latest.checkpoint_id if latest is not None else None,
         metadata={
             "stage": stage,
@@ -988,7 +1086,11 @@ def _append_runtime_script_domain_tool_to_summary(
     execution_id: str,
     arguments: dict[str, Any],
 ) -> None:
-    stage = "export_viewer" if job.domain_tool_name == "export_viewer_scene" else "render_preview"
+    stage = {
+        "import_scene_asset": "compose",
+        "export_viewer_scene": "export_viewer",
+        "render_preview": "render_preview",
+    }.get(job.domain_tool_name, str(job.domain_tool_name))
     summary.setdefault("ok", True)
     summary.setdefault("workflow", "runtime-console")
     requested = summary.setdefault("requested_stages", [])
@@ -1007,6 +1109,9 @@ def _append_runtime_script_domain_tool_to_summary(
     }
     if job.domain_tool_name == "export_viewer_scene":
         summary["latest_viewer_scene_path"] = str(Path(arguments["viewer_glb"]).expanduser().resolve())
+    if job.domain_tool_name == "import_scene_asset":
+        summary["latest_blend_path"] = str(Path(arguments["output_blend"]).expanduser().resolve())
+        summary["latest_preview_image_path"] = str(Path(arguments["preview_png"]).expanduser().resolve())
     if job.domain_tool_name == "render_preview":
         summary["phase"] = WorkflowPhase.BLENDER_PREVIEW.value
         summary["latest_preview_image_path"] = str(Path(arguments["preview_png"]).expanduser().resolve())
@@ -1041,6 +1146,60 @@ def _resolve_viewer_glb_path(state: AgentProjectState) -> Path | None:
         for artifact in state.artifacts:
             if artifact.artifact_id == artifact_id:
                 return Path(artifact.uri).expanduser().resolve()
+    return None
+
+
+def _resolve_scene_asset_glb_path(state: AgentProjectState, scene_asset_id: Any = None) -> Path | None:
+    target_id = str(scene_asset_id) if scene_asset_id is not None else None
+    if state.scene_asset is not None:
+        if target_id is None or state.scene_asset.scene_asset_id == target_id:
+            for artifact_id in state.scene_asset.adapted_artifact_ids:
+                path = _artifact_uri_by_id(state, artifact_id, artifact_type=ArtifactType.SCENE_3D_ASSET)
+                if path is not None:
+                    return path
+    for artifact in state.artifacts:
+        if target_id is not None and artifact.artifact_id != target_id:
+            continue
+        if artifact.artifact_type == ArtifactType.SCENE_3D_ASSET:
+            return Path(artifact.uri).expanduser().resolve()
+    return None
+
+
+def _resolve_subject_asset_glb_path(
+    state: AgentProjectState,
+    *,
+    subject_asset_id: Any = None,
+    subject_id: Any = None,
+) -> Path | None:
+    target_asset_id = str(subject_asset_id) if subject_asset_id is not None else None
+    target_subject_id = str(subject_id) if subject_id is not None else None
+    for asset in state.subject_assets:
+        if target_asset_id is not None and asset.asset_id != target_asset_id:
+            continue
+        if target_subject_id is not None and asset.subject_id != target_subject_id:
+            continue
+        if asset.glb_uri:
+            return Path(asset.glb_uri).expanduser().resolve()
+    for artifact in state.artifacts:
+        if target_asset_id is not None and artifact.artifact_id != target_asset_id:
+            continue
+        if artifact.artifact_type == ArtifactType.SUBJECT_3D_ASSET:
+            return Path(artifact.uri).expanduser().resolve()
+    return None
+
+
+def _artifact_uri_by_id(
+    state: AgentProjectState,
+    artifact_id: str,
+    *,
+    artifact_type: ArtifactType | None = None,
+) -> Path | None:
+    for artifact in state.artifacts:
+        if artifact.artifact_id != artifact_id:
+            continue
+        if artifact_type is not None and artifact.artifact_type != artifact_type:
+            continue
+        return Path(artifact.uri).expanduser().resolve()
     return None
 
 

@@ -278,13 +278,17 @@ def _blender_assembly_plan(
 ) -> ControllerPlan:
     actions: list[ControllerAction] = []
     if state.blender_scene is None:
-        actions.extend(
-            [
-                _node_action(WorkflowPhase.BLENDER_ASSEMBLY_PLANNING, "BlenderAssemblyPlanner", reason),
-                _node_action(WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION, "BlenderCommandExecutor", "execute_blender_plan"),
-                _node_action(WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION, "SceneStateSynchronizer", "sync_blender_state"),
-            ]
-        )
+        if state.blender_assembly_plan is None:
+            actions.append(_node_action(WorkflowPhase.BLENDER_ASSEMBLY_PLANNING, "BlenderAssemblyPlanner", reason))
+        else:
+            actions.append(
+                _tool_action(
+                    WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+                    "import_scene_asset",
+                    "execute_blender_assembly_plan",
+                    payload=_blender_assembly_tool_payload(state),
+                )
+            )
     if state.viewer_scene is None:
         actions.append(
             _tool_action(
@@ -305,6 +309,44 @@ def _blender_assembly_plan(
         next_phase=WorkflowPhase.BLENDER_PREVIEW,
         actions=actions,
     )
+
+
+def _blender_assembly_tool_payload(state: AgentProjectState) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    if state.blender_assembly_plan is not None:
+        payload["assembly_plan_id"] = state.blender_assembly_plan.plan_id
+    if state.scene_asset is not None:
+        payload["scene_asset_id"] = state.scene_asset.scene_asset_id
+    subject_id = _primary_assembly_subject_id(state)
+    if subject_id is not None:
+        payload["subject_id"] = subject_id
+    subject_asset_id = _subject_asset_id_for_subject(state, subject_id)
+    if subject_asset_id is not None:
+        payload["subject_asset_id"] = subject_asset_id
+    return payload
+
+
+def _primary_assembly_subject_id(state: AgentProjectState) -> str | None:
+    if state.blender_assembly_plan is not None:
+        for placement in state.blender_assembly_plan.placement_plans:
+            if placement.subject_id:
+                return placement.subject_id
+    if state.scene_spec is not None and state.scene_spec.subjects:
+        return state.scene_spec.subjects[0].subject_id
+    if state.subject_assets:
+        return state.subject_assets[0].subject_id
+    return None
+
+
+def _subject_asset_id_for_subject(state: AgentProjectState, subject_id: str | None) -> str | None:
+    if subject_id is not None:
+        for asset in state.subject_assets:
+            if asset.subject_id == subject_id and (asset.glb_uri or asset.mesh_uri or asset.obj_uri):
+                return asset.asset_id
+    for asset in state.subject_assets:
+        if asset.glb_uri or asset.mesh_uri or asset.obj_uri:
+            return asset.asset_id
+    return None
 
 
 def _pending_action_plan(state: AgentProjectState) -> ControllerPlan:

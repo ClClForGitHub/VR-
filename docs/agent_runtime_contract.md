@@ -276,8 +276,14 @@ Runtime state-apply contract:
 - only completed execution records with parsed JSON can be applied;
 - dry-run results, user gates, delegated long jobs, and missing outputs are not
   written into state;
-- currently supported apply nodes are `ReferenceBindingValidator`,
-  `SceneSpecCompiler`, and `ConceptPromptPlanner`;
+- currently supported apply nodes include `ReferenceBindingValidator`,
+  `SceneSpecCompiler`, `ConceptPromptPlanner`, `FeedbackPatchParser`,
+  `RegenerationRouter`, `BlenderAssemblyPlanner`, and `BlenderEditRouter`;
+- `BlenderAssemblyPlanner` candidates write `state.blender_assembly_plan`,
+  move the run to `BLENDER_ASSEMBLY_EXECUTION`, and rebuild
+  `runtime_plan.json` toward the existing script-backed
+  `import_scene_asset` domain tool. The runtime normalizes that plan into the
+  compose-script `assembly_plan.json` contract before Blender execution;
 - successful apply writes `state.json`, `summary.json`,
   `frontend_status.json`, `runtime_apply.jsonl`,
   `runtime_apply_summary.json`, and a checkpoint snapshot under

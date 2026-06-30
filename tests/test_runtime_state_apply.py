@@ -11,11 +11,13 @@ from agent_runtime.state import (
     AgentProjectState,
     ArtifactRecord,
     ArtifactType,
+    Asset3DRecord,
     BlenderObjectRecord,
     BlenderSceneState,
     ConceptBundle,
     ConceptPromptPack,
     ReviewPatch,
+    Scene3DRecord,
     SceneSpec,
     UserTurn,
     ViewerSceneObjectRecord,
@@ -424,6 +426,77 @@ def test_runtime_state_apply_hydrates_blender_objects_from_viewer_for_full_asset
     jobs = plan_payload["runtime_plan"]["jobs"]
     assert jobs[0]["domain_tool_name"] == "move_subject"
     assert jobs[0]["tool_arguments"] == {"subject_id": "subject_plush", "location": [0.5, 1.0, 1.5]}
+
+
+def test_runtime_state_apply_blender_assembly_planner_records_plan_and_schedules_import(tmp_path: Path) -> None:
+    run_dir = tmp_path / "outputs" / "runs" / "run_blender_assembly_planner"
+    run_dir.mkdir(parents=True)
+    state = AgentProjectState(
+        project_id="p",
+        thread_id="t",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_PLANNING,
+        scene_spec=SceneSpec(**_scene_spec_payload()),
+        subject_assets=[
+            Asset3DRecord(
+                asset_id="asset_robot",
+                subject_id="subject_robot",
+                source_image_id="concept_robot",
+                glb_uri=str(tmp_path / "robot.glb"),
+                status="succeeded",
+            )
+        ],
+        scene_asset=Scene3DRecord(
+            scene_asset_id="scene_asset_001",
+            service="hy_world",
+            raw_output_type="mesh",
+            adapted_artifact_ids=["scene_glb_001"],
+            blender_import_mode="mesh_import",
+            status="adapted",
+        ),
+    )
+    (run_dir / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
+    (run_dir / "summary.json").write_text(json.dumps({"ok": True, "workflow": "runtime-console"}), encoding="utf-8")
+    _write_completed_execution(
+        run_dir,
+        execution_id="exec_assembly_plan",
+        job_id="job_01_blender_assembly_planning_BlenderAssemblyPlanner",
+        node_name="BlenderAssemblyPlanner",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_PLANNING,
+        parsed_output={
+            "plan_id": "assembly_plan_runtime_001",
+            "placement_plans": [
+                {
+                    "subject_id": "subject_robot",
+                    "target_region": "front_right",
+                    "composition_notes": "Place the hero in the front-right third.",
+                }
+            ],
+            "scale_estimates": [
+                {
+                    "subject_id": "subject_robot",
+                    "relative_scale_description": "large hero subject",
+                    "scale_factor_hint": 0.5,
+                }
+            ],
+            "camera_plan": {"shot_type": "close-up", "angle": "high angle"},
+            "render_plan": {"engine": "cycles", "resolution_x": 1080, "resolution_y": 1440},
+            "notes": "Use the existing compose script boundary.",
+        },
+    )
+
+    result = apply_next_runtime_candidate(run_dir)
+    state_payload = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+    plan_payload = json.loads((run_dir / "runtime_plan.json").read_text(encoding="utf-8"))
+
+    assert result.ok is True
+    assert result.record is not None
+    assert result.record.applied_fields == ["blender_assembly_plan", "phase"]
+    assert state_payload["phase"] == "BLENDER_ASSEMBLY_EXECUTION"
+    assert state_payload["blender_assembly_plan"]["plan_id"] == "assembly_plan_runtime_001"
+    jobs = plan_payload["runtime_plan"]["jobs"]
+    assert jobs[0]["domain_tool_name"] == "import_scene_asset"
+    assert jobs[0]["tool_arguments"]["assembly_plan_id"] == "assembly_plan_runtime_001"
+    assert jobs[0]["tool_arguments"]["subject_asset_id"] == "asset_robot"
 
 
 def _write_completed_execution(

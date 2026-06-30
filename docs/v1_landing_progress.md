@@ -7173,3 +7173,68 @@ Boundary:
   LLM/MCP assembly planner.
 - It improves layout/camera semantics for the existing compose/export path and
   keeps Blender execution behind the same script/domain-tool boundary.
+
+## 2026-06-30 UI29 Runtime Assembly Planner Apply Bridge
+
+Goal: close the runtime gap where `BlenderAssemblyPlanner` had a prompt/schema
+and context, but a completed candidate could not yet become executable Blender
+assembly work.
+
+Implementation:
+
+- Added `AgentProjectState.blender_assembly_plan` as the authoritative stored
+  `BlenderAssemblyPlan` candidate.
+- Added `BlenderAssemblyPlanner` as the mutation owner for that field.
+- `runtime_state_apply.apply_next_runtime_candidate(...)` now supports
+  completed `BlenderAssemblyPlanner` records, validates them with Pydantic,
+  writes `state.blender_assembly_plan`, advances to
+  `BLENDER_ASSEMBLY_EXECUTION`, checkpoints, refreshes `frontend_status.json`,
+  and rebuilds `runtime_plan.json`.
+- `controller.build_controller_plan(...)` now schedules `BlenderAssemblyPlanner`
+  only when no assembly plan exists. Once a plan exists, it schedules the
+  existing script-backed `import_scene_asset` domain tool with artifact/plan ids.
+- `runtime_execution.execute_next_runtime_job(...)` now treats
+  `import_scene_asset` as a runtime script-backed domain tool, resolves scene
+  and subject GLBs from state/artifacts, writes a run-local
+  `compose/runtime_assembly_plan.json`, and calls the existing
+  `ScriptDomainToolDispatcher`.
+- Added a bridge from `BlenderAssemblyPlan` to `ComposeScenePlan` so LLM output
+  is normalized into the compose-script contract instead of being passed to
+  Blender directly.
+- Non-dry-run `import_scene_asset` can now register the produced `.blend` and
+  preview PNG as artifacts and update `BlenderSceneState` through the existing
+  state mutation guard.
+
+Verification:
+
+```bash
+python -m py_compile agent_runtime/state.py agent_runtime/state_views.py \
+  agent_runtime/blender_assembly_planner.py agent_runtime/controller.py \
+  agent_runtime/runtime_state_apply.py agent_runtime/runtime_execution.py \
+  agent_runtime/runtime_jobs.py
+python -m pytest \
+  tests/test_controller.py::test_controller_executes_existing_blender_assembly_plan_with_import_scene_asset \
+  tests/test_runtime_state_apply.py::test_runtime_state_apply_blender_assembly_planner_records_plan_and_schedules_import \
+  tests/test_runtime_execution.py::test_runtime_execution_dry_runs_import_scene_asset_from_assembly_plan \
+  tests/test_runtime_execution.py::test_runtime_execution_live_import_scene_asset_registers_blender_scene \
+  tests/test_blender_assembly_planner.py -q
+python -m pytest tests/test_state.py tests/test_state_views.py tests/test_controller.py \
+  tests/test_runtime_jobs.py tests/test_runtime_state_apply.py \
+  tests/test_runtime_execution.py tests/test_runtime_loop.py \
+  tests/test_blender_assembly_planner.py -q
+python -m pytest -q
+```
+
+Results:
+
+```text
+8 passed in 0.44s
+63 passed in 0.94s
+342 passed in 4.95s
+```
+
+Boundary:
+
+- This closes the candidate-apply and script-job bridge for assembly planning.
+- It does not claim mature visual layout intelligence or a fresh non-dry-run
+  full-asset preview using a live provider plan.

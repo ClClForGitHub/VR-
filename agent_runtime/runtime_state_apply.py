@@ -16,6 +16,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from agent_runtime.agent_prompts import (
+    BlenderAssemblyPlan,
     BlenderEditRouterOutput,
     ConceptPromptPlannerOutput,
     FeedbackPatchParserOutput,
@@ -355,6 +356,25 @@ def _apply_node_output(
             "next_phase": output.next_phase.value,
             "reason": output.reason,
             "affected_artifact_ids": list(output.affected_artifact_ids),
+        }
+
+    if node_name == "BlenderAssemblyPlanner":
+        output = BlenderAssemblyPlan(**parsed_output)
+        updates = {
+            "blender_assembly_plan": output,
+            "phase": WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        }
+        applied_fields = ["blender_assembly_plan"]
+        if state.phase != WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION:
+            applied_fields.append("phase")
+        updated = apply_state_updates(state, node_name="BlenderAssemblyPlanner", updates=updates)
+        return updated, applied_fields, {
+            "plan_id": output.plan_id,
+            "placement_plan_count": len(output.placement_plans),
+            "scale_estimate_count": len(output.scale_estimates),
+            "has_camera_plan": output.camera_plan is not None,
+            "has_lighting_plan": output.lighting_plan is not None,
+            "has_render_plan": output.render_plan is not None,
         }
 
     if node_name == "BlenderEditRouter":
@@ -758,6 +778,7 @@ def _select_candidate_execution(
             "ConceptPromptPlanner",
             "FeedbackPatchParser",
             "RegenerationRouter",
+            "BlenderAssemblyPlanner",
             "BlenderEditRouter",
         }:
             return record

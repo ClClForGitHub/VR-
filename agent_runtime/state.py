@@ -654,6 +654,7 @@ class AgentProjectState(BaseModel):
     reference_bindings: list[ReferenceBinding] = Field(default_factory=list)
     scene_spec: SceneSpec | None = None
     concept_bundle: ConceptBundle | None = None
+    blender_assembly_plan: BlenderAssemblyPlan | None = None
     review_patches: list[ReviewPatch] = Field(default_factory=list)
     subject_assets: list[Asset3DRecord] = Field(default_factory=list)
     scene_asset: Scene3DRecord | None = None

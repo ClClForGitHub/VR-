@@ -308,6 +308,8 @@ def _command_hint(tool: str, *, profile_id: str | None) -> str | None:
         return "workflow_runner scene-asset"
     if tool in {"generate_concept_images", "regenerate_concept_images"}:
         return "workflow_runner codex-self or provider-backed image generation"
+    if tool == "import_scene_asset":
+        return "domain_dispatcher import_scene_asset"
     if tool in {"export_viewer_scene", "render_preview"}:
         return f"domain_dispatcher {tool}"
     if tool in {

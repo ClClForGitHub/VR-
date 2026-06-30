@@ -349,6 +349,13 @@ Acceptance:
 - Dry-run evidence:
   `/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui28_assembly_plan_dryrun/compose/assembly_plan.json`
   with `camera_target_normalized=[-0.072, 0.072]`.
+- Runtime bridge:
+  completed `BlenderAssemblyPlanner` candidates now apply into
+  `state.blender_assembly_plan`, rebuild `runtime_plan.json` to the existing
+  `import_scene_asset` domain tool, normalize the candidate into the
+  compose-script `runtime_assembly_plan.json` contract, and can dry-run the
+  script-backed assembly job. Targeted verification: `7 passed in 0.34s`;
+  related runtime/controller suite: `62 passed in 0.84s`.
 
 ### P5 - Review Loop
 

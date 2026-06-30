@@ -19,6 +19,8 @@ from agent_runtime.state import (
     AgentProjectState,
     ArtifactRecord,
     ArtifactType,
+    Asset3DRecord,
+    BlenderAssemblyPlan,
     BlenderObjectRecord,
     BlenderSceneState,
     CameraSpec,
@@ -26,6 +28,7 @@ from agent_runtime.state import (
     EnvironmentSpec,
     LightingSpec,
     ReviewPatch,
+    Scene3DRecord,
     SceneSpec,
     StyleSpec,
     SubjectSpec,
@@ -354,6 +357,53 @@ def test_runtime_execution_dry_runs_viewer_refresh_script_job(tmp_path: Path, mo
     assert json.loads((run_dir / "state.json").read_text(encoding="utf-8"))["viewer_scene"] is None
 
 
+def test_runtime_execution_dry_runs_import_scene_asset_from_assembly_plan(tmp_path: Path, monkeypatch) -> None:
+    run_dir = _assembly_import_run_dir(tmp_path)
+    calls = _patch_fake_script_dispatcher(monkeypatch)
+    plan = build_and_save_runtime_dispatch_plan(run_dir)
+    assert plan.runtime_plan.jobs[0].domain_tool_name == "import_scene_asset"
+
+    result = execute_next_runtime_job(run_dir, dry_run=True)
+
+    assert result.ok is True
+    assert result.record is not None
+    assert result.record.status == "dry_run"
+    assert result.record.domain_tool_name == "import_scene_asset"
+    assert calls[0][0] == "import_scene_asset"
+    assert calls[0][2] is True
+    assert calls[0][1]["scene_glb"].endswith("scene_glb.glb")
+    assert calls[0][1]["asset_glb"].endswith("subject_glb.glb")
+    assert calls[0][1]["preview_png"].endswith("compose/composed_preview.png")
+    assembly_plan = json.loads(Path(calls[0][1]["assembly_plan_json"]).read_text(encoding="utf-8"))
+    assert assembly_plan["planner"] == "llm_bridge_v1"
+    assert assembly_plan["plan_id"] == "assembly_plan_runtime_001"
+    assert assembly_plan["target_region"] == "front_right"
+    assert assembly_plan["target_height_ratio"] == 0.5
+
+
+def test_runtime_execution_live_import_scene_asset_registers_blender_scene(tmp_path: Path, monkeypatch) -> None:
+    run_dir = _assembly_import_run_dir(tmp_path)
+    calls = _patch_fake_script_dispatcher(monkeypatch)
+    build_and_save_runtime_dispatch_plan(run_dir)
+
+    result = execute_next_runtime_job(run_dir, dry_run=False)
+
+    assert result.ok is True
+    assert result.record is not None
+    assert result.record.status == "completed"
+    assert result.record.domain_tool_name == "import_scene_asset"
+    assert calls[0][0] == "import_scene_asset"
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["blender_scene"]["blend_file_artifact_id"].startswith("runtime_")
+    assert state["blender_scene"]["preview_image_id"].startswith("runtime_")
+    assert {artifact["artifact_type"] for artifact in state["artifacts"]} >= {
+        "BLENDER_FILE",
+        "BLENDER_PREVIEW_RENDER",
+    }
+    runtime_plan = json.loads((run_dir / "runtime_plan.json").read_text(encoding="utf-8"))
+    assert runtime_plan["runtime_plan"]["jobs"][0]["domain_tool_name"] == "export_viewer_scene"
+
+
 def test_runtime_execution_live_viewer_refresh_and_preview_rebuilds_plan(tmp_path: Path, monkeypatch) -> None:
     run_dir = _viewer_refresh_run_dir(tmp_path)
     calls = _patch_fake_script_dispatcher(monkeypatch)
@@ -676,6 +726,58 @@ def _viewer_refresh_run_dir(tmp_path: Path) -> Path:
     return run_dir
 
 
+def _assembly_import_run_dir(tmp_path: Path) -> Path:
+    run_dir = tmp_path / "outputs" / "runs" / "run_assembly_import"
+    run_dir.mkdir(parents=True)
+    scene_glb = _artifact(tmp_path, "scene_glb", ArtifactType.SCENE_3D_ASSET, ".glb", b"scene")
+    subject_glb = _artifact(tmp_path, "subject_glb", ArtifactType.SUBJECT_3D_ASSET, ".glb", b"subject")
+    state = AgentProjectState(
+        project_id="project_assembly_import",
+        thread_id="runtime_console",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=_scene_spec(),
+        blender_assembly_plan=BlenderAssemblyPlan(
+            plan_id="assembly_plan_runtime_001",
+            placement_plans=[
+                {
+                    "subject_id": "subject_robot",
+                    "target_region": "front_right",
+                    "composition_notes": "Place the hero in the foreground right third.",
+                }
+            ],
+            scale_estimates=[
+                {
+                    "subject_id": "subject_robot",
+                    "relative_scale_description": "large hero subject",
+                    "scale_factor_hint": 0.5,
+                }
+            ],
+            camera_plan=CameraSpec(shot_type="close-up", angle="high angle"),
+        ),
+        subject_assets=[
+            Asset3DRecord(
+                asset_id=subject_glb.artifact_id,
+                subject_id="subject_robot",
+                source_image_id="concept_robot",
+                glb_uri=subject_glb.uri,
+                status="succeeded",
+            )
+        ],
+        scene_asset=Scene3DRecord(
+            scene_asset_id="scene_asset_001",
+            service="hy_world",
+            raw_output_type="mesh",
+            adapted_artifact_ids=[scene_glb.artifact_id],
+            blender_import_mode="mesh_import",
+            status="adapted",
+        ),
+        artifacts=[scene_glb, subject_glb],
+    )
+    (run_dir / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
+    (run_dir / "summary.json").write_text("{}", encoding="utf-8")
+    return run_dir
+
+
 def _patch_fake_script_dispatcher(monkeypatch):
     calls = []
 
@@ -701,6 +803,10 @@ def _patch_fake_script_dispatcher(monkeypatch):
                     ),
                     encoding="utf-8",
                 )
+            if not dry_run and domain_tool_name == "import_scene_asset":
+                Path(args["output_blend"]).parent.mkdir(parents=True, exist_ok=True)
+                Path(args["output_blend"]).write_bytes(b"blend")
+                Path(args["preview_png"]).write_bytes(b"png")
             if not dry_run and domain_tool_name == "render_preview":
                 Path(args["preview_png"]).parent.mkdir(parents=True, exist_ok=True)
                 Path(args["preview_png"]).write_bytes(b"png")
@@ -730,7 +836,7 @@ def _patch_fake_script_dispatcher(monkeypatch):
                 arguments=args,
                 outputs={
                     key: args[key]
-                    for key in ("viewer_glb", "scene_state_json", "preview_png", "preview_blend")
+                    for key in ("viewer_glb", "scene_state_json", "output_blend", "preview_png", "preview_blend")
                     if key in args
                 },
                 tool_call_record=record,

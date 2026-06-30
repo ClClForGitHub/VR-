@@ -64,6 +64,11 @@ CONTROLLED_STATE_FIELD_OWNERS: dict[str, frozenset[str]] = {
             "BlenderEditRouter",
         }
     ),
+    "blender_assembly_plan": frozenset(
+        {
+            "BlenderAssemblyPlanner",
+        }
+    ),
     "viewer_scene": frozenset(
         {
             "ScenePreviewExporter",

@@ -120,6 +120,11 @@ Done enough to rely on:
   target height ratio, camera direction, camera target offset, camera distance,
   orthographic framing, and aspect-aware render resolution. The existing
   compose script consumes this plan without replacing the Blender pipeline.
+- Runtime assembly-planner bridge: completed `BlenderAssemblyPlanner`
+  candidates can now be applied into `state.blender_assembly_plan`, rebuild the
+  controller/runtime plan toward `import_scene_asset`, normalize the LLM plan
+  into the compose-script contract, and execute the same script-backed domain
+  tool path in dry-run or non-dry-run mode.
 - SceneSpec-driven non-dry-run assembly: the local-e2e workflow can now load a
   saved `scene_spec.json`, produce `compose/assembly_plan.json`, execute
   Blender compose/export/viewer-check, and hand off to deterministic delivery
