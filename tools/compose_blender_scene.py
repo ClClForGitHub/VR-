@@ -1,9 +1,10 @@
 import json
+import math
 import sys
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 def bounds_of(objects):
@@ -148,6 +149,7 @@ def main():
     target_height_ratio = numeric_value(assembly_plan.get("target_height_ratio"), 0.42, minimum=0.05, maximum=1.5)
     target_height = scene_height * target_height_ratio
     scale = target_height / asset_height
+    subject_yaw_degrees = numeric_value(assembly_plan.get("subject_yaw_degrees"), 0.0, minimum=-180.0, maximum=180.0)
 
     region_x, region_y = numeric_pair(assembly_plan.get("target_region_normalized"), (-0.18, 0.18))
     target = Vector((
@@ -155,10 +157,16 @@ def main():
         scene_center.y + scene_size.y * region_y,
         scene_min.z,
     ))
+    asset_transform = (
+        Matrix.Translation(target + Vector((0, 0, target_height * 0.5)))
+        @ Matrix.Rotation(math.radians(subject_yaw_degrees), 4, "Z")
+        @ Matrix.Diagonal((scale, scale, scale, 1.0))
+        @ Matrix.Translation(-asset_center)
+    )
     for obj in asset_objects:
-        obj.location = (obj.location - asset_center) * scale + target + Vector((0, 0, target_height * 0.5))
-        obj.scale *= scale
+        obj.matrix_world = asset_transform @ obj.matrix_world
         obj.name = "Hunyuan3D_" + obj.name
+    bpy.context.view_layer.update()
 
     all_meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     all_min, all_max = bounds_of(all_meshes)
@@ -218,6 +226,7 @@ def main():
     if assembly_plan:
         print(f"Assembly plan: {assembly_plan.get('plan_id', 'unnamed')}")
     print(f"Asset scale: {scale:.6f}")
+    print(f"Asset yaw degrees: {subject_yaw_degrees:.3f}")
     print(f"Asset target: {tuple(round(v, 4) for v in target)}")
     print(f"Camera direction: {tuple(round(v, 4) for v in camera_direction)}")
     print(f"Camera target: {tuple(round(v, 4) for v in camera_target)}")

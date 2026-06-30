@@ -354,8 +354,16 @@ Acceptance:
   `state.blender_assembly_plan`, rebuild `runtime_plan.json` to the existing
   `import_scene_asset` domain tool, normalize the candidate into the
   compose-script `runtime_assembly_plan.json` contract, and can dry-run the
-  script-backed assembly job. Targeted verification: `7 passed in 0.34s`;
-  related runtime/controller suite: `62 passed in 0.84s`.
+  script-backed assembly job. Targeted verification: `8 passed in 0.44s`;
+  related runtime/controller suite: `63 passed in 0.94s`.
+- Subject orientation contract:
+  `ComposeScenePlan` now includes optional `subject_yaw_degrees`; deterministic
+  SceneSpec planning infers facing direction from orientation text, the LLM
+  bridge preserves explicit `PlacementPlan.transform_hint.rotation_euler.z`,
+  and `tools/compose_blender_scene.py` rotates the imported subject asset
+  around its center before final placement. Verification: `6 passed in 0.32s`,
+  related script/domain/workflow/runtime slice `40 passed in 0.40s`, full suite
+  `344 passed in 4.54s`.
 
 ### P5 - Review Loop
 

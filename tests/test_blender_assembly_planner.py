@@ -1,6 +1,7 @@
-from agent_runtime.blender_assembly_planner import build_compose_scene_plan
+from agent_runtime.blender_assembly_planner import build_compose_scene_plan, build_compose_scene_plan_from_blender_assembly_plan
 from agent_runtime.state import (
     AgentProjectState,
+    BlenderAssemblyPlan,
     CameraSpec,
     EnvironmentSpec,
     LightingSpec,
@@ -60,6 +61,7 @@ def test_build_compose_scene_plan_uses_scene_spec_hints() -> None:
     assert plan.target_region_normalized[0] > 0
     assert plan.target_region_normalized[1] < 0
     assert plan.target_height_ratio == 0.50
+    assert plan.subject_yaw_degrees == 0.0
     assert plan.camera_target_normalized[0] > 0
     assert plan.camera_target_normalized[1] < 0
     assert plan.camera_distance_multiplier < 2.8
@@ -147,6 +149,84 @@ def test_build_compose_scene_plan_uses_portrait_resolution_for_vertical_request(
     assert plan.render_resolution == (1080, 1440)
 
 
+def test_build_compose_scene_plan_infers_subject_orientation_toward_center() -> None:
+    state = AgentProjectState(
+        project_id="project",
+        thread_id="thread",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=SceneSpec(
+            scene_id="scene_004",
+            title="Robot display",
+            user_goal="把机器人放到右前方，并让它朝向中心。",
+            style=StyleSpec(visual_style="stylized"),
+            environment=EnvironmentSpec(environment_type="studio", description="display room"),
+            lighting=LightingSpec(description="soft studio light"),
+            camera=CameraSpec(shot_type="medium"),
+            subjects=[
+                SubjectSpec(
+                    subject_id="robot_001",
+                    display_name="robot",
+                    category="character",
+                    priority="hero",
+                    description="a small robot",
+                    pose_or_state="朝向中心",
+                    placement_hint="right foreground",
+                )
+            ],
+        ),
+    )
+
+    plan = build_compose_scene_plan(state)
+
+    assert plan.target_region == "front_right"
+    assert plan.subject_yaw_degrees == 90.0
+    assert "scene center" in plan.orientation_reason
+
+
+def test_blender_assembly_plan_bridge_prefers_transform_hint_yaw() -> None:
+    state = AgentProjectState(
+        project_id="project",
+        thread_id="thread",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=SceneSpec(
+            scene_id="scene_005",
+            title="Robot bridge",
+            user_goal="Put the robot on the left.",
+            style=StyleSpec(visual_style="stylized"),
+            environment=EnvironmentSpec(environment_type="studio", description="display room"),
+            lighting=LightingSpec(description="soft studio light"),
+            camera=CameraSpec(shot_type="medium"),
+            subjects=[
+                SubjectSpec(
+                    subject_id="robot_001",
+                    display_name="robot",
+                    category="character",
+                    priority="hero",
+                    description="a robot",
+                    placement_hint="left foreground",
+                )
+            ],
+        ),
+    )
+    assembly_plan = BlenderAssemblyPlan(
+        plan_id="assembly_plan_001",
+        placement_plans=[
+            {
+                "subject_id": "robot_001",
+                "target_region": "front_left",
+                "composition_notes": "Even if the text says facing right, use the explicit transform.",
+                "transform_hint": {"rotation_euler": (0.0, 0.0, -35.0)},
+            }
+        ],
+    )
+
+    plan = build_compose_scene_plan_from_blender_assembly_plan(state, assembly_plan)
+
+    assert plan.planner == "llm_bridge_v1"
+    assert plan.subject_yaw_degrees == -35.0
+    assert "transform_hint.rotation_euler.z" in plan.orientation_reason
+
+
 def test_build_compose_scene_plan_fallback_without_scene_spec() -> None:
     state = AgentProjectState(project_id="project", thread_id="thread", phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION)
 
@@ -156,6 +236,7 @@ def test_build_compose_scene_plan_fallback_without_scene_spec() -> None:
     assert plan.target_region == "front_left"
     assert plan.target_region_normalized == (-0.18, 0.18)
     assert plan.target_height_ratio == 0.42
+    assert plan.subject_yaw_degrees == 0.0
     assert plan.camera_target_normalized == (0.0, 0.0)
     assert plan.camera_ortho_scale_factor == 1.55
     assert plan.render_resolution == (1400, 900)

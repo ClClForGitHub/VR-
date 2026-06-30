@@ -164,6 +164,7 @@ Current local compose contract:
   "target_region": "front_left",
   "target_region_normalized": [-0.18, 0.18],
   "target_height_ratio": 0.42,
+  "subject_yaw_degrees": 0.0,
   "camera_direction": [1.25, -1.55, 0.85],
   "camera_target_normalized": [0.0, 0.0],
   "camera_distance_multiplier": 2.8,
@@ -178,6 +179,12 @@ passes it to `tools/compose_blender_scene.py`. The plan is recorded in
 `camera_target_normalized` is optional for backward compatibility; when present
 it shifts the orthographic camera look-at target in normalized scene X/Y space
 so off-center foreground/background subjects stay inspectable.
+`subject_yaw_degrees` is optional for backward compatibility; when present it
+rotates the imported subject asset around the scene Z axis after scale
+normalization and before final placement. The deterministic planner infers it
+from explicit facing/orientation text, and the LLM bridge prefers
+`PlacementPlan.transform_hint.rotation_euler.z` when the field is explicitly
+present.
 
 Do not assume WorldMirror coordinates are metric. Treat the scene coordinate system as arbitrary unless a calibration step is added.
 

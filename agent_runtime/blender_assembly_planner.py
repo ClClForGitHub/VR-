@@ -26,12 +26,14 @@ class ComposeScenePlan(BaseModel):
     target_region: str = "front_left"
     target_region_normalized: tuple[float, float] = (-0.18, 0.18)
     target_height_ratio: float = 0.42
+    subject_yaw_degrees: float = 0.0
     camera_direction: tuple[float, float, float] = (1.25, -1.55, 0.85)
     camera_target_normalized: tuple[float, float] = (0.0, 0.0)
     camera_distance_multiplier: float = 2.8
     camera_ortho_scale_factor: float = 1.55
     render_resolution: tuple[int, int] = (1400, 900)
     placement_reason: str = "Fallback placement: subject visible in front-left third of the scene."
+    orientation_reason: str = "Fallback orientation: keep imported asset yaw unchanged."
     camera_reason: str = "Fallback camera: three-quarter orthographic preview."
     notes: str | None = None
 
@@ -51,6 +53,7 @@ def build_compose_scene_plan(
     camera_target = _camera_target_from_placement(scene_spec, normalized)
     render_resolution = _render_resolution_from_scene(scene_spec)
     height_ratio, scale_reason = _height_ratio_from_subject(subject)
+    subject_yaw_degrees, orientation_reason = _orientation_from_scene(scene_spec, subject, normalized)
     subject_id = subject.subject_id if subject is not None else None
     notes = "; ".join(part for part in [scale_reason, _scene_notes(scene_spec)] if part)
     return ComposeScenePlan(
@@ -61,12 +64,14 @@ def build_compose_scene_plan(
         target_region=target_region,
         target_region_normalized=normalized,
         target_height_ratio=height_ratio,
+        subject_yaw_degrees=subject_yaw_degrees,
         camera_direction=camera_direction,
         camera_target_normalized=camera_target,
         camera_distance_multiplier=distance,
         camera_ortho_scale_factor=ortho,
         render_resolution=render_resolution,
         placement_reason=placement_reason,
+        orientation_reason=orientation_reason,
         camera_reason=_append_camera_target_reason(camera_reason, camera_target),
         notes=notes or None,
     )
@@ -87,6 +92,8 @@ def build_compose_scene_plan_from_blender_assembly_plan(
     target_region = base.target_region
     normalized = base.target_region_normalized
     placement_reason = base.placement_reason
+    subject_yaw_degrees = base.subject_yaw_degrees
+    orientation_reason = base.orientation_reason
     if placement is not None:
         placement_text = " ".join(
             str(part)
@@ -101,6 +108,16 @@ def build_compose_scene_plan_from_blender_assembly_plan(
             placement_text,
             fallback=(target_region, normalized, f"BlenderAssemblyPlan placement fallback from {base.target_region}."),
         )
+        explicit_yaw = _yaw_from_transform_hint(placement.transform_hint)
+        if explicit_yaw is not None:
+            subject_yaw_degrees = explicit_yaw
+            orientation_reason = "BlenderAssemblyPlan transform_hint.rotation_euler.z controls subject yaw."
+        else:
+            subject_yaw_degrees, orientation_reason = _orientation_from_text(
+                placement_text,
+                normalized,
+                fallback=(subject_yaw_degrees, orientation_reason),
+            )
 
     height_ratio = base.target_height_ratio
     scale_reason = _scale_reason_from_assembly_plan(assembly_plan, subject_id)
@@ -134,12 +151,14 @@ def build_compose_scene_plan_from_blender_assembly_plan(
         target_region=target_region,
         target_region_normalized=normalized,
         target_height_ratio=height_ratio,
+        subject_yaw_degrees=subject_yaw_degrees,
         camera_direction=camera_direction,
         camera_target_normalized=camera_target,
         camera_distance_multiplier=distance,
         camera_ortho_scale_factor=ortho,
         render_resolution=render_resolution,
         placement_reason=placement_reason,
+        orientation_reason=orientation_reason,
         camera_reason=_append_camera_target_reason(camera_reason, camera_target),
         notes=notes or None,
     )
@@ -227,6 +246,85 @@ def _height_ratio_from_text(text: str) -> tuple[float, str | None]:
     if any(token in text for token in ["large", "giant", "tall", "huge", "大"]):
         return 0.50, "Subject scale hint suggests a large asset."
     return 0.38, None
+
+
+def _orientation_from_scene(
+    scene_spec: SceneSpec | None,
+    subject: SubjectSpec | None,
+    target_region_normalized: tuple[float, float],
+) -> tuple[float, str]:
+    if scene_spec is None and subject is None:
+        return 0.0, "No orientation hint; keeping imported asset yaw unchanged."
+    text_parts: list[str] = []
+    if scene_spec is not None:
+        text_parts.extend([scene_spec.user_goal, *scene_spec.constraints])
+    if subject is not None:
+        text_parts.extend([subject.description, subject.appearance, subject.pose_or_state, subject.placement_hint])
+    if scene_spec is not None and subject is not None:
+        for relation in scene_spec.spatial_relations:
+            if relation.source_subject_id == subject.subject_id:
+                text_parts.extend([relation.relation, relation.target_region, relation.notes])
+    text = " ".join(str(part) for part in text_parts if part)
+    return _orientation_from_text(
+        text,
+        target_region_normalized,
+        fallback=(0.0, "No explicit orientation hint; keeping imported asset yaw unchanged."),
+    )
+
+
+def _orientation_from_text(
+    text: str,
+    target_region_normalized: tuple[float, float],
+    *,
+    fallback: tuple[float, str],
+) -> tuple[float, str]:
+    normalized = text.lower()
+    if any(token in normalized for token in ["back to camera", "背对镜头", "背对观众", "背面", "背对"]):
+        return 180.0, "Orientation hint asks the subject to face away from the camera."
+    if any(token in normalized for token in ["left profile", "profile left", "facing left", "face left", "朝左", "向左", "左侧脸"]):
+        return 90.0, "Orientation hint asks for a left-facing/profile pose."
+    if any(token in normalized for token in ["right profile", "profile right", "facing right", "face right", "朝右", "向右", "右侧脸"]):
+        return -90.0, "Orientation hint asks for a right-facing/profile pose."
+    if any(
+        token in normalized
+        for token in [
+            "face camera",
+            "facing camera",
+            "toward camera",
+            "front-facing",
+            "front facing",
+            "正面",
+            "面向镜头",
+            "看向镜头",
+            "面向观众",
+        ]
+    ):
+        return 0.0, "Orientation hint asks the subject to face the preview camera."
+    if any(token in normalized for token in ["toward center", "face center", "facing center", "朝向中心", "面向中心"]):
+        return _yaw_toward_center(target_region_normalized), "Orientation hint asks the subject to face the scene center."
+    return fallback
+
+
+def _yaw_toward_center(target_region_normalized: tuple[float, float]) -> float:
+    x, y = target_region_normalized
+    if abs(x) >= abs(y) and abs(x) > 1e-6:
+        return 90.0 if x > 0 else -90.0
+    if abs(y) > 1e-6:
+        return 180.0 if y < 0 else 0.0
+    return 0.0
+
+
+def _yaw_from_transform_hint(transform_hint) -> float | None:
+    if transform_hint is None:
+        return None
+    explicit_fields = getattr(transform_hint, "model_fields_set", None)
+    if explicit_fields is None:
+        explicit_fields = getattr(transform_hint, "__fields_set__", set())
+    if "rotation_euler" not in explicit_fields:
+        return None
+    if not transform_hint.rotation_euler:
+        return None
+    return round(_clamp(float(transform_hint.rotation_euler[2]), -180.0, 180.0), 3)
 
 
 def _camera_from_scene(scene_spec: SceneSpec | None) -> tuple[tuple[float, float, float], float, float, str]:

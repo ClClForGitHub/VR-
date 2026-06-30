@@ -379,6 +379,7 @@ def test_runtime_execution_dry_runs_import_scene_asset_from_assembly_plan(tmp_pa
     assert assembly_plan["plan_id"] == "assembly_plan_runtime_001"
     assert assembly_plan["target_region"] == "front_right"
     assert assembly_plan["target_height_ratio"] == 0.5
+    assert assembly_plan["subject_yaw_degrees"] == 35.0
 
 
 def test_runtime_execution_live_import_scene_asset_registers_blender_scene(tmp_path: Path, monkeypatch) -> None:
@@ -743,6 +744,7 @@ def _assembly_import_run_dir(tmp_path: Path) -> Path:
                     "subject_id": "subject_robot",
                     "target_region": "front_right",
                     "composition_notes": "Place the hero in the foreground right third.",
+                    "transform_hint": {"rotation_euler": (0.0, 0.0, 35.0)},
                 }
             ],
             scale_estimates=[

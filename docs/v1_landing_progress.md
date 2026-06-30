@@ -7238,3 +7238,57 @@ Boundary:
 - This closes the candidate-apply and script-job bridge for assembly planning.
 - It does not claim mature visual layout intelligence or a fresh non-dry-run
   full-asset preview using a live provider plan.
+
+## 2026-06-30 UI30 Compose Subject Orientation Contract
+
+Goal: reduce the assembly-planner semantic loss between natural-language/LLM
+placement instructions and the existing Blender compose script. Before this
+slice, the richer compose plan carried placement, scale, camera target, and
+render aspect, but did not carry subject-facing/orientation.
+
+Implementation:
+
+- Extended `ComposeScenePlan` with `subject_yaw_degrees` and
+  `orientation_reason`.
+- The deterministic SceneSpec planner now infers yaw from explicit orientation
+  hints such as facing the camera, back-to-camera, left/right profile, and
+  facing the scene center.
+- The `BlenderAssemblyPlan` bridge now preserves explicit
+  `PlacementPlan.transform_hint.rotation_euler.z` as the strongest yaw signal,
+  then falls back to placement/relation/composition text.
+- `tools/compose_blender_scene.py` now consumes optional
+  `subject_yaw_degrees` and applies a Z-axis rotation around the imported
+  subject asset center before scale normalization and placement.
+- The runtime assembly dry-run test now proves `subject_yaw_degrees` survives
+  `BlenderAssemblyPlan -> compose/runtime_assembly_plan.json`.
+- Updated `docs/blender_asset_pipeline_contract.md` with the optional yaw
+  field and backward-compatible behavior.
+
+Verification:
+
+```bash
+python -m py_compile agent_runtime/blender_assembly_planner.py tools/compose_blender_scene.py
+python -m pytest tests/test_blender_assembly_planner.py -q
+python -m pytest tests/test_script_adapters.py tests/test_domain_dispatcher.py \
+  tests/test_workflow_runner.py::test_local_e2e_workflow_uses_scene_spec_for_compose_plan \
+  tests/test_runtime_execution.py::test_runtime_execution_dry_runs_import_scene_asset_from_assembly_plan -q
+python -m pytest tests/test_runtime_execution.py::test_runtime_execution_dry_runs_import_scene_asset_from_assembly_plan \
+  tests/test_runtime_execution.py::test_runtime_execution_live_import_scene_asset_registers_blender_scene -q
+python -m pytest -q
+```
+
+Results:
+
+```text
+6 passed in 0.32s
+40 passed in 0.40s
+2 passed in 0.55s
+344 passed in 4.54s
+```
+
+Boundary:
+
+- This improves placement/orientation semantics in the existing script-backed
+  Blender path.
+- It does not yet provide mesh-aware collision placement, a live-provider
+  `BlenderAssemblyPlanner` call, or the new non-dry-run full-asset preview.

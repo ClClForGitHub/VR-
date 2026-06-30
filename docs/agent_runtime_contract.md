@@ -283,7 +283,8 @@ Runtime state-apply contract:
   move the run to `BLENDER_ASSEMBLY_EXECUTION`, and rebuild
   `runtime_plan.json` toward the existing script-backed
   `import_scene_asset` domain tool. The runtime normalizes that plan into the
-  compose-script `assembly_plan.json` contract before Blender execution;
+  compose-script `assembly_plan.json` contract, including optional subject
+  yaw/orientation, before Blender execution;
 - successful apply writes `state.json`, `summary.json`,
   `frontend_status.json`, `runtime_apply.jsonl`,
   `runtime_apply_summary.json`, and a checkpoint snapshot under
