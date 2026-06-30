@@ -183,6 +183,50 @@ def test_build_compose_scene_plan_infers_subject_orientation_toward_center() -> 
     assert "scene center" in plan.orientation_reason
 
 
+def test_build_compose_scene_plan_keeps_placement_when_orientation_mentions_center() -> None:
+    state = AgentProjectState(
+        project_id="project",
+        thread_id="thread",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=SceneSpec(
+            scene_id="scene_004b",
+            title="Right foreground orientation",
+            user_goal="Place the plush on the right foreground and make it face the scene center.",
+            style=StyleSpec(visual_style="realistic"),
+            environment=EnvironmentSpec(environment_type="garden", description="flower field", ground_surface="grass"),
+            lighting=LightingSpec(description="soft daylight"),
+            camera=CameraSpec(shot_type="close-up", angle="high angle"),
+            subjects=[
+                SubjectSpec(
+                    subject_id="plush_001",
+                    display_name="plush",
+                    category="character",
+                    priority="hero",
+                    description="a plush character",
+                    pose_or_state="facing the scene center",
+                    placement_hint="right side foreground on the grass, facing center",
+                    scale_hint="large hero",
+                )
+            ],
+            spatial_relations=[
+                SpatialRelation(
+                    relation_id="rel_001",
+                    source_subject_id="plush_001",
+                    relation="right_of",
+                    target_region="foreground grass area",
+                    notes="Use right foreground composition and orient the subject toward the scene center.",
+                )
+            ],
+        ),
+    )
+
+    plan = build_compose_scene_plan(state)
+
+    assert plan.target_region == "front_right"
+    assert plan.target_region_normalized == (0.24, -0.24)
+    assert plan.subject_yaw_degrees == 90.0
+
+
 def test_blender_assembly_plan_bridge_prefers_transform_hint_yaw() -> None:
     state = AgentProjectState(
         project_id="project",

@@ -32,6 +32,29 @@ def test_natural_language_fixture_matrix_has_expected_coverage() -> None:
     } <= categories
 
 
+def test_natural_language_fixture_matrix_includes_user_requested_samples() -> None:
+    cases = {case.case_id: case for case in SCENARIO_CASES}
+
+    assert {
+        "scenario_zh_wuthering_chibi_beach_duo",
+        "scenario_zh_little_gwen_chessboard_ref",
+        "scenario_zh_explorer_rover_moon_regolith",
+    } <= set(cases)
+    assert cases["scenario_zh_wuthering_chibi_beach_duo"].expected.subject_ids == [
+        "subject_phoebe_chibi",
+        "subject_fronono_chibi",
+        "subject_beach_chair",
+        "subject_sand_castle",
+    ]
+    little_gwen = cases["scenario_zh_little_gwen_chessboard_ref"]
+    assert Path(little_gwen.input_images[0].uri).is_file()
+    assert little_gwen.declared_bindings[0]["target_id"] == "subject_little_gwen"
+    assert little_gwen.expected.subject_ids == ["subject_little_gwen", "subject_chess_pieces"]
+    assert cases["scenario_zh_explorer_rover_moon_regolith"].expected.subject_ids == [
+        "subject_explorer_rover"
+    ]
+
+
 @pytest.mark.parametrize(
     "case",
     [case for case in SCENARIO_CASES if case.expected.stop_reason == "delegated"],

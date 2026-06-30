@@ -7292,3 +7292,155 @@ Boundary:
   Blender path.
 - It does not yet provide mesh-aware collision placement, a live-provider
   `BlenderAssemblyPlanner` call, or the new non-dry-run full-asset preview.
+
+## 2026-06-30 UI31 Full-Asset Yaw Non-Dry-Run Preview
+
+Goal: close the Step 8 evidence gap for a new non-dry-run full-asset preview
+using the richer compose plan, including subject orientation.
+
+Implementation and findings:
+
+- Reused the full-asset scene/subject GLBs from
+  `outputs/runs/20260630_full_asset_live_router_edit_dfce104f/artifacts/`.
+- Generated a run-local SceneSpec copy that asks for the subject in the right
+  foreground facing the scene center.
+- Refreshed infrastructure inventory before execution:
+  `ok=true`, required `20/20` present.
+- First non-dry-run surfaced a real semantic bug: `face/toward scene center`
+  let the placement parser read `center` as a placement request, producing
+  `target_region=center` and `subject_yaw_degrees=0`.
+- Fixed `_placement_from_text(...)` ordering so composite foreground/background
+  plus left/right placement wins before generic center placement, while
+  `center foreground` remains centered.
+- Added a regression test for right-foreground placement with orientation
+  mentioning scene center.
+
+Non-dry-run command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python -m agent_runtime.workflow_runner local-e2e \
+  --root /home/team/zouzhiyuan/image23D_Agent \
+  --scene-glb /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_full_asset_live_router_edit_dfce104f/artifacts/scene_3d_asset/workflow_scene_glb.glb \
+  --asset-glb /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_full_asset_live_router_edit_dfce104f/artifacts/subject_3d_asset/workflow_subject_glb.glb \
+  --scene-spec-json /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/scene_spec_yaw.json \
+  --output-dir /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed \
+  --blender-path /home/team/zouzhiyuan/blender-5.1.2-linux-x64/blender \
+  --viewer-base-url http://127.0.0.1:8092 \
+  --compose-timeout 420 \
+  --export-timeout 240 \
+  --viewer-timeout 10 \
+  --stages compose,export_viewer,viewer_check \
+  --no-reset-metadata
+```
+
+Result:
+
+```text
+summary.ok=true
+dry_run=false
+executed_stages=["compose", "export_viewer", "viewer_check"]
+phase=BLENDER_PREVIEW
+target_region=front_right
+target_region_normalized=[0.24, -0.24]
+subject_yaw_degrees=90.0
+camera_target_normalized=[0.132, -0.132]
+viewer_check.ok=true
+delivery_handoff.ready=true
+delivery_handoff.verified=true
+viewer_scene_object_count=7
+preview_png=1400x900, nonblank
+```
+
+Evidence:
+
+```text
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/summary.json
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/compose/assembly_plan.json
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/compose/composed_preview.png
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/compose/composed_scene.blend
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/viewer_export/viewer_scene.glb
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/viewer_export/scene_state.json
+```
+
+Verification:
+
+```bash
+python -m py_compile agent_runtime/blender_assembly_planner.py tools/compose_blender_scene.py
+python -m pytest tests/test_blender_assembly_planner.py -q
+python -m pytest tests/test_blender_assembly_planner.py \
+  tests/test_workflow_runner.py::test_local_e2e_workflow_uses_scene_spec_for_compose_plan \
+  tests/test_runtime_execution.py::test_runtime_execution_dry_runs_import_scene_asset_from_assembly_plan -q
+python -m pytest -q
+```
+
+Results:
+
+```text
+7 passed in 0.42s
+9 passed in 0.45s
+345 passed in 4.59s
+```
+
+Boundary:
+
+- This proves the richer deterministic compose plan can drive a real
+  full-asset Blender compose/export/viewer-check run.
+- Visual quality is still not final: mesh/collision-aware layout and stronger
+  scene/asset quality tuning remain open.
+- This is still deterministic SceneSpec planning evidence, not a live-provider
+  `BlenderAssemblyPlanner` call.
+
+## 2026-06-30 UI32 User-Provided Scenario And Review Branch Fixtures
+
+Goal: add the user's three concrete scenario prompts to the runtime fixture
+matrix and simulate both acceptance and rejection at review gates.
+
+Implementation:
+
+- Stored the uploaded Little Gwen reference image in the repo fixture area:
+  `tests/fixtures/images/little_gwen_reference.png` (`1080x810`, RGB PNG).
+- Added three natural-language cases to
+  `tests/fixtures/natural_language_scene_cases.json`:
+  - `scenario_zh_wuthering_chibi_beach_duo`: chibi Phoebe/Fronono-inspired
+    beach duo with beach chair and sand castle props.
+  - `scenario_zh_little_gwen_chessboard_ref`: image-1-bound chibi Little
+    Gwen-inspired subject on a chessboard with many chess pieces.
+  - `scenario_zh_explorer_rover_moon_regolith`: explorer robot rover on the
+    moon beside pitted lunar regolith.
+- Added fixture coverage assertions proving the new case ids, subject ids, and
+  Little Gwen image binding are present.
+- Added a runtime user-action simulation test covering:
+  - concept approval for the beach duo sample;
+  - concept rejection/feedback patch for the Little Gwen image-reference sample;
+  - Blender preview approval for the lunar rover sample;
+  - Blender preview rejection/edit feedback for the beach layout sample.
+
+Verification:
+
+```bash
+python -m pytest \
+  tests/test_natural_language_scene_fixtures.py::test_natural_language_fixture_matrix_includes_user_requested_samples \
+  tests/test_natural_language_scene_fixtures.py::test_natural_language_scene_cases_run_to_delegated_generation -q
+python -m pytest tests/test_runtime_user_actions.py::test_user_requested_samples_cover_accept_and_reject_review_branches -q
+python -m pytest tests/test_natural_language_scene_fixtures.py tests/test_runtime_user_actions.py \
+  tests/test_blender_assembly_planner.py -q
+python -m py_compile agent_runtime/blender_assembly_planner.py tools/compose_blender_scene.py \
+  agent_runtime/scenario_fixtures.py agent_runtime/runtime_user_actions.py
+python -m pytest -q
+```
+
+Results:
+
+```text
+10 passed in 0.76s
+1 passed in 0.36s
+26 passed in 0.77s
+350 passed in 4.76s
+```
+
+Boundary:
+
+- These are structured runtime fixtures and review-action simulations, not live
+  image generation or live 3D generation.
+- They keep the existing runtime loop as the execution surface and make the
+  prompt/schema/user-gate behavior inspectable for the user's concrete cases.

@@ -41,7 +41,9 @@ Done enough to rely on:
   covers Chinese/English, text-only, explicit subject/scene/style/texture/layout
   bindings, multi-subject scenes, and missing-binding clarification. The
   runtime fixture test materializes these as run directories and drives the
-  bounded loop rather than only checking prompt strings.
+  bounded loop rather than only checking prompt strings. The matrix now also
+  covers the user's concrete beach-duo, image-bound Little Gwen chessboard, and
+  lunar-rover-regolith samples.
 - LLM node execution boundary: `ConceptPromptPlanner` can now run through the
   existing Qwen provider adapter and validate JSON with Pydantic.
 - Concept planning bridge: validated `ConceptPromptPlanner` output can be
@@ -130,7 +132,10 @@ Done enough to rely on:
 - SceneSpec-driven non-dry-run assembly: the local-e2e workflow can now load a
   saved `scene_spec.json`, produce `compose/assembly_plan.json`, execute
   Blender compose/export/viewer-check, and hand off to deterministic delivery
-  packaging.
+  packaging. A fresh full-asset yaw/orientation run now reaches
+  `BLENDER_PREVIEW` with `target_region=front_right`,
+  `subject_yaw_degrees=90.0`, `viewer_check.ok=true`, and verified delivery
+  handoff readiness.
 - codex-self-mcp boundary: status, plan handoff, guarded execution path,
   confirmed non-dry-run text execution smoke, completed-log image extraction
   into concept handoff apply, and one freshly submitted runtime-worker concept
@@ -141,6 +146,10 @@ Done enough to rely on:
   `hq_textured_1m_768`; the GLB was later saved, QAed, and handoff-applied to
   the parent runtime run as `subject_plush_asset_hq_001`.
 - Blender Lab MCP boundary: safe selected read/edit operations through injected/socket raw caller; dry-run and selected non-dry-run smoke paths exist.
+- Runtime review-gate simulation: concept approval, concept rejection with a
+  pending feedback patch, Blender-preview approval, and Blender-preview
+  rejection/edit feedback are now explicitly covered with the user's sample
+  scenarios.
 - Delivery packaging: deterministic local zip/package from existing state
   artifacts, now verified through runtime approval and delivery execution for
   the SceneSpec-driven non-dry-run assembly run.
@@ -215,6 +224,9 @@ These are the main gaps before the overall system is truly complete:
    - One saved SceneSpec has now driven a non-dry-run compose/export/viewer
      check and delivery package for the `20260629_scene_spec_assembly_non_dryrun`
      run.
+   - A fresh full-asset SceneSpec with orientation now drives non-dry-run
+     compose/export/viewer-check under
+     `outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/`.
    - Blender preview feedback can now be routed into concrete planned edit
      domain-tool calls, stored in `ReviewPatch.structured_delta`, scheduled by
      the controller before viewer refresh, dry-run through the safe Blender

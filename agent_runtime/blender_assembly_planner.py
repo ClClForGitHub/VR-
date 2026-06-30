@@ -201,8 +201,7 @@ def _placement_from_text(
     wants_back = any(token in text for token in ["behind", "back", "background", "rear", "后方", "背景"])
     wants_right = any(token in text for token in ["right", "右"])
     wants_left = any(token in text for token in ["left", "左"])
-    if any(token in text for token in ["center", "middle", "中央", "中心", "centered_in"]):
-        return "center", (0.0, 0.0), "SceneSpec requests centered placement."
+    wants_center = any(token in text for token in ["center", "middle", "中央", "中心", "centered_in"])
     if wants_front and wants_right:
         return "front_right", (0.24, -0.24), "SceneSpec requests foreground right-side placement."
     if wants_front and wants_left:
@@ -211,6 +210,8 @@ def _placement_from_text(
         return "back_right", (0.24, 0.24), "SceneSpec requests background right-side placement."
     if wants_back and wants_left:
         return "back_left", (-0.24, 0.24), "SceneSpec requests background left-side placement."
+    if wants_center:
+        return "center", (0.0, 0.0), "SceneSpec requests centered placement."
     if wants_right:
         return "right_center", (0.26, 0.0), "SceneSpec requests right-side placement."
     if wants_left:

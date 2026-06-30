@@ -11,7 +11,9 @@
       "expected": {
         "stop_reason": "delegated",
         "final_phase": "CONCEPT_GENERATION",
-        "subject_ids": ["subject_robot"],
+        "subject_ids": [
+          "subject_robot"
+        ],
         "reference_binding_count": 0,
         "has_prompt_pack": true
       },
@@ -24,7 +26,9 @@
         },
         "SceneInterpreter": {
           "user_goal": "Create a compact friendly robot display.",
-          "subject_summaries": ["A compact friendly robot with rounded panels."],
+          "subject_summaries": [
+            "A compact friendly robot with rounded panels."
+          ],
           "environment_summary": "A clean small studio display area.",
           "style_summary": "bright, polished, toy-like, readable silhouette",
           "open_questions": []
@@ -34,21 +38,31 @@
           "title": "Compact Robot Studio Display",
           "user_goal": "Create a compact friendly robot in a clean studio display scene.",
           "style": {
-            "style_keywords": ["clean", "friendly", "polished"],
+            "style_keywords": [
+              "clean",
+              "friendly",
+              "polished"
+            ],
             "rendering_style": "stylized",
             "realism_level": "stylized"
           },
           "environment": {
             "environment_type": "studio",
             "description": "A small clean studio display area with a simple pedestal.",
-            "background_elements": ["pedestal"],
+            "background_elements": [
+              "pedestal"
+            ],
             "ground_surface": "matte floor"
           },
-          "lighting": {"description": "Soft studio lighting with a gentle key light."},
+          "lighting": {
+            "description": "Soft studio lighting with a gentle key light."
+          },
           "camera": {
             "shot_type": "three quarter",
             "framing": "full subject centered with some floor visible",
-            "target_subject_ids": ["subject_robot"]
+            "target_subject_ids": [
+              "subject_robot"
+            ]
           },
           "subjects": [
             {
@@ -68,7 +82,10 @@
             }
           ],
           "spatial_relations": [],
-          "constraints": ["single clear hero subject", "avoid cluttered background"],
+          "constraints": [
+            "single clear hero subject",
+            "avoid cluttered background"
+          ],
           "open_questions": [],
           "version": 1
         },
@@ -77,7 +94,9 @@
           "subject_prompts": {
             "subject_robot": "Compact friendly robot, rounded white panels, blue accent lights, expressive face screen, three-quarter view."
           },
-          "scene_prompts": ["Clean studio display area, small pedestal, soft shadows, uncluttered floor."],
+          "scene_prompts": [
+            "Clean studio display area, small pedestal, soft shadows, uncluttered floor."
+          ],
           "negative_prompt": "blurry, cropped, extra limbs, messy background"
         }
       }
@@ -143,7 +162,9 @@
       "expected": {
         "stop_reason": "delegated",
         "final_phase": "CONCEPT_GENERATION",
-        "subject_ids": ["subject_plush"],
+        "subject_ids": [
+          "subject_plush"
+        ],
         "reference_binding_count": 3,
         "has_prompt_pack": true
       },
@@ -184,7 +205,9 @@
         },
         "SceneInterpreter": {
           "user_goal": "Create a yellow cotton plush-like hero subject in a bright street-corner shop scene.",
-          "subject_summaries": ["Yellow cotton-doll-like character with flexible limbs and cute proportions."],
+          "subject_summaries": [
+            "Yellow cotton-doll-like character with flexible limbs and cute proportions."
+          ],
           "environment_summary": "Street-corner shop display based on the scene reference.",
           "style_summary": "soft cotton texture, cute toy proportions, clean generated asset silhouette",
           "open_questions": []
@@ -194,7 +217,12 @@
           "title": "Yellow Plush Street Shop",
           "user_goal": "Create a yellow cotton plush-like hero subject in a bright street-corner shop scene.",
           "style": {
-            "style_keywords": ["cotton plush", "cute", "soft", "yellow"],
+            "style_keywords": [
+              "cotton plush",
+              "cute",
+              "soft",
+              "yellow"
+            ],
             "mood": "warm and playful",
             "color_palette": "yellow, cream, soft shop-window colors",
             "rendering_style": "stylized",
@@ -203,15 +231,24 @@
           "environment": {
             "environment_type": "street_shop_corner",
             "description": "A bright street-corner shop display with a simple storefront and clean floor.",
-            "background_elements": ["shop window", "small display platform"],
+            "background_elements": [
+              "shop window",
+              "small display platform"
+            ],
             "ground_surface": "street-side shop floor",
-            "scene_reference_image_ids": ["image_scene_shop"]
+            "scene_reference_image_ids": [
+              "image_scene_shop"
+            ]
           },
-          "lighting": {"description": "Soft daylight with gentle shop-window fill."},
+          "lighting": {
+            "description": "Soft daylight with gentle shop-window fill."
+          },
           "camera": {
             "shot_type": "three quarter",
             "framing": "full body hero subject with storefront context visible",
-            "target_subject_ids": ["subject_plush"]
+            "target_subject_ids": [
+              "subject_plush"
+            ]
           },
           "subjects": [
             {
@@ -222,7 +259,10 @@
               "description": "Yellow cotton plush doll with cute large head and flexible limbs.",
               "appearance": "soft cotton fabric, simple stitched details, rounded head, short flexible arms and legs",
               "pose_or_state": "standing naturally, ready for Blender placement",
-              "reference_image_ids": ["image_subject_plush", "image_style_cotton"],
+              "reference_image_ids": [
+                "image_subject_plush",
+                "image_style_cotton"
+              ],
               "priority": "hero",
               "needs_2d_concept": true,
               "needs_3d_asset": true,
@@ -241,7 +281,10 @@
               "notes": "Keep the hero clearly visible."
             }
           ],
-          "constraints": ["explicitly preserve image bindings", "avoid over-complex cloth hair or tiny unreadable details"],
+          "constraints": [
+            "explicitly preserve image bindings",
+            "avoid over-complex cloth hair or tiny unreadable details"
+          ],
           "open_questions": [],
           "version": 1
         },
@@ -250,7 +293,9 @@
           "subject_prompts": {
             "subject_plush": "Yellow cotton plush doll, large cute head, flexible small limbs, soft fabric texture, three-quarter full-body view, clean silhouette."
           },
-          "scene_prompts": ["Bright street-corner shop display, simple storefront, clean floor, small display platform, soft daylight."],
+          "scene_prompts": [
+            "Bright street-corner shop display, simple storefront, clean floor, small display platform, soft daylight."
+          ],
           "negative_prompt": "photoreal human skin, messy cables, cropped feet, unreadable tiny accessories"
         }
       }
@@ -283,7 +328,10 @@
       "expected": {
         "stop_reason": "delegated",
         "final_phase": "CONCEPT_GENERATION",
-        "subject_ids": ["subject_service_robot", "subject_tea_table"],
+        "subject_ids": [
+          "subject_service_robot",
+          "subject_tea_table"
+        ],
         "reference_binding_count": 1,
         "has_prompt_pack": true
       },
@@ -306,7 +354,10 @@
         },
         "SceneInterpreter": {
           "user_goal": "Create a small teahouse scene with a service robot left of a wooden tea table.",
-          "subject_summaries": ["service robot", "wooden tea table with teapot"],
+          "subject_summaries": [
+            "service robot",
+            "wooden tea table with teapot"
+          ],
           "environment_summary": "small teahouse interior",
           "style_summary": "warm wood, calm, compact scene",
           "open_questions": []
@@ -316,21 +367,34 @@
           "title": "Small Teahouse Service Robot",
           "user_goal": "Create a small teahouse scene with a service robot left of a wooden tea table.",
           "style": {
-            "style_keywords": ["warm wood", "calm", "cozy"],
+            "style_keywords": [
+              "warm wood",
+              "calm",
+              "cozy"
+            ],
             "rendering_style": "semi_realistic",
             "realism_level": "semi_realistic"
           },
           "environment": {
             "environment_type": "teahouse_interior",
             "description": "A compact warm wooden teahouse corner.",
-            "background_elements": ["wood wall", "floor mat", "small shelf"],
+            "background_elements": [
+              "wood wall",
+              "floor mat",
+              "small shelf"
+            ],
             "ground_surface": "wood floor"
           },
-          "lighting": {"description": "Warm indoor lantern-like light."},
+          "lighting": {
+            "description": "Warm indoor lantern-like light."
+          },
           "camera": {
             "shot_type": "wide three quarter",
             "framing": "show the robot left of the table and the table contents",
-            "target_subject_ids": ["subject_service_robot", "subject_tea_table"]
+            "target_subject_ids": [
+              "subject_service_robot",
+              "subject_tea_table"
+            ]
           },
           "subjects": [
             {
@@ -374,7 +438,9 @@
               "notes": "Layout is controlled by image_layout_teahouse."
             }
           ],
-          "constraints": ["layout reference controls placement only"],
+          "constraints": [
+            "layout reference controls placement only"
+          ],
           "open_questions": [],
           "version": 1
         },
@@ -384,7 +450,9 @@
             "subject_service_robot": "Compact service robot, rounded body, tray-like hands, warm teahouse style, three-quarter view.",
             "subject_tea_table": "Low wooden tea table with simple teapot and cups, clean procedural-friendly shapes."
           },
-          "scene_prompts": ["Cozy wooden teahouse corner, warm lantern light, layout keeps robot left of table."],
+          "scene_prompts": [
+            "Cozy wooden teahouse corner, warm lantern light, layout keeps robot left of table."
+          ],
           "negative_prompt": "crowded restaurant, complex crowd, unreadable tiny decorations"
         }
       }
@@ -432,7 +500,9 @@
       "expected": {
         "stop_reason": "delegated",
         "final_phase": "CONCEPT_GENERATION",
-        "subject_ids": ["subject_moon_rover"],
+        "subject_ids": [
+          "subject_moon_rover"
+        ],
         "reference_binding_count": 2,
         "has_prompt_pack": true
       },
@@ -464,7 +534,9 @@
         },
         "SceneInterpreter": {
           "user_goal": "Create a small moon rover model in a simple maintenance bay.",
-          "subject_summaries": ["Small rover with dusty metal texture."],
+          "subject_summaries": [
+            "Small rover with dusty metal texture."
+          ],
           "environment_summary": "simple maintenance bay garage",
           "style_summary": "functional sci-fi prop, dusty metal",
           "open_questions": []
@@ -474,21 +546,32 @@
           "title": "Moon Rover Maintenance Bay",
           "user_goal": "Create a small moon rover model in a simple maintenance bay.",
           "style": {
-            "style_keywords": ["sci-fi", "dusty metal", "functional"],
+            "style_keywords": [
+              "sci-fi",
+              "dusty metal",
+              "functional"
+            ],
             "rendering_style": "semi_realistic",
             "realism_level": "semi_realistic"
           },
           "environment": {
             "environment_type": "maintenance_bay",
             "description": "A simple garage-like maintenance bay with clear floor space.",
-            "background_elements": ["tool wall", "floor markings"],
+            "background_elements": [
+              "tool wall",
+              "floor markings"
+            ],
             "ground_surface": "painted concrete"
           },
-          "lighting": {"description": "Cool overhead workshop lighting."},
+          "lighting": {
+            "description": "Cool overhead workshop lighting."
+          },
           "camera": {
             "shot_type": "low three quarter",
             "framing": "rover fully visible with some garage context",
-            "target_subject_ids": ["subject_moon_rover"]
+            "target_subject_ids": [
+              "subject_moon_rover"
+            ]
           },
           "subjects": [
             {
@@ -499,7 +582,10 @@
               "description": "A compact moon rover with dusty metal panels and visible wheels.",
               "appearance": "boxy chassis, four rugged wheels, dusty metal material",
               "pose_or_state": "parked in maintenance bay",
-              "reference_image_ids": ["image_rover_body", "image_dusty_metal"],
+              "reference_image_ids": [
+                "image_rover_body",
+                "image_dusty_metal"
+              ],
               "priority": "hero",
               "needs_2d_concept": true,
               "needs_3d_asset": true,
@@ -508,7 +594,9 @@
             }
           ],
           "spatial_relations": [],
-          "constraints": ["keep silhouette readable for image-to-3D"],
+          "constraints": [
+            "keep silhouette readable for image-to-3D"
+          ],
           "open_questions": [],
           "version": 1
         },
@@ -517,7 +605,9 @@
           "subject_prompts": {
             "subject_moon_rover": "Small moon rover, boxy chassis, four rugged wheels, dusty metal panels, three-quarter view, isolated clean silhouette."
           },
-          "scene_prompts": ["Simple maintenance bay garage, painted concrete floor, tool wall, cool overhead lighting."],
+          "scene_prompts": [
+            "Simple maintenance bay garage, painted concrete floor, tool wall, cool overhead lighting."
+          ],
           "negative_prompt": "large complex spaceship, text labels, excessive tiny wires"
         }
       }
@@ -550,7 +640,10 @@
       "expected": {
         "stop_reason": "delegated",
         "final_phase": "CONCEPT_GENERATION",
-        "subject_ids": ["subject_reading_chair", "subject_floor_lamp"],
+        "subject_ids": [
+          "subject_reading_chair",
+          "subject_floor_lamp"
+        ],
         "reference_binding_count": 1,
         "has_prompt_pack": true
       },
@@ -573,7 +666,10 @@
         },
         "SceneInterpreter": {
           "user_goal": "Create a rounded reading chair in a warm Scandinavian reading corner.",
-          "subject_summaries": ["rounded reading chair", "small floor lamp"],
+          "subject_summaries": [
+            "rounded reading chair",
+            "small floor lamp"
+          ],
           "environment_summary": "quiet reading corner",
           "style_summary": "warm Scandinavian style",
           "open_questions": []
@@ -583,7 +679,12 @@
           "title": "Warm Reading Corner",
           "user_goal": "Create a rounded reading chair in a warm Scandinavian reading corner.",
           "style": {
-            "style_keywords": ["warm", "Scandinavian", "rounded", "quiet"],
+            "style_keywords": [
+              "warm",
+              "Scandinavian",
+              "rounded",
+              "quiet"
+            ],
             "color_palette": "warm wood, cream fabric, muted green",
             "rendering_style": "semi_realistic",
             "realism_level": "semi_realistic"
@@ -591,14 +692,22 @@
           "environment": {
             "environment_type": "interior_reading_corner",
             "description": "A quiet room corner with soft rug and small lamp.",
-            "background_elements": ["wall corner", "small rug", "lamp"],
+            "background_elements": [
+              "wall corner",
+              "small rug",
+              "lamp"
+            ],
             "ground_surface": "wood floor"
           },
-          "lighting": {"description": "Warm lamp light with soft ambient fill."},
+          "lighting": {
+            "description": "Warm lamp light with soft ambient fill."
+          },
           "camera": {
             "shot_type": "medium wide",
             "framing": "chair prominent, lamp beside it",
-            "target_subject_ids": ["subject_reading_chair"]
+            "target_subject_ids": [
+              "subject_reading_chair"
+            ]
           },
           "subjects": [
             {
@@ -609,7 +718,9 @@
               "description": "A rounded comfortable reading chair.",
               "appearance": "soft rounded upholstery, warm cream fabric, simple wooden legs",
               "pose_or_state": "stationary in corner",
-              "reference_image_ids": ["image_scandi_mood"],
+              "reference_image_ids": [
+                "image_scandi_mood"
+              ],
               "priority": "hero",
               "needs_2d_concept": true,
               "needs_3d_asset": true,
@@ -624,7 +735,9 @@
               "description": "A small warm floor lamp beside the chair.",
               "appearance": "simple slender stand and fabric shade",
               "pose_or_state": "standing beside chair",
-              "reference_image_ids": ["image_scandi_mood"],
+              "reference_image_ids": [
+                "image_scandi_mood"
+              ],
               "priority": "important",
               "needs_2d_concept": true,
               "needs_3d_asset": true,
@@ -641,7 +754,9 @@
               "distance_hint": "near"
             }
           ],
-          "constraints": ["mood image controls style only"],
+          "constraints": [
+            "mood image controls style only"
+          ],
           "open_questions": [],
           "version": 1
         },
@@ -651,7 +766,9 @@
             "subject_reading_chair": "Rounded reading chair, soft cream upholstery, simple wooden legs, warm Scandinavian style, three-quarter view.",
             "subject_floor_lamp": "Small floor lamp, slender stand, warm fabric shade, simple clean shape."
           },
-          "scene_prompts": ["Quiet reading corner, wood floor, soft rug, warm lamp light, muted Scandinavian palette."],
+          "scene_prompts": [
+            "Quiet reading corner, wood floor, soft rug, warm lamp light, muted Scandinavian palette."
+          ],
           "negative_prompt": "ornate baroque details, clutter, harsh neon lighting"
         }
       }
@@ -665,7 +782,9 @@
       "expected": {
         "stop_reason": "delegated",
         "final_phase": "CONCEPT_GENERATION",
-        "subject_ids": ["subject_archway"],
+        "subject_ids": [
+          "subject_archway"
+        ],
         "reference_binding_count": 0,
         "has_prompt_pack": true
       },
@@ -678,7 +797,9 @@
         },
         "SceneInterpreter": {
           "user_goal": "Create a small courtyard entrance scene with an archway and low walls.",
-          "subject_summaries": ["round archway with low side walls"],
+          "subject_summaries": [
+            "round archway with low side walls"
+          ],
           "environment_summary": "small outdoor courtyard entrance",
           "style_summary": "editable, simple geometry, warm stone",
           "open_questions": []
@@ -688,21 +809,33 @@
           "title": "Small Courtyard Entry",
           "user_goal": "Create a small courtyard entrance scene with an archway and low walls.",
           "style": {
-            "style_keywords": ["warm stone", "simple", "editable"],
+            "style_keywords": [
+              "warm stone",
+              "simple",
+              "editable"
+            ],
             "rendering_style": "semi_realistic",
             "realism_level": "semi_realistic"
           },
           "environment": {
             "environment_type": "outdoor_courtyard",
             "description": "Small courtyard entrance with a round archway, low side walls, and simple stone floor.",
-            "background_elements": ["low walls", "stone floor", "small plants"],
+            "background_elements": [
+              "low walls",
+              "stone floor",
+              "small plants"
+            ],
             "ground_surface": "stone paving"
           },
-          "lighting": {"description": "Soft daylight with mild shadows."},
+          "lighting": {
+            "description": "Soft daylight with mild shadows."
+          },
           "camera": {
             "shot_type": "wide front three quarter",
             "framing": "show the archway and both low walls",
-            "target_subject_ids": ["subject_archway"]
+            "target_subject_ids": [
+              "subject_archway"
+            ]
           },
           "subjects": [
             {
@@ -722,7 +855,10 @@
             }
           ],
           "spatial_relations": [],
-          "constraints": ["no people", "keep geometry editable in Blender"],
+          "constraints": [
+            "no people",
+            "keep geometry editable in Blender"
+          ],
           "open_questions": [],
           "version": 1
         },
@@ -731,8 +867,488 @@
           "subject_prompts": {
             "subject_archway": "Round stone archway with two low side walls, warm stone material, clean editable geometry, front three-quarter view."
           },
-          "scene_prompts": ["Outdoor courtyard entrance, stone paving, a few small plants, soft daylight."],
+          "scene_prompts": [
+            "Outdoor courtyard entrance, stone paving, a few small plants, soft daylight."
+          ],
           "negative_prompt": "people, dense foliage, broken geometry, overly complex ornament"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_zh_wuthering_chibi_beach_duo",
+      "language": "zh",
+      "category": "user_sample_multi_character_scene",
+      "description": "User-provided sample: Wuthering Waves chibi Phoebe and Fronono-like duo on a beach with chair and sandcastle props.",
+      "user_text": "我想看到一个鸣潮的Q版角色菲比和弗糯糯在海滩上，旁边是沙滩椅和沙子城堡。",
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": [
+          "subject_phoebe_chibi",
+          "subject_fronono_chibi",
+          "subject_beach_chair",
+          "subject_sand_castle"
+        ],
+        "reference_binding_count": 0,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a beach scene with two chibi game-style characters, beach chair, and sand castle props.",
+          "subject_summaries": [
+            "Chibi Phoebe-inspired girl character",
+            "Chibi Fronono-inspired companion character",
+            "beach chair",
+            "sand castle"
+          ],
+          "environment_summary": "Sunny beach with sand, shallow water, and playful props.",
+          "style_summary": "cute Q-version game character style, bright beach colors, Blender-friendly silhouettes",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_chibi_beach_duo",
+          "title": "Chibi Beach Duo With Sand Castle",
+          "user_goal": "Create a beach scene with chibi Phoebe and Fronono-inspired characters beside a beach chair and sand castle.",
+          "style": {
+            "style_keywords": [
+              "chibi",
+              "game character",
+              "cute",
+              "summer beach"
+            ],
+            "mood": "playful",
+            "color_palette": "sunny sand, sea blue, pastel character colors",
+            "rendering_style": "stylized",
+            "realism_level": "stylized"
+          },
+          "environment": {
+            "environment_type": "beach",
+            "description": "A bright sandy beach with shallow sea water in the background.",
+            "background_elements": [
+              "shoreline",
+              "gentle waves",
+              "small shells"
+            ],
+            "ground_surface": "sand"
+          },
+          "lighting": {
+            "description": "Warm clear daylight with soft beach shadows."
+          },
+          "camera": {
+            "shot_type": "wide three quarter",
+            "framing": "show both chibi characters and the nearby beach props",
+            "target_subject_ids": [
+              "subject_phoebe_chibi",
+              "subject_fronono_chibi"
+            ]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_phoebe_chibi",
+              "display_name": "Chibi Phoebe",
+              "category": "character",
+              "role_in_scene": "hero character",
+              "description": "A Q-version Phoebe-inspired fantasy girl character for a playful beach scene.",
+              "appearance": "cute oversized head, bright fantasy outfit, simplified hair and accessories, readable chibi silhouette",
+              "pose_or_state": "standing on the sand facing the viewer",
+              "reference_image_ids": [],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter",
+              "placement_hint": "left foreground near the sand castle",
+              "scale_hint": "small chibi character scale"
+            },
+            {
+              "subject_id": "subject_fronono_chibi",
+              "display_name": "Chibi Fronono",
+              "category": "character",
+              "role_in_scene": "companion character",
+              "description": "A Q-version Fronono-inspired companion character with a cute fantasy look.",
+              "appearance": "round chibi proportions, playful expression, simplified costume details",
+              "pose_or_state": "standing beside Phoebe on the beach",
+              "reference_image_ids": [],
+              "priority": "important",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter",
+              "placement_hint": "right of Phoebe near the beach chair",
+              "scale_hint": "matching chibi character scale"
+            },
+            {
+              "subject_id": "subject_beach_chair",
+              "display_name": "Beach Chair",
+              "category": "furniture",
+              "role_in_scene": "scene prop",
+              "description": "A simple foldable beach chair beside the characters.",
+              "appearance": "striped fabric, simple wooden or metal frame",
+              "pose_or_state": "stationary on sand",
+              "reference_image_ids": [],
+              "priority": "important",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "procedural_blender",
+              "preferred_subject_image_view": "front",
+              "placement_hint": "right background beside the characters",
+              "scale_hint": "prop scale"
+            },
+            {
+              "subject_id": "subject_sand_castle",
+              "display_name": "Sand Castle",
+              "category": "prop",
+              "role_in_scene": "foreground prop",
+              "description": "A small sand castle built beside the chibi characters.",
+              "appearance": "bucket-shaped towers, simple flag, sandy material",
+              "pose_or_state": "stationary on beach sand",
+              "reference_image_ids": [],
+              "priority": "important",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "procedural_blender",
+              "preferred_subject_image_view": "front",
+              "placement_hint": "front center on the sand",
+              "scale_hint": "small prop"
+            }
+          ],
+          "spatial_relations": [
+            {
+              "relation_id": "rel_fronono_right_of_phoebe",
+              "source_subject_id": "subject_fronono_chibi",
+              "relation": "right_of",
+              "target_subject_id": "subject_phoebe_chibi",
+              "distance_hint": "near",
+              "notes": "Keep the two chibi characters visually grouped."
+            },
+            {
+              "relation_id": "rel_chair_right_background",
+              "source_subject_id": "subject_beach_chair",
+              "relation": "behind",
+              "target_subject_id": "subject_fronono_chibi",
+              "target_region": "right background",
+              "distance_hint": "near",
+              "notes": "Chair should be visible but not block the characters."
+            },
+            {
+              "relation_id": "rel_sandcastle_front",
+              "source_subject_id": "subject_sand_castle",
+              "relation": "in_front_of",
+              "target_subject_id": "subject_phoebe_chibi",
+              "target_region": "front center",
+              "distance_hint": "near"
+            }
+          ],
+          "constraints": [
+            "keep chibi silhouettes simple for image-to-3D",
+            "avoid over-detailed copyrighted costume micro-elements",
+            "all props must fit on the same beach ground plane"
+          ],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "Two cute Q-version fantasy characters inspired by Phoebe and Fronono standing on a sunny beach, with a striped beach chair and a small sand castle nearby, playful summer composition.",
+          "subject_prompts": {
+            "subject_phoebe_chibi": "Chibi Phoebe-inspired fantasy girl, oversized head, simplified bright outfit, cute expression, clean three-quarter full-body silhouette.",
+            "subject_fronono_chibi": "Chibi Fronono-inspired companion character, round proportions, playful fantasy outfit, three-quarter full-body silhouette.",
+            "subject_beach_chair": "Simple striped foldable beach chair prop, clean geometry, sandy beach context.",
+            "subject_sand_castle": "Small sand castle prop with bucket towers and tiny flag, simple sandy material, clean shape."
+          },
+          "scene_prompts": [
+            "Sunny sandy beach, shallow blue water, soft shadows, playful summer scene with props around the characters."
+          ],
+          "negative_prompt": "photoreal human, crowded beach, complex tiny accessories, unreadable costume details, cropped characters"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_zh_little_gwen_chessboard_ref",
+      "language": "zh",
+      "category": "user_sample_subject_ref_board_game_scene",
+      "description": "User-provided sample: League of Legends chibi Little Gwen reference image on a chessboard with many chess pieces.",
+      "user_text": "我想看到英雄联盟的Q版角色小小格温图片1在棋盘上，旁边是很多国际象棋棋子。",
+      "input_images": [
+        {
+          "image_id": "image_little_gwen_ref",
+          "artifact_id": "artifact_little_gwen_ref",
+          "uri": "tests/fixtures/images/little_gwen_reference.png",
+          "user_declared_label": "图片1 小小格温参考"
+        }
+      ],
+      "declared_bindings": [
+        {
+          "binding_id": "binding_little_gwen_subject",
+          "image_id": "image_little_gwen_ref",
+          "target_type": "subject",
+          "target_id": "subject_little_gwen",
+          "usage": "subject_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0,
+          "notes": "图片1 controls the chibi Little Gwen subject reference."
+        }
+      ],
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": [
+          "subject_little_gwen",
+          "subject_chess_pieces"
+        ],
+        "reference_binding_count": 1,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [
+            {
+              "binding_id": "binding_little_gwen_subject",
+              "image_id": "image_little_gwen_ref",
+              "target_type": "subject",
+              "target_id": "subject_little_gwen",
+              "usage": "subject_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            }
+          ],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a chibi Little Gwen-inspired character on a chessboard surrounded by many chess pieces.",
+          "subject_summaries": [
+            "Chibi Little Gwen-inspired blue-haired character from image 1",
+            "many chess pieces around her"
+          ],
+          "environment_summary": "A large chessboard surface used as a stage.",
+          "style_summary": "cute chibi game-character style, blue magical accents, board-game props",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_little_gwen_chessboard",
+          "title": "Little Gwen On Chessboard",
+          "user_goal": "Create a chibi Little Gwen-inspired character from image 1 standing on a chessboard with many chess pieces nearby.",
+          "style": {
+            "style_keywords": [
+              "chibi",
+              "game character",
+              "blue magical accents",
+              "board game"
+            ],
+            "mood": "playful and dramatic",
+            "color_palette": "cyan blue, dark board squares, white and black chess pieces",
+            "rendering_style": "stylized",
+            "realism_level": "stylized"
+          },
+          "environment": {
+            "environment_type": "chessboard_stage",
+            "description": "A large chessboard surface with alternating dark and light squares.",
+            "background_elements": [
+              "oversized chess pieces",
+              "board edge"
+            ],
+            "ground_surface": "chessboard squares"
+          },
+          "lighting": {
+            "description": "Cool magical spotlight with soft reflections on the board."
+          },
+          "camera": {
+            "shot_type": "medium close three quarter",
+            "framing": "show the chibi character clearly with chess pieces surrounding her",
+            "target_subject_ids": [
+              "subject_little_gwen"
+            ]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_little_gwen",
+              "display_name": "Chibi Little Gwen",
+              "category": "character",
+              "role_in_scene": "hero subject",
+              "description": "A Q-version Little Gwen-inspired blue-haired character based on image 1.",
+              "appearance": "bright cyan twin-tail hair, cute chibi proportions, magical blue scissor-like energy accents, simplified dress details",
+              "pose_or_state": "standing on the chessboard and waving toward the viewer",
+              "reference_image_ids": [
+                "image_little_gwen_ref"
+              ],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter",
+              "placement_hint": "center foreground on the chessboard",
+              "scale_hint": "small chibi scale but larger than chess pieces"
+            },
+            {
+              "subject_id": "subject_chess_pieces",
+              "display_name": "Chess Pieces",
+              "category": "prop",
+              "role_in_scene": "surrounding props",
+              "description": "A group of many black and white international chess pieces around the character.",
+              "appearance": "pawns, knights, bishops, rooks, queen and king in simplified clean shapes",
+              "pose_or_state": "stationary around the character",
+              "reference_image_ids": [],
+              "priority": "important",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "procedural_blender",
+              "preferred_subject_image_view": "front",
+              "placement_hint": "surrounding the character on nearby chessboard squares",
+              "scale_hint": "prop group scale"
+            }
+          ],
+          "spatial_relations": [
+            {
+              "relation_id": "rel_chess_pieces_surround_gwen",
+              "source_subject_id": "subject_chess_pieces",
+              "relation": "surrounding",
+              "target_subject_id": "subject_little_gwen",
+              "target_region": "around center squares",
+              "distance_hint": "near",
+              "notes": "Chess pieces should frame the hero without hiding the image-1 character silhouette."
+            }
+          ],
+          "constraints": [
+            "preserve image 1 as the subject reference",
+            "keep the hero face and hair readable",
+            "avoid chess pieces blocking the character"
+          ],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "Chibi Little Gwen-inspired blue-haired character from image 1 standing on a large chessboard, surrounded by many black and white chess pieces, cool magical blue accents.",
+          "subject_prompts": {
+            "subject_little_gwen": "Use image 1 as reference: Q-version Little Gwen-inspired character, cyan blue twin-tail hair, cute face, simplified fantasy outfit, magical blue scissor-like energy accents, clean full-body three-quarter view.",
+            "subject_chess_pieces": "Many international chess pieces, black and white, simplified clean shapes, arranged around the hero on chessboard squares."
+          },
+          "scene_prompts": [
+            "Large chessboard stage with alternating dark and light squares, cool magical lighting, hero clearly visible among chess pieces."
+          ],
+          "negative_prompt": "cropped face, hidden character, too many tiny unreadable pieces, photoreal human, messy board"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_zh_explorer_rover_moon_regolith",
+      "language": "zh",
+      "category": "user_sample_vehicle_lunar_scene",
+      "description": "User-provided sample: explorer robot rover on the moon with cratered lunar regolith.",
+      "user_text": "我想看到一个探索者机器人车在月亮上，旁边是坑坑洼洼的月壤。",
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": [
+          "subject_explorer_rover"
+        ],
+        "reference_binding_count": 0,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create an explorer robot rover on the moon beside pitted lunar regolith.",
+          "subject_summaries": [
+            "explorer robot rover with rugged wheels"
+          ],
+          "environment_summary": "moon surface with cratered regolith and small pits",
+          "style_summary": "semi-realistic sci-fi exploration vehicle, dusty lunar material",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_explorer_rover_moon",
+          "title": "Explorer Rover On Moon",
+          "user_goal": "Create an explorer robot rover on the moon beside pitted lunar regolith.",
+          "style": {
+            "style_keywords": [
+              "sci-fi",
+              "lunar",
+              "exploration",
+              "dusty"
+            ],
+            "mood": "quiet exploration",
+            "color_palette": "gray regolith, white rover panels, dark sky",
+            "rendering_style": "semi_realistic",
+            "realism_level": "semi_realistic"
+          },
+          "environment": {
+            "environment_type": "moon_surface",
+            "description": "A cratered lunar surface with many pits, uneven dust, and low horizon.",
+            "background_elements": [
+              "small craters",
+              "distant ridge",
+              "black sky"
+            ],
+            "ground_surface": "pitted lunar regolith"
+          },
+          "lighting": {
+            "description": "Hard low-angle sunlight with strong shadows on the moon surface."
+          },
+          "camera": {
+            "shot_type": "low wide three quarter",
+            "framing": "show the rover and the cratered regolith around it",
+            "target_subject_ids": [
+              "subject_explorer_rover"
+            ]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_explorer_rover",
+              "display_name": "Explorer Robot Rover",
+              "category": "vehicle",
+              "role_in_scene": "hero vehicle",
+              "description": "A compact explorer robot car designed for lunar terrain.",
+              "appearance": "rugged wheels, boxy sensor mast, small antenna, white and gray panels with dusty edges",
+              "pose_or_state": "parked on uneven moon dust near small craters",
+              "reference_image_ids": [],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter",
+              "placement_hint": "front left on the pitted lunar ground",
+              "scale_hint": "small vehicle scale"
+            }
+          ],
+          "spatial_relations": [
+            {
+              "relation_id": "rel_rover_near_craters",
+              "source_subject_id": "subject_explorer_rover",
+              "relation": "near",
+              "target_region": "cluster of small pits in the foreground",
+              "distance_hint": "near",
+              "notes": "The pitted regolith should be visible beside and around the rover."
+            }
+          ],
+          "constraints": [
+            "moon surface must include cratered regolith",
+            "keep rover silhouette clean for image-to-3D",
+            "avoid earth plants or atmosphere"
+          ],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "A compact explorer robot rover on the moon, parked beside cratered pitted lunar regolith, low wide three-quarter camera, hard sunlight and dark sky.",
+          "subject_prompts": {
+            "subject_explorer_rover": "Explorer robot rover, rugged wheels, boxy sensor mast, small antenna, white and gray dusty panels, clean three-quarter vehicle silhouette."
+          },
+          "scene_prompts": [
+            "Moon surface with pitted lunar regolith, many small craters, dusty uneven ground, distant ridge, black sky, hard low-angle sunlight."
+          ],
+          "negative_prompt": "earth plants, wet mud, city background, smooth flat floor, unreadable tiny wires"
         }
       }
     },

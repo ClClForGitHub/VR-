@@ -364,6 +364,25 @@ Acceptance:
   around its center before final placement. Verification: `6 passed in 0.32s`,
   related script/domain/workflow/runtime slice `40 passed in 0.40s`, full suite
   `344 passed in 4.54s`.
+- Fresh full-asset yaw non-dry-run:
+  fixed a placement parser bug where `face/toward scene center` could be
+  mistaken for center placement, added a regression test, and reran
+  `local-e2e` non-dry with the full scene/subject GLBs. Evidence:
+  `/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui31_full_asset_yaw_nondryrun_fixed/`
+  with `summary.ok=true`, `executed_stages=["compose","export_viewer","viewer_check"]`,
+  `target_region=front_right`, `subject_yaw_degrees=90.0`,
+  `viewer_check.ok=true`, and `delivery_handoff.verified=true`. Related
+  regression slice: `9 passed in 0.45s`; full suite: `345 passed in 4.59s`.
+- User-provided scenario fixtures:
+  added the user's three samples to the natural-language runtime matrix:
+  Wuthering-style chibi Phoebe/Fronono beach duo with beach chair and sand
+  castle, image-1-bound chibi Little Gwen on a chessboard with chess pieces,
+  and lunar explorer rover beside pitted regolith. The uploaded Little Gwen
+  reference is stored at `tests/fixtures/images/little_gwen_reference.png`.
+  Review simulation now covers concept accept, concept reject/feedback patch,
+  Blender preview accept, and Blender preview reject/edit feedback. Targeted
+  scenario/user-action verification: `10 passed in 0.76s`, `1 passed in 0.36s`;
+  related suite: `26 passed in 0.77s`; full suite: `350 passed in 4.76s`.
 
 ### P5 - Review Loop
 
