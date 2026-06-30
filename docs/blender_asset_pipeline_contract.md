@@ -165,6 +165,7 @@ Current local compose contract:
   "target_region_normalized": [-0.18, 0.18],
   "target_height_ratio": 0.42,
   "camera_direction": [1.25, -1.55, 0.85],
+  "camera_target_normalized": [0.0, 0.0],
   "camera_distance_multiplier": 2.8,
   "camera_ortho_scale_factor": 1.55,
   "render_resolution": [1400, 900]
@@ -174,6 +175,9 @@ Current local compose contract:
 `workflow_runner local-e2e` writes this as `compose/assembly_plan.json` and
 passes it to `tools/compose_blender_scene.py`. The plan is recorded in
 `summary.json`, tool-call arguments, and compose-stage checkpoint metadata.
+`camera_target_normalized` is optional for backward compatibility; when present
+it shifts the orthographic camera look-at target in normalized scene X/Y space
+so off-center foreground/background subjects stay inspectable.
 
 Do not assume WorldMirror coordinates are metric. Treat the scene coordinate system as arbitrary unless a calibration step is added.
 

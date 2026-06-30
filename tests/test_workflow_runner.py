@@ -607,7 +607,10 @@ def test_local_e2e_workflow_uses_scene_spec_for_compose_plan(tmp_path: Path) -> 
     assert summary["context_views"]["compose"]["summary"]["scene_id"] == "scene_plush_flowers"
     assert summary["compose"]["assembly_plan"]["subject_id"] == "subject_plush"
     assert summary["compose"]["assembly_plan"]["target_region"] == "front_right"
+    assert summary["compose"]["assembly_plan"]["target_region_normalized"][1] < 0
     assert summary["compose"]["assembly_plan"]["target_height_ratio"] == 0.50
+    assert summary["compose"]["assembly_plan"]["camera_target_normalized"][0] > 0
+    assert summary["compose"]["assembly_plan"]["camera_target_normalized"][1] < 0
     assert summary["compose"]["assembly_plan"]["camera_ortho_scale_factor"] < 1.55
     state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
     assert state["scene_spec"]["scene_id"] == "scene_plush_flowers"

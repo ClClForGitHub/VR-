@@ -27,6 +27,7 @@ class ComposeScenePlan(BaseModel):
     target_region_normalized: tuple[float, float] = (-0.18, 0.18)
     target_height_ratio: float = 0.42
     camera_direction: tuple[float, float, float] = (1.25, -1.55, 0.85)
+    camera_target_normalized: tuple[float, float] = (0.0, 0.0)
     camera_distance_multiplier: float = 2.8
     camera_ortho_scale_factor: float = 1.55
     render_resolution: tuple[int, int] = (1400, 900)
@@ -47,6 +48,8 @@ def build_compose_scene_plan(
     subject = _primary_subject(scene_spec) if scene_spec is not None else None
     target_region, normalized, placement_reason = _placement_from_scene(scene_spec, subject)
     camera_direction, distance, ortho, camera_reason = _camera_from_scene(scene_spec)
+    camera_target = _camera_target_from_placement(scene_spec, normalized)
+    render_resolution = _render_resolution_from_scene(scene_spec)
     height_ratio, scale_reason = _height_ratio_from_subject(subject)
     subject_id = subject.subject_id if subject is not None else None
     notes = "; ".join(part for part in [scale_reason, _scene_notes(scene_spec)] if part)
@@ -59,10 +62,12 @@ def build_compose_scene_plan(
         target_region_normalized=normalized,
         target_height_ratio=height_ratio,
         camera_direction=camera_direction,
+        camera_target_normalized=camera_target,
         camera_distance_multiplier=distance,
         camera_ortho_scale_factor=ortho,
+        render_resolution=render_resolution,
         placement_reason=placement_reason,
-        camera_reason=camera_reason,
+        camera_reason=_append_camera_target_reason(camera_reason, camera_target),
         notes=notes or None,
     )
 
@@ -91,15 +96,27 @@ def _placement_from_scene(
                 if part
             )
     text = " ".join(text_parts).lower()
+    wants_front = any(token in text for token in ["front", "foreground", "前景", "靠前", "in_front_of"])
+    wants_back = any(token in text for token in ["behind", "back", "background", "rear", "后方", "背景"])
+    wants_right = any(token in text for token in ["right", "右"])
+    wants_left = any(token in text for token in ["left", "左"])
     if any(token in text for token in ["center", "middle", "中央", "中心", "centered_in"]):
         return "center", (0.0, 0.0), "SceneSpec requests centered placement."
-    if any(token in text for token in ["right", "右"]):
-        return "front_right", (0.20, 0.14), "SceneSpec requests right-side placement."
-    if any(token in text for token in ["left", "左"]):
-        return "front_left", (-0.20, 0.14), "SceneSpec requests left-side placement."
-    if any(token in text for token in ["front", "前景", "in_front_of"]):
+    if wants_front and wants_right:
+        return "front_right", (0.24, -0.24), "SceneSpec requests foreground right-side placement."
+    if wants_front and wants_left:
+        return "front_left", (-0.24, -0.24), "SceneSpec requests foreground left-side placement."
+    if wants_back and wants_right:
+        return "back_right", (0.24, 0.24), "SceneSpec requests background right-side placement."
+    if wants_back and wants_left:
+        return "back_left", (-0.24, 0.24), "SceneSpec requests background left-side placement."
+    if wants_right:
+        return "right_center", (0.26, 0.0), "SceneSpec requests right-side placement."
+    if wants_left:
+        return "left_center", (-0.26, 0.0), "SceneSpec requests left-side placement."
+    if wants_front:
         return "front_center", (0.0, -0.22), "SceneSpec requests foreground placement."
-    if any(token in text for token in ["behind", "back", "后方"]):
+    if wants_back:
         return "back_center", (0.0, 0.24), "SceneSpec requests background placement."
     if any(token in text for token in ["near", "beside", "旁边", "附近"]):
         return "near_scene_focus", (-0.12, 0.12), "SceneSpec requests nearby placement."
@@ -158,6 +175,67 @@ def _camera_from_scene(scene_spec: SceneSpec | None) -> tuple[tuple[float, float
         direction = (1.35, -1.65, 0.45)
         reason += " Low angle requested."
     return direction, distance, ortho, reason
+
+
+def _camera_target_from_placement(
+    scene_spec: SceneSpec | None,
+    target_region_normalized: tuple[float, float],
+) -> tuple[float, float]:
+    if scene_spec is None:
+        return (0.0, 0.0)
+    text = " ".join(
+        str(part)
+        for part in [
+            scene_spec.camera.shot_type,
+            scene_spec.camera.angle,
+            scene_spec.camera.framing,
+            scene_spec.camera.lens_hint,
+            scene_spec.user_goal,
+        ]
+        if part
+    ).lower()
+    if any(token in text for token in ["wide", "full", "全景", "广角", "landscape", "横版"]):
+        strength = 0.25
+    elif any(token in text for token in ["close", "portrait", "特写", "近景", "竖版", "竖图"]):
+        strength = 0.55
+    else:
+        strength = 0.40
+    return (
+        _clamp(round(target_region_normalized[0] * strength, 3), -0.35, 0.35),
+        _clamp(round(target_region_normalized[1] * strength, 3), -0.35, 0.35),
+    )
+
+
+def _render_resolution_from_scene(scene_spec: SceneSpec | None) -> tuple[int, int]:
+    if scene_spec is None:
+        return (1400, 900)
+    text = " ".join(
+        str(part)
+        for part in [
+            scene_spec.camera.shot_type,
+            scene_spec.camera.framing,
+            scene_spec.camera.lens_hint,
+            scene_spec.user_goal,
+        ]
+        if part
+    ).lower()
+    if any(token in text for token in ["square", "1:1", "正方形"]):
+        return (1200, 1200)
+    if any(token in text for token in ["vertical", "portrait", "9:16", "竖版", "竖图", "手机"]):
+        return (1080, 1440)
+    if any(token in text for token in ["wide", "landscape", "16:9", "panorama", "横版", "全景", "广角"]):
+        return (1600, 900)
+    return (1400, 900)
+
+
+def _append_camera_target_reason(camera_reason: str, camera_target: tuple[float, float]) -> str:
+    if camera_target == (0.0, 0.0):
+        return camera_reason
+    return f"{camera_reason} Camera target follows subject placement at {camera_target}."
+
+
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
 
 
 def _scene_notes(scene_spec: SceneSpec | None) -> str | None:

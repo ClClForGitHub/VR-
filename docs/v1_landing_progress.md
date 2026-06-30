@@ -7106,3 +7106,70 @@ Boundary:
 - It is not a bidirectional WebSocket channel.
 - Exact mesh-level picking and live user-click object edit/preview generation
   proof on the full-asset run still remain.
+
+## 2026-06-30 UI28 Assembly Plan Camera Target
+
+Goal: move the SceneSpec-driven Blender assembly plan one step past smoke-level
+placement without creating a second Blender composition pipeline.
+
+Implementation:
+
+- Extended `ComposeScenePlan` with `camera_target_normalized`.
+- `build_compose_scene_plan(...)` now combines horizontal and depth placement
+  hints before selecting a region, so requests like `right side foreground`
+  become a true `front_right` plan with a foreground Y offset.
+- Camera target offset now follows the planned subject region with different
+  strengths for close/portrait, default, and wide/full-scene framing.
+- Render resolution now responds to `square` / `vertical portrait` / `wide
+  landscape` SceneSpec camera hints while preserving the default 1400x900
+  preview when no aspect hint exists.
+- `tools/compose_blender_scene.py` consumes the optional
+  `camera_target_normalized` field and aims the orthographic preview camera at
+  the shifted target. Old assembly plans without the field still run with the
+  previous center target.
+- Updated `docs/blender_asset_pipeline_contract.md` to document the new
+  optional field and its backward-compatible behavior.
+
+Verification:
+
+```bash
+python -m py_compile agent_runtime/blender_assembly_planner.py tools/compose_blender_scene.py
+python -m pytest tests/test_blender_assembly_planner.py \
+  tests/test_workflow_runner.py::test_local_e2e_workflow_uses_scene_spec_for_compose_plan -q
+python -m pytest tests/test_blender_assembly_planner.py tests/test_workflow_runner.py tests/test_script_adapters.py -q
+python -m pytest -q
+python -m agent_runtime.workflow_runner local-e2e \
+  --root /home/team/zouzhiyuan/image23D_Agent \
+  --scene-glb /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_full_asset_live_router_edit_dfce104f/artifacts/scene_3d_asset/workflow_scene_glb.glb \
+  --asset-glb /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_full_asset_live_router_edit_dfce104f/artifacts/subject_3d_asset/workflow_subject_glb.glb \
+  --scene-spec-json /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_blender_socket_edit_refresh_scratch_20260630T025222/scene_spec.json \
+  --output-dir /home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui28_assembly_plan_dryrun \
+  --blender-path /home/team/zouzhiyuan/blender-5.1.2-linux-x64/blender \
+  --dry-run \
+  --stages compose
+```
+
+Results:
+
+```text
+5 passed in 0.50s
+59 passed in 0.55s
+338 passed in 4.81s
+dry-run workflow: ok=true, executed_stages=["compose"],
+assembly_plan_json=outputs/runs/20260630_ui28_assembly_plan_dryrun/compose/assembly_plan.json,
+camera_target_normalized=[-0.072, 0.072]
+```
+
+Evidence:
+
+```text
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui28_assembly_plan_dryrun/summary.json
+/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui28_assembly_plan_dryrun/compose/assembly_plan.json
+```
+
+Boundary:
+
+- This is still deterministic SceneSpec-to-compose planning, not a full
+  LLM/MCP assembly planner.
+- It improves layout/camera semantics for the existing compose/export path and
+  keeps Blender execution behind the same script/domain-tool boundary.

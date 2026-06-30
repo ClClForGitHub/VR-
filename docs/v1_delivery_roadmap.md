@@ -333,6 +333,23 @@ Acceptance:
   `target_region=front_right`, `target_height_ratio=0.5`, and produced a
   viewer scene with `7` objects.
 
+2026-06-30 result:
+
+- Extended the deterministic `ComposeScenePlan` contract with
+  `camera_target_normalized` while keeping old plans compatible.
+- SceneSpec placement planning now combines horizontal and depth hints, so
+  `right side foreground` becomes a real foreground-right placement instead of
+  only a side placement.
+- `tools/compose_blender_scene.py` now aims the preview camera at the optional
+  normalized camera target, and the planner chooses square/vertical/wide render
+  resolution from SceneSpec camera hints.
+- Verification:
+  `python -m pytest tests/test_blender_assembly_planner.py tests/test_workflow_runner.py::test_local_e2e_workflow_uses_scene_spec_for_compose_plan -q`
+  -> `5 passed in 0.50s`.
+- Dry-run evidence:
+  `/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_ui28_assembly_plan_dryrun/compose/assembly_plan.json`
+  with `camera_target_normalized=[-0.072, 0.072]`.
+
 ### P5 - Review Loop
 
 Status: state loop and runtime console MVP exist; one-step runtime execution

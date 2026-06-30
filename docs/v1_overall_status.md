@@ -116,9 +116,10 @@ Done enough to rely on:
   `state/frontend_status/delivery_handoff/summary/checkpoint/runtime_plan`, and
   stop creating further delivery jobs once a valid `EXPORT_PACKAGE` zip exists.
 - Blender compose planning: `SceneSpec`/fallback state now produces a run-local
-  `compose/assembly_plan.json` with target region, target height ratio, camera
-  direction, camera distance, and orthographic framing. The existing compose
-  script consumes this plan without replacing the Blender pipeline.
+  `compose/assembly_plan.json` with composite front/back/left/right placement,
+  target height ratio, camera direction, camera target offset, camera distance,
+  orthographic framing, and aspect-aware render resolution. The existing
+  compose script consumes this plan without replacing the Blender pipeline.
 - SceneSpec-driven non-dry-run assembly: the local-e2e workflow can now load a
   saved `scene_spec.json`, produce `compose/assembly_plan.json`, execute
   Blender compose/export/viewer-check, and hand off to deterministic delivery
@@ -441,7 +442,9 @@ If the "whole thing" means a real autonomous image-to-3D-scene agent:
 
 ## Immediate Next Steps
 
-1. Keep git initialized and make a deliberate first commit only after the user approves the tracked file list.
+1. Keep git clean and push only deliberate source/test/doc slices; the
+   repository has already been initialized and pushed to
+   `https://github.com/ClClForGitHub/VR-`.
 2. Ask the user to inspect
    `outputs/runs/20260630_full_asset_live_router_edit_dfce104f` in the 8093
    console. If accepted, run the Blender-preview approval action and build the

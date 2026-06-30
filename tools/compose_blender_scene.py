@@ -61,6 +61,14 @@ def numeric_pair(value, default):
         return default
 
 
+def clamped_pair(value, default, minimum=-0.8, maximum=0.8):
+    first, second = numeric_pair(value, default)
+    return (
+        max(minimum, min(maximum, first)),
+        max(minimum, min(maximum, second)),
+    )
+
+
 def numeric_triple(value, default):
     if not isinstance(value, (list, tuple)) or len(value) != 3:
         return default
@@ -173,10 +181,16 @@ def main():
     camera_direction = Vector(numeric_triple(assembly_plan.get("camera_direction"), (1.25, -1.55, 0.85)))
     if camera_direction.length < 1e-6:
         camera_direction = Vector((1.25, -1.55, 0.85))
+    camera_target_x, camera_target_y = clamped_pair(assembly_plan.get("camera_target_normalized"), (0.0, 0.0))
+    camera_target = Vector((
+        all_center.x + all_size.x * camera_target_x,
+        all_center.y + all_size.y * camera_target_y,
+        all_center.z,
+    ))
     camera.data.ortho_scale = max_dim * ortho_scale_factor
-    camera.location = all_center + camera_direction.normalized() * max_dim * camera_distance_multiplier
+    camera.location = camera_target + camera_direction.normalized() * max_dim * camera_distance_multiplier
     camera.data.clip_end = max_dim * 30
-    look_at(camera, all_center)
+    look_at(camera, camera_target)
 
     scene = bpy.context.scene
     scene.camera = camera
@@ -206,6 +220,7 @@ def main():
     print(f"Asset scale: {scale:.6f}")
     print(f"Asset target: {tuple(round(v, 4) for v in target)}")
     print(f"Camera direction: {tuple(round(v, 4) for v in camera_direction)}")
+    print(f"Camera target: {tuple(round(v, 4) for v in camera_target)}")
     print(f"Camera ortho scale factor: {ortho_scale_factor:.6f}")
     print(f"Saved preview: {preview_png}")
     print(f"Saved blend: {output_blend}")
