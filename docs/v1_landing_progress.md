@@ -7040,3 +7040,69 @@ Boundary:
   mesh-name picking.
 - True websocket/server-push refresh and a live user-click object edit/preview
   generation proof on the full-asset run still remain.
+
+## 2026-06-30 UI27 Server-Push Refresh
+
+Goal: replace the review surface's passive-only refresh behavior with a real
+server-push channel while keeping the existing polling path as a fallback for
+explicit long-running actions.
+
+Implementation:
+
+- Added `GET /api/runs/<run_key>/events` to `tools/runtime_console_server.py`.
+- The endpoint serves Server-Sent Events with:
+  - `event: ready` when the stream opens;
+  - `event: refresh` when watched run artifacts change;
+  - `event: heartbeat` for long-lived connections.
+- The event signature watches mtime/size for run-local control and preview
+  files such as `state.json`, `frontend_status.json`, `summary.json`,
+  runtime JSON/JSONL evidence, `delivery_handoff.json`, `viewer_export/*`,
+  `preview_render/*`, and delivery zips. It does not read model or preview
+  file contents.
+- `web/runtime_console/app.js` now opens an `EventSource` for the selected run,
+  refreshes the current run bundle/chat on `refresh`, and closes/reopens the
+  stream when the selected run changes.
+- Existing bounded polling for `生成预览` and `确认当前预览并打包` remains in
+  place as an explicit-action fallback.
+- Bumped the runtime-console cache/version key to `20260630-ui27`.
+- Restarted the 8093 runtime console service after updating server code.
+
+Verification:
+
+```bash
+python -m py_compile tools/runtime_console_server.py scripts/runtime_console_hydrated_smoke.py
+node --check web/runtime_console/app.js
+python -m pytest tests/test_runtime_console_server.py tests/test_runtime_console.py tests/test_frontend_status.py -q
+python scripts/runtime_console_hydrated_smoke.py \
+  --console-url http://127.0.0.1:8093 \
+  --expected-run-id 20260630_full_asset_live_router_edit_dfce104f \
+  --output-dir /tmp/image23d_ui27_sse \
+  --skip-firefox
+python -m pytest -q
+```
+
+Results:
+
+```text
+targeted pytest: 11 passed in 0.87s
+full pytest: 336 passed in 4.48s
+hydrated smoke: ok=true
+selected_run_id=20260630_full_asset_live_router_edit_dfce104f
+phase=BLENDER_PREVIEW
+run_event_stream_present=true
+direct /events check: content-type=text/event-stream; event_ready=true
+```
+
+Evidence:
+
+```text
+/tmp/image23d_ui27_sse/summary.json
+http://127.0.0.1:8093/api/runs/<run_key>/events?max_seconds=0.2&interval=0.2
+```
+
+Boundary:
+
+- This closes the server-push refresh layer for the runtime console using SSE.
+- It is not a bidirectional WebSocket channel.
+- Exact mesh-level picking and live user-click object edit/preview generation
+  proof on the full-asset run still remain.

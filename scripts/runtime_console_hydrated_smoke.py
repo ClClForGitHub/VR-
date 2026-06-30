@@ -254,7 +254,7 @@ def main() -> int:
     parser.add_argument("--console-url", default=DEFAULT_CONSOLE_URL)
     parser.add_argument("--output-dir", default=DEFAULT_OUT_DIR)
     parser.add_argument("--expected-run-id", default="20260629_scene_spec_assembly_non_dryrun")
-    parser.add_argument("--expected-ui-version", default="20260630-ui26")
+    parser.add_argument("--expected-ui-version", default="20260630-ui27")
     parser.add_argument("--skip-firefox", action="store_true")
     args = parser.parse_args()
 
@@ -297,6 +297,7 @@ def main() -> int:
     bool_check(checks, "run_refresh_poll_present", all(token in app_js for token in ["startRunRefreshPoll", "stopRunRefreshPoll", "正在生成新版预览", "正在打包交付"]))
     bool_check(checks, "ui25_creator_skin_present", "ui25_creator.css" in index_html and "请验收当前 3D 场景" in app_js)
     bool_check(checks, "viewer_object_selection_bridge_present", all(token in viewer_html for token in ["sceneObjectsJson", "image23d.viewer.objectSelected", "objectPicker"]) and "handleViewerObjectSelectedMessage" in app_js)
+    bool_check(checks, "run_event_stream_present", all(token in app_js for token in ["EventSource", "/events", "startRunEventStream", "refreshFromRunEventStream"]))
     bool_check(checks, "old_public_strings_absent", not any(token in index_html for token in OLD_PUBLIC_STRINGS))
     bool_check(checks, "has_public_runs", bool(visible_runs))
     bool_check(checks, "expected_run_selected", selected_run and selected_run.get("run_id") == args.expected_run_id)

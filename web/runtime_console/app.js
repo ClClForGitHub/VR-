@@ -1,4 +1,4 @@
-const UI_VERSION = '20260630-ui26';
+const UI_VERSION = '20260630-ui27';
 const DEV_MODE = new URLSearchParams(window.location.search).get('dev') === '1';
 const PUBLIC_RUN_LIMIT = 6;
 
@@ -17,6 +17,9 @@ const state = {
   viewerLoadingTimer: null,
   runRefreshPollTimer: null,
   runRefreshPollCount: 0,
+  runEventSource: null,
+  runEventSourceKey: null,
+  runEventRefreshInFlight: false,
   selectedSceneObjectKey: '',
 };
 
@@ -291,6 +294,7 @@ function routeKey(run) {
 }
 
 async function selectRun(runKey) {
+  stopRunEventStream();
   state.currentRunKey = runKey;
   state.selectedSceneObjectKey = '';
   window.localStorage?.setItem('image23d.runtimeConsole.currentRunKey', runKey);
@@ -299,6 +303,7 @@ async function selectRun(runKey) {
   renderRuns();
   renderBundle();
   await refreshChat();
+  startRunEventStream();
 }
 
 function renderRuns() {
@@ -871,6 +876,46 @@ async function refreshCurrentRunBundle({ refreshChatLog = false } = {}) {
   renderBundle();
   if (refreshChatLog) await refreshChat();
   return state.bundle;
+}
+
+function startRunEventStream() {
+  stopRunEventStream();
+  if (!state.currentRunKey || typeof window.EventSource !== 'function') return;
+  const runKey = state.currentRunKey;
+  const source = new EventSource(`/api/runs/${encodeURIComponent(runKey)}/events`);
+  state.runEventSource = source;
+  state.runEventSourceKey = runKey;
+  source.addEventListener('refresh', () => {
+    refreshFromRunEventStream(runKey);
+  });
+  source.addEventListener('ready', () => {
+    document.documentElement.classList.add('has-run-push-refresh');
+  });
+  source.onerror = () => {
+    document.documentElement.classList.remove('has-run-push-refresh');
+  };
+}
+
+function stopRunEventStream() {
+  if (state.runEventSource) {
+    state.runEventSource.close();
+    state.runEventSource = null;
+  }
+  state.runEventSourceKey = null;
+  state.runEventRefreshInFlight = false;
+}
+
+async function refreshFromRunEventStream(expectedRunKey) {
+  if (!expectedRunKey || state.currentRunKey !== expectedRunKey) return;
+  if (state.runEventRefreshInFlight) return;
+  state.runEventRefreshInFlight = true;
+  try {
+    await refreshCurrentRunBundle({ refreshChatLog: true });
+  } catch {
+    // EventSource will reconnect; explicit action polling remains the fallback.
+  } finally {
+    state.runEventRefreshInFlight = false;
+  }
 }
 
 async function refreshChat() {
@@ -2649,6 +2694,7 @@ els.uploadInput?.addEventListener('change', () => {
 
 els.viewerFrame?.addEventListener('load', handleViewerFrameLoaded);
 window.addEventListener('message', handleViewerObjectSelectedMessage);
+window.addEventListener('beforeunload', stopRunEventStream);
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({

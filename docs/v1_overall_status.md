@@ -381,6 +381,14 @@ These are the main gaps before the overall system is truly complete:
      existing object-feedback draft when the composer is empty. Hydrated smoke
      confirms `viewer_object_selection_bridge_present=true`; evidence is under
      `/tmp/image23d_ui26_object_pick_final/`.
+   - The UI27 server-push pass adds
+     `GET /api/runs/<run_key>/events` as an SSE channel. The 8093 console opens
+     an `EventSource` for the selected run and refreshes the run bundle/chat on
+     server `refresh` events while keeping bounded polling as the fallback for
+     explicit long-running actions. Hydrated smoke confirms
+     `run_event_stream_present=true`; direct endpoint checks return
+     `text/event-stream` and `event: ready`; evidence is under
+     `/tmp/image23d_ui27_sse/`.
    - It can build a runtime plan, run a bounded dispatcher loop, apply
      supported candidates, create delegated job handoff packages, dry-run a
      worker/sub-agent execution attempt, ingest
@@ -395,7 +403,7 @@ These are the main gaps before the overall system is truly complete:
      debug-like run ids are collapsed to public-safe names unless `?dev=1` is
      enabled.
    - It is not yet a full background worker runtime with exact mesh-level
-     picking, true websocket/push refresh, or live user-click evidence for
+     picking, bidirectional websocket control, or live user-click evidence for
      object refresh on the full-asset run.
 
 8. End-to-end acceptance run
@@ -446,8 +454,9 @@ If the "whole thing" means a real autonomous image-to-3D-scene agent:
 6. Run live Qwen visual/reasoning checks in the close-out phase, with DeepSeek
    kept as a compatibility comparison path that already has router replay
    evidence.
-7. Continue improving the review surface: exact mesh-level picking, true
-   websocket or server-push refresh, and live user-click proof for object
-   refresh on the full-asset run are still missing even though the file/runtime
-   edit chain, explicit object-refresh command bridge, polling refresh layer,
-   and viewer-to-console object-selection bridge are now proven.
+7. Continue improving the review surface: exact mesh-level picking,
+   bidirectional websocket control if needed, and live user-click proof for
+   object refresh on the full-asset run are still missing even though the
+   file/runtime edit chain, explicit object-refresh command bridge, polling
+   refresh layer, server-push SSE refresh, and viewer-to-console
+   object-selection bridge are now proven.

@@ -12,6 +12,7 @@ import argparse
 import base64
 import json
 import posixpath
+import time
 from email import policy
 from email.parser import BytesParser
 from http import HTTPStatus
@@ -66,6 +67,29 @@ STATIC_TYPES = {
     ".png": "image/png",
     ".webp": "image/webp",
 }
+
+RUN_EVENT_WATCH_FILES = [
+    "state.json",
+    "frontend_status.json",
+    "summary.json",
+    "runtime_plan.json",
+    "runtime_execution.jsonl",
+    "runtime_apply.jsonl",
+    "runtime_loop.jsonl",
+    "runtime_handoff.jsonl",
+    "runtime_worker.jsonl",
+    "runtime_user_action.jsonl",
+    "runtime_handoff_apply.jsonl",
+    "delivery_handoff.json",
+    "chat.jsonl",
+    "uploads.json",
+]
+
+RUN_EVENT_WATCH_GLOBS = [
+    "viewer_export/*",
+    "preview_render/*",
+    "delivery_package/**/*.zip",
+]
 
 
 class RuntimeConsoleHandler(BaseHTTPRequestHandler):
@@ -163,6 +187,8 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
         if leaf == "runtime-handoff-apply":
             summary = read_runtime_handoff_apply_summary(effective_dir)
             return self._send_json(summary or {})
+        if leaf == "events":
+            return self._send_run_events(run_dir, effective_dir, query)
         if leaf == "file":
             return self._send_run_file(run_dir, query)
         return self._send_error(HTTPStatus.NOT_FOUND, f"unknown run endpoint: {leaf}")
@@ -335,6 +361,51 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
         content_type = STATIC_TYPES.get(path.suffix, "application/octet-stream")
         self._send_bytes(path.read_bytes(), content_type)
 
+    def _send_run_events(self, run_dir: Path, effective_dir: Path, query: dict):
+        interval = _safe_float(query.get("interval", ["2"])[0], default=2.0, minimum=0.2, maximum=30.0)
+        max_seconds = _safe_float(query.get("max_seconds", ["180"])[0], default=180.0, minimum=0.2, maximum=900.0)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        last_signature = _runtime_event_signature(run_dir, effective_dir)
+        started = time.monotonic()
+        event_id = 0
+
+        def write_event(event_name: str, payload: dict) -> bool:
+            nonlocal event_id
+            event_id += 1
+            body = (
+                f"id: {event_id}\n"
+                f"event: {event_name}\n"
+                f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            ).encode("utf-8")
+            try:
+                self.wfile.write(body)
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return False
+            return True
+
+        if not write_event("ready", {"ok": True, "signature": last_signature["fingerprint"]}):
+            return
+        next_heartbeat = time.monotonic() + 15.0
+        while time.monotonic() - started < max_seconds:
+            time.sleep(interval)
+            signature = _runtime_event_signature(run_dir, effective_dir)
+            if signature["fingerprint"] != last_signature["fingerprint"]:
+                last_signature = signature
+                if not write_event("refresh", signature):
+                    return
+            elif time.monotonic() >= next_heartbeat:
+                if not write_event("heartbeat", {"ok": True, "signature": signature["fingerprint"]}):
+                    return
+                next_heartbeat = time.monotonic() + 15.0
+
     def _read_json_body(self, *, default=None):
         length = int(self.headers.get("Content-Length", "0"))
         if length == 0 and default is not None:
@@ -392,6 +463,53 @@ def _model_to_dict(model):
     if hasattr(model, "model_dump"):
         return model.model_dump(mode="json")
     return model.dict()
+
+
+def _safe_float(value, *, default: float, minimum: float, maximum: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
+
+def _runtime_event_signature(run_dir: Path, effective_dir: Path) -> dict:
+    roots = []
+    for root in [run_dir, effective_dir]:
+        resolved = root.resolve()
+        if resolved not in roots:
+            roots.append(resolved)
+    records = []
+    for root in roots:
+        for rel in RUN_EVENT_WATCH_FILES:
+            path = root / rel
+            _append_signature_record(records, root, path)
+        for pattern in RUN_EVENT_WATCH_GLOBS:
+            for path in sorted(root.glob(pattern))[:200]:
+                if path.is_file():
+                    _append_signature_record(records, root, path)
+    fingerprint = "|".join(records)
+    return {
+        "ok": True,
+        "fingerprint": fingerprint,
+        "file_count": len(records),
+        "generated_at": time.time(),
+    }
+
+
+def _append_signature_record(records: list[str], root: Path, path: Path) -> None:
+    try:
+        rel = path.resolve().relative_to(root).as_posix()
+    except (OSError, ValueError):
+        return
+    try:
+        stat = path.stat()
+    except OSError:
+        records.append(f"{root.name}:{rel}:missing")
+        return
+    if not path.is_file():
+        return
+    records.append(f"{root.name}:{rel}:{stat.st_mtime_ns}:{stat.st_size}")
 
 
 def main() -> int:

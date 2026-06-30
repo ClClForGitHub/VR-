@@ -480,7 +480,9 @@ Useful, but not the final product:
   object-preview and delivery-package actions, UI25 creator-workbench skin plus
   the 8093 static-route fix for `ui25_creator.css`, UI26 viewer-to-console
   object selection through adjacent `scene_state.json` and
-  `image23d.viewer.objectSelected`, and clean runtime audit;
+  `image23d.viewer.objectSelected`, UI27 server-push refresh through
+  `GET /api/runs/<run_key>/events` and frontend `EventSource`, and clean
+  runtime audit;
 - scratch live `blender-lab-socket` edit-refresh evidence on
   `20260630_blender_socket_edit_refresh_scratch_20260630T025222`, using
   `update_camera` to save the scratch `.blend`, export a refreshed viewer GLB,
