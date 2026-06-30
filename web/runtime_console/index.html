@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>image23D 创作空间</title>
+  <link rel="stylesheet" href="/styles.css?v=20260630-ui26">
+  <link rel="stylesheet" href="/ui19_public.css?v=20260630-ui26">
+  <link rel="stylesheet" href="/ui25_creator.css?v=20260630-ui26">
+</head>
+<body>
+  <div class="app">
+    <nav class="workspace-nav" aria-label="主导航">
+      <a class="nav-logo" href="/" aria-label="image23D">
+        <span class="logo-mark"></span>
+      </a>
+      <button class="nav-item active" type="button" aria-current="page">
+        <span class="nav-icon">◇</span>
+        <span>创作</span>
+      </button>
+      <button class="nav-item" type="button">
+        <span class="nav-icon">✦</span>
+        <span>生成</span>
+      </button>
+      <button class="nav-item" type="button">
+        <span class="nav-icon">□</span>
+        <span>资产</span>
+      </button>
+      <button class="nav-item" type="button">
+        <span class="nav-icon">⌁</span>
+        <span>场景</span>
+      </button>
+      <div class="nav-spacer"></div>
+      <button class="nav-item" type="button">
+        <span class="nav-icon">?</span>
+        <span>帮助</span>
+      </button>
+    </nav>
+
+    <aside class="sidebar">
+      <header class="topbar">
+        <div>
+          <h1>image23D</h1>
+          <p id="runSubtitle">正在读取创作</p>
+        </div>
+        <button id="newRunButton" type="button">新建创作</button>
+      </header>
+
+      <section class="panel run-panel">
+        <div class="panel-title">
+          <h2>创作历史</h2>
+          <button id="refreshRunsButton" type="button">刷新</button>
+        </div>
+        <div id="runList" class="run-list">
+          <div class="run-item placeholder">
+            <span class="item-title">正在读取创作记录</span>
+            <span class="item-meta">连接本地服务...</span>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <main class="creator-main">
+      <section class="preview-panel">
+        <div class="viewer-toolbar">
+          <div>
+            <span class="eyebrow">3D 预览</span>
+            <strong id="viewerTitle">等待载入创作</strong>
+            <span id="viewerMeta"></span>
+          </div>
+          <div class="toolbar-actions">
+            <a id="viewerOpenLink" class="disabled" href="#" target="_blank" rel="noreferrer" hidden>等待预览</a>
+            <a id="blendOpenLink" class="disabled" href="#" target="_blank" rel="noreferrer" hidden>等待工程</a>
+          </div>
+        </div>
+        <div id="stageRoadmap" class="stage-roadmap" aria-label="创作阶段总览">
+          <div class="roadmap-step active">
+            <span>1</span>
+            <strong>载入记录</strong>
+          </div>
+        </div>
+        <div id="workflowRibbon" class="workflow-ribbon" aria-label="当前创作摘要">
+          <div class="ribbon-item">
+            <span>当前阶段</span>
+            <strong id="centerPhaseValue">读取中</strong>
+          </div>
+          <div class="ribbon-item">
+            <span>下一步</span>
+            <strong id="centerNextValue">等待创作数据</strong>
+          </div>
+          <div class="ribbon-item">
+            <span>场景预览</span>
+            <strong id="centerPreviewValue">准备中</strong>
+          </div>
+          <div class="ribbon-item">
+            <span>素材</span>
+            <strong id="centerAssetValue">读取中</strong>
+          </div>
+        </div>
+        <div id="taskBrief" class="task-brief">
+          <div>
+            <span>当前任务</span>
+            <strong>等待用户输入</strong>
+          </div>
+          <p>发送需求或上传参考图后，这里会显示自然语言目标、参考图绑定和下一步。</p>
+        </div>
+        <div id="viewerFrameWrap" class="viewer-frame-wrap">
+          <iframe id="viewerFrame" title="3D 场景预览"></iframe>
+          <img id="conceptPreviewImage" class="concept-preview-image" alt="概念图预览">
+          <div id="viewerEmpty" class="empty-view">
+            <div class="empty-stack">
+              <strong>正在读取创作</strong>
+              <span>载入完成后会自动显示 3D 场景、概念图或下一步提示。</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chat-panel composer-panel">
+        <div class="panel-title composer-title">
+          <div>
+            <span class="eyebrow">对话</span>
+            <h2>输入想法、上传参考、确认结果</h2>
+          </div>
+          <div id="uploadChips" class="upload-chips"></div>
+        </div>
+        <div id="chatLog" class="chat-log"></div>
+        <div id="composerNotice" class="composer-notice" hidden></div>
+        <div class="composer-inputs">
+          <form id="uploadForm" class="upload-row">
+            <label class="upload-drop" for="uploadInput">
+              <span class="upload-plus">+</span>
+              <strong>添加参考图</strong>
+              <small id="uploadFileHint">支持图片文件</small>
+            </label>
+            <input id="uploadInput" type="file" accept="image/*">
+            <button type="submit">上传参考图</button>
+          </form>
+          <form id="chatForm" class="chat-form">
+            <textarea id="chatInput" rows="3" placeholder="输入角色、场景、参考图用途，或对当前结果的修改意见"></textarea>
+            <button type="submit">发送</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <aside class="inspector">
+      <div class="inspector-scroll">
+        <section class="panel status-panel">
+          <div class="panel-title">
+            <h2>创作阶段</h2>
+          </div>
+          <div id="nextActionBanner" class="next-action-banner">
+            <div>
+              <span>下一步</span>
+              <strong>等待创作数据</strong>
+            </div>
+            <p>载入完成后会显示当前阶段、资产状态和可交付入口。</p>
+          </div>
+          <div id="userGateActions" class="user-gate-actions"></div>
+          <div class="panel-subtitle">阶段进度</div>
+          <div id="stageTimeline" class="stage-timeline" aria-label="创作阶段">
+            <div class="stage-step active">
+              <span class="stage-dot">1</span>
+              <strong>载入记录</strong>
+            </div>
+          </div>
+          <div id="statusHero" class="status-hero">
+            <span>当前阶段</span>
+            <strong>读取创作中</strong>
+            <p>正在载入最近的创作记录。</p>
+          </div>
+          <div id="runStatusStrip" class="run-status-strip" aria-label="运行摘要">
+            <div class="strip-item"><span>阶段</span><strong>读取中</strong></div>
+            <div class="strip-item"><span>状态</span><strong>等待数据</strong></div>
+          </div>
+        </section>
+
+        <section class="panel asset-panel">
+          <div class="panel-title">
+            <h2>素材库</h2>
+          </div>
+          <div id="assetGallery" class="asset-gallery">
+            <div class="asset-gallery-empty">等待资产写入</div>
+          </div>
+          <div id="assetList" class="asset-list">
+            <div class="asset-item missing">
+              <span class="asset-dot"></span>
+              <div><strong>参考图</strong><small>等待载入</small></div>
+            </div>
+            <div class="asset-item missing">
+              <span class="asset-dot"></span>
+              <div><strong>3D 预览</strong><small>等待载入</small></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel scene-object-panel">
+          <div class="panel-title">
+            <h2>场景内容</h2>
+          </div>
+          <div id="sceneObjectList" class="scene-object-list">
+            <div class="scene-object-empty">等待场景对象</div>
+          </div>
+        </section>
+
+        <section class="panel delivery-panel">
+          <div class="panel-title">
+            <h2>验收与交付</h2>
+          </div>
+          <div id="deliveryList" class="delivery-list">
+            <div class="delivery-item muted">
+              <strong>等待可交付结果</strong>
+              <span>生成预览后显示入口</span>
+            </div>
+          </div>
+        </section>
+
+        <details class="panel collapsible-panel dev-only" hidden>
+          <summary>
+            <span>开发详情</span>
+          </summary>
+          <dl id="statusList" class="kv-list"></dl>
+
+          <div class="dev-actions">
+            <h3>调试运行控制</h3>
+            <div class="button-row">
+              <button id="planButton" type="button">生成计划</button>
+              <button id="stepButton" type="button">试跑一步</button>
+              <button id="applyButton" type="button">应用结果</button>
+              <button id="loopButton" type="button">循环试跑</button>
+              <button id="handoffButton" type="button">交给子任务</button>
+              <button id="workerButton" type="button">试跑子任务</button>
+            </div>
+          </div>
+
+          <h3>内部运行记录</h3>
+          <div id="jobList" class="job-list"></div>
+
+          <h3>场景对象 <span id="objectCount" class="count">0</span></h3>
+          <div id="objectList" class="object-list"></div>
+
+          <h3>运行文件 <span id="fileCount" class="count">0</span></h3>
+          <div id="fileList" class="file-list"></div>
+        </details>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/app.js?v=20260630-ui26" defer></script>
+</body>
+</html>

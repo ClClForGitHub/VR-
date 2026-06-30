@@ -1,0 +1,101 @@
+import json
+from pathlib import Path
+
+import pytest
+
+from agent_runtime.runtime_audit import audit_runtime_run
+from agent_runtime.runtime_loop import run_bounded_runtime_loop
+from agent_runtime.scenario_fixtures import (
+    NaturalLanguageSceneCase,
+    load_natural_language_scene_cases,
+    materialize_runtime_scenario_case,
+)
+
+
+SCENARIO_CASES = load_natural_language_scene_cases()
+
+
+def test_natural_language_fixture_matrix_has_expected_coverage() -> None:
+    case_ids = [case.case_id for case in SCENARIO_CASES]
+    categories = {case.category for case in SCENARIO_CASES}
+    languages = {case.language for case in SCENARIO_CASES}
+
+    assert len(case_ids) == len(set(case_ids))
+    assert len(SCENARIO_CASES) >= 7
+    assert {"zh", "en"} <= languages
+    assert {
+        "text_only_single_subject",
+        "subject_scene_style_refs",
+        "multi_subject_layout",
+        "vehicle_texture_scene_refs",
+        "clarification_required",
+    } <= categories
+
+
+@pytest.mark.parametrize(
+    "case",
+    [case for case in SCENARIO_CASES if case.expected.stop_reason == "delegated"],
+    ids=lambda case: case.case_id,
+)
+def test_natural_language_scene_cases_run_to_delegated_generation(
+    tmp_path: Path,
+    case: NaturalLanguageSceneCase,
+) -> None:
+    run_dir = materialize_runtime_scenario_case(root=tmp_path, case=case)
+
+    result = run_bounded_runtime_loop(
+        run_dir,
+        max_steps=8,
+        dry_run=True,
+        response_text_by_node=case.response_text_by_node(),
+    )
+
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+    audit = audit_runtime_run(run_dir)
+
+    assert result.ok is True
+    assert result.stop_reason == case.expected.stop_reason
+    assert state["phase"] == case.expected.final_phase
+    assert [item["subject_id"] for item in state["scene_spec"]["subjects"]] == case.expected.subject_ids
+    assert len(state["reference_bindings"]) == case.expected.reference_binding_count
+    assert bool(state["concept_bundle"]["prompt_pack"]) is case.expected.has_prompt_pack
+    assert result.iterations[-1].domain_tool_name == "generate_concept_images"
+    assert audit.ok is True
+    _assert_prompt_outputs_are_reviewable(run_dir)
+
+
+def test_unbound_reference_case_waits_for_user_before_llm_or_generation(tmp_path: Path) -> None:
+    case = next(case for case in SCENARIO_CASES if case.case_id == "scenario_missing_reference_binding")
+    run_dir = materialize_runtime_scenario_case(root=tmp_path, case=case)
+
+    result = run_bounded_runtime_loop(run_dir, max_steps=3, dry_run=True)
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+
+    assert result.ok is True
+    assert result.stop_reason == "waiting_user"
+    assert result.iterations[0].execution_status == case.expected.first_runtime_status
+    assert result.iterations[0].node_name is None
+    assert state["phase"] == "INTAKE"
+    assert state["scene_spec"] is None
+    assert state["concept_bundle"] is None
+
+
+def _assert_prompt_outputs_are_reviewable(run_dir: Path) -> None:
+    records = [
+        json.loads(line)
+        for line in (run_dir / "runtime_execution.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    output_paths = [Path(record["output_json"]) for record in records if record.get("output_json")]
+    assert output_paths
+    for output_path in output_paths:
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        llm_result = payload["llm_result"]
+        system_prompt = llm_result["prompt"]["system_prompt"]
+        assert "context_json:" in system_prompt
+        assert "output_json_schema:" in system_prompt
+        assert "Do not execute tools" in system_prompt
+        assert "Do not call raw MCP tools" in system_prompt
+        assert "Do not invent artifact ids" in system_prompt
+        assert payload["context_json"] is not None
+        assert llm_result["parsed_output"] is not None

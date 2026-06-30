@@ -1,0 +1,764 @@
+{
+  "version": 1,
+  "purpose": "Inspectable natural-language fixtures for the V1 image/text-to-Blender runtime.",
+  "cases": [
+    {
+      "case_id": "scenario_text_robot_studio",
+      "language": "en",
+      "category": "text_only_single_subject",
+      "description": "Text-only request for one hero subject in a simple studio scene.",
+      "user_text": "Create a compact friendly robot in a clean studio display scene. It should be easy to generate as one subject and place on a small pedestal.",
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": ["subject_robot"],
+        "reference_binding_count": 0,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a compact friendly robot display.",
+          "subject_summaries": ["A compact friendly robot with rounded panels."],
+          "environment_summary": "A clean small studio display area.",
+          "style_summary": "bright, polished, toy-like, readable silhouette",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_robot_studio",
+          "title": "Compact Robot Studio Display",
+          "user_goal": "Create a compact friendly robot in a clean studio display scene.",
+          "style": {
+            "style_keywords": ["clean", "friendly", "polished"],
+            "rendering_style": "stylized",
+            "realism_level": "stylized"
+          },
+          "environment": {
+            "environment_type": "studio",
+            "description": "A small clean studio display area with a simple pedestal.",
+            "background_elements": ["pedestal"],
+            "ground_surface": "matte floor"
+          },
+          "lighting": {"description": "Soft studio lighting with a gentle key light."},
+          "camera": {
+            "shot_type": "three quarter",
+            "framing": "full subject centered with some floor visible",
+            "target_subject_ids": ["subject_robot"]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_robot",
+              "display_name": "Friendly Robot",
+              "category": "character",
+              "role_in_scene": "hero subject",
+              "description": "A compact friendly robot with rounded white panels and blue accent lights.",
+              "appearance": "rounded body, small antenna, expressive screen face, clean toy-like finish",
+              "pose_or_state": "standing upright on a small pedestal",
+              "reference_image_ids": [],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter"
+            }
+          ],
+          "spatial_relations": [],
+          "constraints": ["single clear hero subject", "avoid cluttered background"],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "A compact friendly robot on a small pedestal in a clean studio display scene.",
+          "subject_prompts": {
+            "subject_robot": "Compact friendly robot, rounded white panels, blue accent lights, expressive face screen, three-quarter view."
+          },
+          "scene_prompts": ["Clean studio display area, small pedestal, soft shadows, uncluttered floor."],
+          "negative_prompt": "blurry, cropped, extra limbs, messy background"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_zh_plush_shop_refs",
+      "language": "zh",
+      "category": "subject_scene_style_refs",
+      "description": "Chinese request with explicit subject, scene, and style reference bindings.",
+      "user_text": "请根据图1生成一个黄色棉花娃娃主体，图2是街角店铺场景参考，图3只控制柔软棉布质感。主体要适合放进 Blender 场景，四肢灵活，头身比可爱。",
+      "input_images": [
+        {
+          "image_id": "image_subject_plush",
+          "artifact_id": "artifact_subject_plush",
+          "uri": "/fixtures/images/yellow_plush_reference.png",
+          "user_declared_label": "图1 主体参考"
+        },
+        {
+          "image_id": "image_scene_shop",
+          "artifact_id": "artifact_scene_shop",
+          "uri": "/fixtures/images/street_shop_reference.png",
+          "user_declared_label": "图2 场景参考"
+        },
+        {
+          "image_id": "image_style_cotton",
+          "artifact_id": "artifact_style_cotton",
+          "uri": "/fixtures/images/cotton_texture_reference.png",
+          "user_declared_label": "图3 材质风格参考"
+        }
+      ],
+      "declared_bindings": [
+        {
+          "binding_id": "binding_subject_plush",
+          "image_id": "image_subject_plush",
+          "target_type": "subject",
+          "target_id": "subject_plush",
+          "usage": "subject_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0,
+          "notes": "图1 controls the hero subject."
+        },
+        {
+          "binding_id": "binding_scene_shop",
+          "image_id": "image_scene_shop",
+          "target_type": "scene",
+          "target_id": "scene_shop_corner",
+          "usage": "scene_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0,
+          "notes": "图2 controls the environment."
+        },
+        {
+          "binding_id": "binding_style_cotton",
+          "image_id": "image_style_cotton",
+          "target_type": "style",
+          "target_id": null,
+          "usage": "style_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0,
+          "notes": "图3 controls soft cotton material feel."
+        }
+      ],
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": ["subject_plush"],
+        "reference_binding_count": 3,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [
+            {
+              "binding_id": "binding_subject_plush",
+              "image_id": "image_subject_plush",
+              "target_type": "subject",
+              "target_id": "subject_plush",
+              "usage": "subject_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            },
+            {
+              "binding_id": "binding_scene_shop",
+              "image_id": "image_scene_shop",
+              "target_type": "scene",
+              "target_id": "scene_shop_corner",
+              "usage": "scene_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            },
+            {
+              "binding_id": "binding_style_cotton",
+              "image_id": "image_style_cotton",
+              "target_type": "style",
+              "target_id": null,
+              "usage": "style_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            }
+          ],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a yellow cotton plush-like hero subject in a bright street-corner shop scene.",
+          "subject_summaries": ["Yellow cotton-doll-like character with flexible limbs and cute proportions."],
+          "environment_summary": "Street-corner shop display based on the scene reference.",
+          "style_summary": "soft cotton texture, cute toy proportions, clean generated asset silhouette",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_plush_shop",
+          "title": "Yellow Plush Street Shop",
+          "user_goal": "Create a yellow cotton plush-like hero subject in a bright street-corner shop scene.",
+          "style": {
+            "style_keywords": ["cotton plush", "cute", "soft", "yellow"],
+            "mood": "warm and playful",
+            "color_palette": "yellow, cream, soft shop-window colors",
+            "rendering_style": "stylized",
+            "realism_level": "stylized"
+          },
+          "environment": {
+            "environment_type": "street_shop_corner",
+            "description": "A bright street-corner shop display with a simple storefront and clean floor.",
+            "background_elements": ["shop window", "small display platform"],
+            "ground_surface": "street-side shop floor",
+            "scene_reference_image_ids": ["image_scene_shop"]
+          },
+          "lighting": {"description": "Soft daylight with gentle shop-window fill."},
+          "camera": {
+            "shot_type": "three quarter",
+            "framing": "full body hero subject with storefront context visible",
+            "target_subject_ids": ["subject_plush"]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_plush",
+              "display_name": "Yellow Cotton Doll",
+              "category": "character",
+              "role_in_scene": "hero subject",
+              "description": "Yellow cotton plush doll with cute large head and flexible limbs.",
+              "appearance": "soft cotton fabric, simple stitched details, rounded head, short flexible arms and legs",
+              "pose_or_state": "standing naturally, ready for Blender placement",
+              "reference_image_ids": ["image_subject_plush", "image_style_cotton"],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter",
+              "scale_hint": "small toy scale"
+            }
+          ],
+          "spatial_relations": [
+            {
+              "relation_id": "relation_plush_on_display",
+              "source_subject_id": "subject_plush",
+              "relation": "centered_in",
+              "target_region": "shop display platform",
+              "distance_hint": "centered",
+              "notes": "Keep the hero clearly visible."
+            }
+          ],
+          "constraints": ["explicitly preserve image bindings", "avoid over-complex cloth hair or tiny unreadable details"],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "A yellow cotton plush doll with cute proportions standing in a bright street-corner shop display, soft daylight, clean Blender-friendly composition.",
+          "subject_prompts": {
+            "subject_plush": "Yellow cotton plush doll, large cute head, flexible small limbs, soft fabric texture, three-quarter full-body view, clean silhouette."
+          },
+          "scene_prompts": ["Bright street-corner shop display, simple storefront, clean floor, small display platform, soft daylight."],
+          "negative_prompt": "photoreal human skin, messy cables, cropped feet, unreadable tiny accessories"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_multi_subject_teahouse_layout",
+      "language": "zh",
+      "category": "multi_subject_layout",
+      "description": "Two-subject layout with a layout reference and explicit spatial relation.",
+      "user_text": "生成一个小茶馆场景：一个服务机器人站在木桌左侧，桌上有茶壶。图A是布局参考，只控制摆放，不控制风格。",
+      "input_images": [
+        {
+          "image_id": "image_layout_teahouse",
+          "artifact_id": "artifact_layout_teahouse",
+          "uri": "/fixtures/images/teahouse_layout.png",
+          "user_declared_label": "图A 布局参考"
+        }
+      ],
+      "declared_bindings": [
+        {
+          "binding_id": "binding_layout_teahouse",
+          "image_id": "image_layout_teahouse",
+          "target_type": "layout",
+          "target_id": "scene_teahouse",
+          "usage": "layout_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0
+        }
+      ],
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": ["subject_service_robot", "subject_tea_table"],
+        "reference_binding_count": 1,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [
+            {
+              "binding_id": "binding_layout_teahouse",
+              "image_id": "image_layout_teahouse",
+              "target_type": "layout",
+              "target_id": "scene_teahouse",
+              "usage": "layout_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            }
+          ],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a small teahouse scene with a service robot left of a wooden tea table.",
+          "subject_summaries": ["service robot", "wooden tea table with teapot"],
+          "environment_summary": "small teahouse interior",
+          "style_summary": "warm wood, calm, compact scene",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_teahouse",
+          "title": "Small Teahouse Service Robot",
+          "user_goal": "Create a small teahouse scene with a service robot left of a wooden tea table.",
+          "style": {
+            "style_keywords": ["warm wood", "calm", "cozy"],
+            "rendering_style": "semi_realistic",
+            "realism_level": "semi_realistic"
+          },
+          "environment": {
+            "environment_type": "teahouse_interior",
+            "description": "A compact warm wooden teahouse corner.",
+            "background_elements": ["wood wall", "floor mat", "small shelf"],
+            "ground_surface": "wood floor"
+          },
+          "lighting": {"description": "Warm indoor lantern-like light."},
+          "camera": {
+            "shot_type": "wide three quarter",
+            "framing": "show the robot left of the table and the table contents",
+            "target_subject_ids": ["subject_service_robot", "subject_tea_table"]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_service_robot",
+              "display_name": "Service Robot",
+              "category": "character",
+              "role_in_scene": "main assistant",
+              "description": "A small service robot standing beside a tea table.",
+              "appearance": "rounded compact robot body with tray-like hands",
+              "pose_or_state": "standing on the left side of the table",
+              "reference_image_ids": [],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter"
+            },
+            {
+              "subject_id": "subject_tea_table",
+              "display_name": "Tea Table",
+              "category": "furniture",
+              "role_in_scene": "important prop",
+              "description": "Small wooden table with a teapot on top.",
+              "appearance": "low wooden table, simple teapot and cups",
+              "pose_or_state": "stationary",
+              "reference_image_ids": [],
+              "priority": "important",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "procedural_blender",
+              "preferred_subject_image_view": "front"
+            }
+          ],
+          "spatial_relations": [
+            {
+              "relation_id": "relation_robot_left_table",
+              "source_subject_id": "subject_service_robot",
+              "relation": "left_of",
+              "target_subject_id": "subject_tea_table",
+              "distance_hint": "near",
+              "notes": "Layout is controlled by image_layout_teahouse."
+            }
+          ],
+          "constraints": ["layout reference controls placement only"],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "A cozy wooden teahouse corner with a compact service robot standing left of a small tea table with teapot.",
+          "subject_prompts": {
+            "subject_service_robot": "Compact service robot, rounded body, tray-like hands, warm teahouse style, three-quarter view.",
+            "subject_tea_table": "Low wooden tea table with simple teapot and cups, clean procedural-friendly shapes."
+          },
+          "scene_prompts": ["Cozy wooden teahouse corner, warm lantern light, layout keeps robot left of table."],
+          "negative_prompt": "crowded restaurant, complex crowd, unreadable tiny decorations"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_vehicle_garage_texture",
+      "language": "en",
+      "category": "vehicle_texture_scene_refs",
+      "description": "Vehicle subject with texture and garage scene references.",
+      "user_text": "Build a small moon rover model for Blender. The first image is the rover body reference, the second image is only the dusty metal texture, and the garage scene can be a simple maintenance bay.",
+      "input_images": [
+        {
+          "image_id": "image_rover_body",
+          "artifact_id": "artifact_rover_body",
+          "uri": "/fixtures/images/rover_body.png",
+          "user_declared_label": "rover body"
+        },
+        {
+          "image_id": "image_dusty_metal",
+          "artifact_id": "artifact_dusty_metal",
+          "uri": "/fixtures/images/dusty_metal.png",
+          "user_declared_label": "dusty metal texture"
+        }
+      ],
+      "declared_bindings": [
+        {
+          "binding_id": "binding_rover_body",
+          "image_id": "image_rover_body",
+          "target_type": "subject",
+          "target_id": "subject_moon_rover",
+          "usage": "subject_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0
+        },
+        {
+          "binding_id": "binding_rover_texture",
+          "image_id": "image_dusty_metal",
+          "target_type": "texture",
+          "target_id": "subject_moon_rover",
+          "usage": "texture_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0
+        }
+      ],
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": ["subject_moon_rover"],
+        "reference_binding_count": 2,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [
+            {
+              "binding_id": "binding_rover_body",
+              "image_id": "image_rover_body",
+              "target_type": "subject",
+              "target_id": "subject_moon_rover",
+              "usage": "subject_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            },
+            {
+              "binding_id": "binding_rover_texture",
+              "image_id": "image_dusty_metal",
+              "target_type": "texture",
+              "target_id": "subject_moon_rover",
+              "usage": "texture_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            }
+          ],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a small moon rover model in a simple maintenance bay.",
+          "subject_summaries": ["Small rover with dusty metal texture."],
+          "environment_summary": "simple maintenance bay garage",
+          "style_summary": "functional sci-fi prop, dusty metal",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_rover_maintenance_bay",
+          "title": "Moon Rover Maintenance Bay",
+          "user_goal": "Create a small moon rover model in a simple maintenance bay.",
+          "style": {
+            "style_keywords": ["sci-fi", "dusty metal", "functional"],
+            "rendering_style": "semi_realistic",
+            "realism_level": "semi_realistic"
+          },
+          "environment": {
+            "environment_type": "maintenance_bay",
+            "description": "A simple garage-like maintenance bay with clear floor space.",
+            "background_elements": ["tool wall", "floor markings"],
+            "ground_surface": "painted concrete"
+          },
+          "lighting": {"description": "Cool overhead workshop lighting."},
+          "camera": {
+            "shot_type": "low three quarter",
+            "framing": "rover fully visible with some garage context",
+            "target_subject_ids": ["subject_moon_rover"]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_moon_rover",
+              "display_name": "Moon Rover",
+              "category": "vehicle",
+              "role_in_scene": "hero vehicle",
+              "description": "A compact moon rover with dusty metal panels and visible wheels.",
+              "appearance": "boxy chassis, four rugged wheels, dusty metal material",
+              "pose_or_state": "parked in maintenance bay",
+              "reference_image_ids": ["image_rover_body", "image_dusty_metal"],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter"
+            }
+          ],
+          "spatial_relations": [],
+          "constraints": ["keep silhouette readable for image-to-3D"],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "Compact moon rover with dusty metal panels parked in a simple maintenance bay, low three-quarter camera.",
+          "subject_prompts": {
+            "subject_moon_rover": "Small moon rover, boxy chassis, four rugged wheels, dusty metal panels, three-quarter view, isolated clean silhouette."
+          },
+          "scene_prompts": ["Simple maintenance bay garage, painted concrete floor, tool wall, cool overhead lighting."],
+          "negative_prompt": "large complex spaceship, text labels, excessive tiny wires"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_furniture_room_style",
+      "language": "en",
+      "category": "furniture_style_reference",
+      "description": "Furniture subject plus style reference for a room-scale scene.",
+      "user_text": "Make a rounded reading chair as the main model. Use the uploaded mood image only for warm Scandinavian style. Put it in a quiet reading corner with a small lamp.",
+      "input_images": [
+        {
+          "image_id": "image_scandi_mood",
+          "artifact_id": "artifact_scandi_mood",
+          "uri": "/fixtures/images/scandi_mood.png",
+          "user_declared_label": "warm Scandinavian mood"
+        }
+      ],
+      "declared_bindings": [
+        {
+          "binding_id": "binding_scandi_style",
+          "image_id": "image_scandi_mood",
+          "target_type": "style",
+          "target_id": null,
+          "usage": "style_reference",
+          "explicit_in_user_text": true,
+          "confidence": 1.0
+        }
+      ],
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": ["subject_reading_chair", "subject_floor_lamp"],
+        "reference_binding_count": 1,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [
+            {
+              "binding_id": "binding_scandi_style",
+              "image_id": "image_scandi_mood",
+              "target_type": "style",
+              "target_id": null,
+              "usage": "style_reference",
+              "explicit_in_user_text": true,
+              "confidence": 1.0
+            }
+          ],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a rounded reading chair in a warm Scandinavian reading corner.",
+          "subject_summaries": ["rounded reading chair", "small floor lamp"],
+          "environment_summary": "quiet reading corner",
+          "style_summary": "warm Scandinavian style",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_reading_corner",
+          "title": "Warm Reading Corner",
+          "user_goal": "Create a rounded reading chair in a warm Scandinavian reading corner.",
+          "style": {
+            "style_keywords": ["warm", "Scandinavian", "rounded", "quiet"],
+            "color_palette": "warm wood, cream fabric, muted green",
+            "rendering_style": "semi_realistic",
+            "realism_level": "semi_realistic"
+          },
+          "environment": {
+            "environment_type": "interior_reading_corner",
+            "description": "A quiet room corner with soft rug and small lamp.",
+            "background_elements": ["wall corner", "small rug", "lamp"],
+            "ground_surface": "wood floor"
+          },
+          "lighting": {"description": "Warm lamp light with soft ambient fill."},
+          "camera": {
+            "shot_type": "medium wide",
+            "framing": "chair prominent, lamp beside it",
+            "target_subject_ids": ["subject_reading_chair"]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_reading_chair",
+              "display_name": "Rounded Reading Chair",
+              "category": "furniture",
+              "role_in_scene": "hero furniture",
+              "description": "A rounded comfortable reading chair.",
+              "appearance": "soft rounded upholstery, warm cream fabric, simple wooden legs",
+              "pose_or_state": "stationary in corner",
+              "reference_image_ids": ["image_scandi_mood"],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "hunyuan3d_img2asset",
+              "preferred_subject_image_view": "three_quarter"
+            },
+            {
+              "subject_id": "subject_floor_lamp",
+              "display_name": "Small Floor Lamp",
+              "category": "prop",
+              "role_in_scene": "supporting light prop",
+              "description": "A small warm floor lamp beside the chair.",
+              "appearance": "simple slender stand and fabric shade",
+              "pose_or_state": "standing beside chair",
+              "reference_image_ids": ["image_scandi_mood"],
+              "priority": "important",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "procedural_blender",
+              "preferred_subject_image_view": "front"
+            }
+          ],
+          "spatial_relations": [
+            {
+              "relation_id": "relation_lamp_beside_chair",
+              "source_subject_id": "subject_floor_lamp",
+              "relation": "beside",
+              "target_subject_id": "subject_reading_chair",
+              "distance_hint": "near"
+            }
+          ],
+          "constraints": ["mood image controls style only"],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "Warm Scandinavian reading corner with a rounded cream reading chair and small floor lamp, quiet cozy mood.",
+          "subject_prompts": {
+            "subject_reading_chair": "Rounded reading chair, soft cream upholstery, simple wooden legs, warm Scandinavian style, three-quarter view.",
+            "subject_floor_lamp": "Small floor lamp, slender stand, warm fabric shade, simple clean shape."
+          },
+          "scene_prompts": ["Quiet reading corner, wood floor, soft rug, warm lamp light, muted Scandinavian palette."],
+          "negative_prompt": "ornate baroque details, clutter, harsh neon lighting"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_architecture_courtyard",
+      "language": "zh",
+      "category": "architecture_scene_component",
+      "description": "Architecture-part subject in an outdoor courtyard.",
+      "user_text": "我想要一个小型庭院入口场景，主体是圆拱门和两侧矮墙，不需要人物。整体适合后续在 Blender 里继续编辑。",
+      "expected": {
+        "stop_reason": "delegated",
+        "final_phase": "CONCEPT_GENERATION",
+        "subject_ids": ["subject_archway"],
+        "reference_binding_count": 0,
+        "has_prompt_pack": true
+      },
+      "fixture_responses": {
+        "ReferenceBindingValidator": {
+          "valid_bindings": [],
+          "requires_clarification": false,
+          "open_questions": [],
+          "issues": []
+        },
+        "SceneInterpreter": {
+          "user_goal": "Create a small courtyard entrance scene with an archway and low walls.",
+          "subject_summaries": ["round archway with low side walls"],
+          "environment_summary": "small outdoor courtyard entrance",
+          "style_summary": "editable, simple geometry, warm stone",
+          "open_questions": []
+        },
+        "SceneSpecCompiler": {
+          "scene_id": "scene_courtyard_entry",
+          "title": "Small Courtyard Entry",
+          "user_goal": "Create a small courtyard entrance scene with an archway and low walls.",
+          "style": {
+            "style_keywords": ["warm stone", "simple", "editable"],
+            "rendering_style": "semi_realistic",
+            "realism_level": "semi_realistic"
+          },
+          "environment": {
+            "environment_type": "outdoor_courtyard",
+            "description": "Small courtyard entrance with a round archway, low side walls, and simple stone floor.",
+            "background_elements": ["low walls", "stone floor", "small plants"],
+            "ground_surface": "stone paving"
+          },
+          "lighting": {"description": "Soft daylight with mild shadows."},
+          "camera": {
+            "shot_type": "wide front three quarter",
+            "framing": "show the archway and both low walls",
+            "target_subject_ids": ["subject_archway"]
+          },
+          "subjects": [
+            {
+              "subject_id": "subject_archway",
+              "display_name": "Courtyard Archway",
+              "category": "architecture_part",
+              "role_in_scene": "main structure",
+              "description": "Round stone archway with two low side walls.",
+              "appearance": "simple warm stone blocks, clean editable structure",
+              "pose_or_state": "stationary entrance",
+              "reference_image_ids": [],
+              "priority": "hero",
+              "needs_2d_concept": true,
+              "needs_3d_asset": true,
+              "asset_strategy": "procedural_blender",
+              "preferred_subject_image_view": "front"
+            }
+          ],
+          "spatial_relations": [],
+          "constraints": ["no people", "keep geometry editable in Blender"],
+          "open_questions": [],
+          "version": 1
+        },
+        "ConceptPromptPlanner": {
+          "final_preview_prompt": "Small courtyard entrance with round warm-stone archway and low side walls, simple editable Blender-friendly geometry.",
+          "subject_prompts": {
+            "subject_archway": "Round stone archway with two low side walls, warm stone material, clean editable geometry, front three-quarter view."
+          },
+          "scene_prompts": ["Outdoor courtyard entrance, stone paving, a few small plants, soft daylight."],
+          "negative_prompt": "people, dense foliage, broken geometry, overly complex ornament"
+        }
+      }
+    },
+    {
+      "case_id": "scenario_missing_reference_binding",
+      "language": "zh",
+      "category": "clarification_required",
+      "description": "Uploaded image exists but the user does not bind its purpose; controller must wait for user clarification.",
+      "user_text": "参考这个图做一个主体模型，然后放进简单场景里。",
+      "input_images": [
+        {
+          "image_id": "image_unbound_001",
+          "artifact_id": "artifact_unbound_001",
+          "uri": "/fixtures/images/unbound_reference.png",
+          "user_declared_label": "未说明用途的图片"
+        }
+      ],
+      "expected": {
+        "stop_reason": "waiting_user",
+        "final_phase": "INTAKE",
+        "subject_ids": [],
+        "reference_binding_count": 0,
+        "has_prompt_pack": false,
+        "first_runtime_status": "waiting_user"
+      },
+      "fixture_responses": {}
+    }
+  ]
+}

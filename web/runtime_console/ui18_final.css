@@ -1,0 +1,200 @@
+/* image23D runtime console UI18 final layer.
+   Loaded after legacy polish.css so public product UI wins over old debug skins. */
+
+:root {
+  --ui18-page: #f5f7fa;
+  --ui18-surface: #ffffff;
+  --ui18-line: #dce3ec;
+  --ui18-text: #172033;
+  --ui18-muted: #5d6b7c;
+  --ui18-accent: #14a394;
+  --ui18-accent-dark: #0f766e;
+  --ui18-accent-soft: #e9f8f5;
+}
+
+html:not(.dev-mode) .dev-only,
+html:not(.dev-mode) .collapsible-panel,
+html:not(.dev-mode) #statusList,
+html:not(.dev-mode) #jobList,
+html:not(.dev-mode) #objectList,
+html:not(.dev-mode) #fileList,
+html:not(.dev-mode) .run-status-strip {
+  display: none !important;
+}
+
+.app {
+  grid-template-columns: 64px 300px minmax(720px, 1fr) 392px !important;
+  background: var(--ui18-page) !important;
+}
+
+.creator-main {
+  grid-template-rows: minmax(640px, 68vh) minmax(260px, 1fr) !important;
+  gap: 14px !important;
+  padding: 14px !important;
+  background: var(--ui18-page) !important;
+}
+
+.preview-panel {
+  display: grid !important;
+  grid-template-rows: auto auto auto auto minmax(300px, 1fr) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  border-color: var(--ui18-line) !important;
+  background: #ffffff !important;
+}
+
+.task-brief {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 10px 16px !important;
+}
+
+.task-brief strong {
+  color: var(--ui18-text) !important;
+}
+
+.task-brief p {
+  color: var(--ui18-muted) !important;
+}
+
+.viewer-frame-wrap {
+  min-height: 300px !important;
+  height: auto !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(20, 163, 148, 0.16), transparent 34%),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.16) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.16) 1px, transparent 1px),
+    #151c25 !important;
+  background-size: auto, 34px 34px, 34px 34px, auto !important;
+}
+
+#viewerFrame,
+.viewer-frame-wrap iframe,
+.concept-preview-image {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.stage-roadmap {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+
+.stage-timeline {
+  display: grid !important;
+  grid-auto-flow: row !important;
+  grid-auto-columns: auto !important;
+  grid-template-columns: 1fr !important;
+  overflow: visible !important;
+}
+
+.stage-step {
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr) !important;
+}
+
+.scene-object-panel {
+  order: 3 !important;
+}
+
+.delivery-panel {
+  order: 4 !important;
+}
+
+.scene-object-list {
+  display: grid !important;
+  gap: 8px !important;
+}
+
+.scene-object-empty,
+.scene-object-item {
+  min-height: 54px !important;
+  border: 1px solid var(--ui18-line) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  padding: 10px !important;
+}
+
+.scene-object-empty {
+  display: grid !important;
+  place-items: center !important;
+  color: var(--ui18-muted) !important;
+  font-size: 13px !important;
+}
+
+.scene-object-item {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.scene-object-item strong,
+.scene-object-item small,
+.scene-object-item em {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.scene-object-item strong {
+  color: var(--ui18-text) !important;
+  font-size: 13px !important;
+  font-weight: 880 !important;
+}
+
+.scene-object-item small,
+.scene-object-item em {
+  color: var(--ui18-muted) !important;
+  font-size: 12px !important;
+  font-style: normal !important;
+}
+
+.scene-object-item a {
+  min-height: 30px !important;
+  border-color: rgba(20, 163, 148, 0.36) !important;
+  background: var(--ui18-accent-soft) !important;
+  color: var(--ui18-accent-dark) !important;
+  padding: 5px 9px !important;
+}
+
+#viewerEmpty.loading {
+  place-items: end start !important;
+  padding: 22px !important;
+  pointer-events: none !important;
+}
+
+.loading-stack.has-preview {
+  width: min(360px, 42%) !important;
+  max-width: 420px !important;
+  gap: 8px !important;
+  padding: 10px !important;
+  text-align: left !important;
+}
+
+.loading-preview-image {
+  display: block !important;
+  width: 100% !important;
+  aspect-ratio: 16 / 10 !important;
+  object-fit: cover !important;
+  border: 1px solid rgba(148, 163, 184, 0.7) !important;
+  border-radius: 8px !important;
+  background: #0f172a !important;
+}
+
+.delivery-item a {
+  border-color: var(--ui18-accent) !important;
+  background: var(--ui18-accent) !important;
+  color: #ffffff !important;
+}
+
+@media (max-width: 1500px) {
+  .app {
+    grid-template-columns: 58px 280px minmax(600px, 1fr) 352px !important;
+  }
+
+  .creator-main {
+    grid-template-rows: minmax(600px, 66vh) minmax(260px, 1fr) !important;
+  }
+}
