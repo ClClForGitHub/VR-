@@ -576,7 +576,22 @@ def _copy_attachment(item: Image2ReferenceAttachment, **updates: Any) -> Image2R
 
 
 def _is_natively_viewable_image(path: Path) -> bool:
-    return path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+    expected_by_suffix = {
+        ".jpg": "JPEG",
+        ".jpeg": "JPEG",
+        ".png": "PNG",
+        ".webp": "WEBP",
+    }
+    expected = expected_by_suffix.get(path.suffix.lower())
+    if expected is None:
+        return False
+    try:
+        from PIL import Image
+
+        with Image.open(path) as image:
+            return image.format == expected
+    except Exception:
+        return False
 
 
 def _convert_image_to_png(source: Path, target: Path) -> None:

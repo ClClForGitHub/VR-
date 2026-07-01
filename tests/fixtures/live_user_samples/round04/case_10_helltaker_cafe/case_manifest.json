@@ -37,7 +37,7 @@
       "subject_id": "subject_cerberus_chibi"
     }
   ],
-  "initial_user_request": "帮我生成一张《Helltaker》IP 的 Q版图片。\n主体包括 Q版 Lucifer 和 Q版 Justice，场景是带有恶魔主题的复古咖啡馆兼办公室。\n桌上有咖啡杯、甜甜圈、文件、黑胶唱片，整体偏暖色、可爱、画面干净，适合后续 3D 建模。",
+  "initial_user_request": "帮我生成一张《Helltaker》IP 的 Q版图片。\n主体包括 Q版 Lucifer 和 Q版 Justice，场景是带有恶魔主题的复古咖啡馆兼办公室。\n桌上有咖啡杯、甜甜圈、文件、黑胶唱片，整体偏暖色、可爱、画面干净，适合后续 3D 建模。\n第一轮上传 @图片L 作为 Q版 Lucifer 主体参考图；后续如果没有新的 Lucifer 参考要求，主体绑定应继续沿用这张图。",
   "parse_notes": [
     "用户确认 Q版路西法.png 也作为第一轮 Lucifer 主体参考图加入流程；原始样例文本只显式写了场景 @图片1。"
   ],
@@ -51,7 +51,7 @@
       "required_for_generation": true,
       "slot": "@图片L",
       "source_text_span": "@图片L",
-      "upload_stage": "concept_feedback_1",
+      "upload_stage": "initial_request",
       "usage": "subject_reference"
     },
     {
@@ -72,10 +72,9 @@
       "expected_next_phase": "CONCEPT_GENERATION",
       "gate": "concept_review",
       "reference_image_ids": [
-        "image_001",
         "image_002"
       ],
-      "text": "不同意。概念图不够干净；新增 Q版 Cerberus。用户确认第一轮同时上传 Q版路西法主体参考和恶魔咖啡馆场景参考。"
+      "text": "不同意。概念图不够干净；新增 Q版 Cerberus。第一轮已上传 Q版路西法主体参考，本轮只上传恶魔咖啡馆场景参考；Lucifer 主体绑定应继续保留。"
     },
     {
       "action": "approve_concept",

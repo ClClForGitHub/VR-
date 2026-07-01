@@ -325,3 +325,28 @@ Known issues:
 Next:
 - After user acceptance, run the broader live sample set or explicitly continue
   downstream generation with Hunyuan3D/HY-World/Blender command boundaries.
+
+## 2026-07-01 - Round 04 live path preflight
+
+Scope:
+- Prepare input/output paths before broad live testing.
+- Keep full generated path manifests under ignored `outputs/runs/` while
+  tracking the durable path contract in harness docs.
+
+Changed:
+- Corrected `case_10_helltaker_cafe` so `Q版路西法.png` is uploaded at
+  `initial_request`, while the concept-feedback turn uploads only the demon cafe
+  scene reference.
+- Hardened image2 reference preparation so mislabeled image files, such as WEBP
+  content with `.png` or `.jpg` suffixes, are converted to PNG `view_path`
+  copies before child Codex `view_image` calls.
+- Added `round_04_live_path_preflight.md`.
+
+Verification:
+- `python -m py_compile agent_runtime/image2_reference_adapter.py scripts/run_round04_live_user_samples.py agent_runtime/round04_live_samples.py` -> passed.
+- `python -m pytest tests/test_round04_live_sample_manifest.py tests/test_image2_reference_attachment_live_contract.py -q` -> 8 passed.
+- Local preflight manifest generation -> `case_count=12`, `issues=[]`.
+
+Known issues:
+- Runtime upload filenames include generated upload IDs, so preflight records
+  upload glob patterns and resolves exact paths only after a live run.

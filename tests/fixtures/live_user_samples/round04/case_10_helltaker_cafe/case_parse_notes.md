@@ -1,1 +1,2 @@
 - 用户确认 Q版路西法.png 也作为第一轮 Lucifer 主体参考图加入流程；原始样例文本只显式写了场景 @图片1。
+- Round04 path preflight 修正：Lucifer 主体参考图在 initial_request 上传，概念反馈轮只上传恶魔咖啡馆场景图，用于测试后续轮次继续沿用主体绑定。

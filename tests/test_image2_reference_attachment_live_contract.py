@@ -71,9 +71,35 @@ def test_prepare_viewable_attachment_manifest_converts_non_native_image_suffix(t
     assert Path(prepared[0].view_path).exists()
 
 
+def test_prepare_viewable_attachment_manifest_converts_mislabeled_webp(tmp_path: Path) -> None:
+    pytest.importorskip("PIL.Image")
+    from PIL import Image
+
+    reference = tmp_path / "reference.png"
+    Image.new("RGB", (12, 8), "red").save(reference, format="WEBP")
+    manifest = build_attachment_manifest(
+        input_reference_image_ids=["image_subject"],
+        input_image_paths=[str(reference)],
+        source_requirement_ids=[],
+        source_image_paths=[],
+        output_type="subject_concept",
+    )
+
+    prepared, issues = prepare_viewable_attachment_manifest(manifest, view_dir=tmp_path / "reference_views")
+
+    assert issues == []
+    assert prepared[0].path == str(reference.resolve())
+    assert prepared[0].mime_type == "image/png"
+    assert prepared[0].view_path is not None
+    assert prepared[0].view_path != prepared[0].path
+    assert prepared[0].view_mime_type == "image/png"
+    with Image.open(prepared[0].view_path) as image:
+        assert image.format == "PNG"
+
+
 def test_codex_self_image2_backend_requires_view_image_evidence(tmp_path: Path) -> None:
     reference = tmp_path / "reference.png"
-    reference.write_bytes(b"reference-image")
+    _write_test_png(reference)
     adapter = _FakeCodexAdapter(reference_path=reference, include_view_image=True)
     backend = CodexSelfMCPImage2ConceptBackend(adapter=adapter)
     request = _request(reference, tmp_path / "generated.png")
@@ -91,7 +117,7 @@ def test_codex_self_image2_backend_requires_view_image_evidence(tmp_path: Path) 
 
 def test_codex_self_image2_backend_fails_without_view_image_evidence(tmp_path: Path) -> None:
     reference = tmp_path / "reference.png"
-    reference.write_bytes(b"reference-image")
+    _write_test_png(reference)
     adapter = _FakeCodexAdapter(reference_path=reference, include_view_image=False)
     backend = CodexSelfMCPImage2ConceptBackend(adapter=adapter)
 
@@ -103,7 +129,7 @@ def test_codex_self_image2_backend_fails_without_view_image_evidence(tmp_path: P
 
 def test_codex_self_image2_backend_fails_when_view_image_returns_no_payload(tmp_path: Path) -> None:
     reference = tmp_path / "reference.png"
-    reference.write_bytes(b"reference-image")
+    _write_test_png(reference)
     adapter = _FakeCodexAdapter(reference_path=reference, include_view_image=True, include_payload=False)
     backend = CodexSelfMCPImage2ConceptBackend(adapter=adapter)
 
@@ -235,6 +261,13 @@ def _request(reference: Path, output: Path):
         attachment_manifest=manifest,
         output_path=str(output),
     )
+
+
+def _write_test_png(path: Path) -> None:
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (8, 8), "blue").save(path, format="PNG")
 
 
 _TINY_PNG_BASE64 = (
