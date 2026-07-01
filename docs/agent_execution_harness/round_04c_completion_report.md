@@ -23,10 +23,10 @@
 
 ```text
 branch: round04c-image2-reference-generation
-implementation_commit_sha: to be filled after commit
+implementation_commit_sha: 3980ace0bef0526c3d57d38da485e818ec80c613
 github_branch_url: https://github.com/ClClForGitHub/VR-/tree/round04c-image2-reference-generation
-github_commit_url: final pushed commit URL will be provided after commit
-pushed: pending at report write time
+github_commit_url: https://github.com/ClClForGitHub/VR-/commit/3980ace0bef0526c3d57d38da485e818ec80c613
+pushed: yes, after report update commit in this turn
 ```
 
 ## 3. Image2 Backend Used
