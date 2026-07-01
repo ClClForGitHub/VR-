@@ -134,3 +134,35 @@ Consequences:
   acceptance.
 - A future provider backend can be accepted by implementing the same
   `ConceptImageBackend` contract and proving real file attachments.
+
+## DEC-20260701-round04c-agent-mediated-image2: Accept child-agent view_image as the image2 attachment boundary
+
+Decision:
+- Use `codex_self_mcp_image2` as the Round04C live concept backend.
+- Treat child Codex `view_image` calls plus `input_image` payload evidence as
+  the project-level proof that local reference files reached the visual context.
+- Preserve original attachment paths in `input_image_paths` and
+  `attachment_manifest.path`; use `attachment_manifest.view_path` for any
+  converted PNG passed to the child visual tool.
+
+Reason:
+- The official codex MCP tool exposes a prompt string but no native `images[]`
+  parameter.
+- Local canary evidence proved a child Codex session can call `view_image` on
+  local files and then generate images.
+- AVIF uploads may not be directly processable by the visual tool, so the
+  adapter must create a PNG view copy without changing the original user input
+  record.
+
+Alternatives considered:
+- Mark backend capability as true without proving visual payloads.
+- Put only `/path/to/image` inside the prompt and trust the model to infer it.
+- Modify the external `codex-self-mcp` helper for an image argument.
+
+Consequences:
+- `view_image_tool_call` alone is insufficient; logs must contain
+  `function_call_output` with an `input_image` payload.
+- Target renders must attach generated concept outputs as visual references
+  through the same manifest path.
+- The boundary remains a wrapper over codex-self rather than a claim that the
+  upstream MCP schema has native image parameters.

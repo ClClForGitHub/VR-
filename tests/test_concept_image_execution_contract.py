@@ -31,11 +31,18 @@ def test_concept_image_execution_resolves_inputs_and_source_outputs(tmp_path: Pa
         "target_render:final_preview",
     ]
     assert rows[0]["input_image_paths"] == [str(reference.resolve())]
+    assert rows[0]["attachment_manifest"][0]["label"] == "Image 1"
+    assert rows[0]["attachment_manifest"][0]["path"] == str(reference.resolve())
+    assert rows[0]["attachment_manifest"][0]["role"] == "subject_reference"
     assert rows[2]["source_requirement_ids"] == ["subject_concept:rover", "scene_concept:moon"]
     assert len(rows[2]["source_image_paths"]) == 2
+    assert [item["path"] for item in rows[2]["attachment_manifest"]] == rows[2]["source_image_paths"]
     assert result.image_results[2]["output_type"] == "target_render"
     assert result.image_results[2]["metadata"]["source_image_paths"] == rows[2]["source_image_paths"]
+    assert result.image_results[2]["metadata"]["attachment_manifest"] == rows[2]["attachment_manifest"]
     assert len(backend.calls) == 3
+    assert backend.calls[0].attachment_manifest[0].path == str(reference.resolve())
+    assert [item.path for item in backend.calls[2].attachment_manifest] == rows[2]["source_image_paths"]
 
 
 def test_concept_image_execution_blocks_missing_required_reference(tmp_path: Path) -> None:

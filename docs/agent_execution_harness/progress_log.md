@@ -287,3 +287,41 @@ Next:
 - Wire or prove a provider backend that satisfies `ConceptImageBackend` with
   real local file attachments, then rerun the Round04B canary before broad
   12-sample execution.
+
+## 2026-07-01 - Round 04C image2 reference generation
+
+Scope:
+- Implement the Round04C package boundary for local reference-image generation.
+- Reuse the Round04B concept executor, runtime worker, handoff-apply,
+  artifact, asset-library, state, checkpoint, and frontend-status paths.
+
+Changed:
+- Added `agent_runtime/image2_reference_adapter.py` for codex-self image2
+  generation with attachment manifests, PNG view copies, log evidence parsing,
+  and stream extraction after `image_generation_end`.
+- Updated `CodexSelfMCPImage2ConceptBackend` and the default `live_image`
+  worker backend.
+- Updated `scripts/probe_live_image_backend.py` to prove child-agent
+  `view_image` and `input_image` payload support.
+- Added `tests/test_image2_reference_attachment_live_contract.py` and extended
+  concept execution tests for attachment manifests and target source images.
+- Added `round_04c_image2_reference_generation.md` and
+  `round_04c_completion_report.md`.
+
+Verification:
+- `python -m py_compile agent_runtime/image2_reference_adapter.py agent_runtime/concept_image_execution.py agent_runtime/runtime_worker.py scripts/probe_live_image_backend.py tests/test_image2_reference_attachment_live_contract.py` -> passed.
+- `python -m pytest tests/test_concept_image_execution_contract.py tests/test_runtime_worker_live_image_backend.py tests/test_round04_live_canary_execution.py tests/test_image2_reference_attachment_live_contract.py -q` -> 10 passed.
+- `python scripts/probe_live_image_backend.py --write-report outputs/runs/round04c_probe/live_image_backend_probe.json` -> exit 0, `live_acceptance_ready=true`.
+- `python scripts/run_round04_live_user_samples.py --case case_03_lunar_rover --live --overwrite --max-concept-regens 1` -> exit 0, `ok=true`, `status=partial`, concept worker completed 3/3 calls.
+
+Known issues:
+- The Round04C canary intentionally does not start downstream
+  Hunyuan3D/HY-World/Blender stages; the sample report is `partial` for that
+  reason.
+- The official codex MCP schema still has no native `images[]` argument; this
+  round accepts child-agent `view_image` payload evidence as the wrapper
+  boundary.
+
+Next:
+- After user acceptance, run the broader live sample set or explicitly continue
+  downstream generation with Hunyuan3D/HY-World/Blender command boundaries.

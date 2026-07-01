@@ -45,6 +45,7 @@ from agent_runtime.concept_regeneration import (
 )
 from agent_runtime.concept_image_execution import (
     CodexSelfMCPConceptImageBackend,
+    CodexSelfMCPImage2ConceptBackend,
     ConceptImageBackend,
     ConceptImageBackendCapability,
     ConceptImageBackendGenerationRequest,
@@ -53,6 +54,15 @@ from agent_runtime.concept_image_execution import (
     ConceptImageExecutionRequest,
     ConceptImageExecutionResult,
     execute_concept_image_handoff,
+)
+from agent_runtime.image2_reference_adapter import (
+    CodexSelfMCPImage2Adapter,
+    CodexSelfMCPImage2CallResult,
+    CodexSelfMCPImage2LogEvidence,
+    Image2ReferenceAttachment,
+    build_attachment_manifest,
+    inspect_codex_self_image2_log,
+    prepare_viewable_attachment_manifest,
 )
 from agent_runtime.concept_planning import (
     ConceptPromptApplicationResult,
@@ -381,6 +391,10 @@ __all__ = [
     "CameraSpec",
     "ConceptBundle",
     "CodexSelfMCPConceptImageBackend",
+    "CodexSelfMCPImage2Adapter",
+    "CodexSelfMCPImage2CallResult",
+    "CodexSelfMCPImage2ConceptBackend",
+    "CodexSelfMCPImage2LogEvidence",
     "ConceptImageBackend",
     "ConceptImageBackendCapability",
     "ConceptImageBackendGenerationRequest",
@@ -393,6 +407,7 @@ __all__ = [
     "ConceptPromptPack",
     "ConceptPromptPlannerOutput",
     "ConceptPromptPlannerContext",
+    "Image2ReferenceAttachment",
     "ComposeScenePlan",
     "ControllerAction",
     "ControllerPlan",
@@ -538,6 +553,7 @@ __all__ = [
     "build_runtime_run_bundle",
     "build_runtime_web_surface",
     "build_and_save_runtime_dispatch_plan",
+    "build_attachment_manifest",
     "build_llm_node_context",
     "build_reference_intake_payload",
     "build_reference_intake_result",
@@ -571,6 +587,8 @@ __all__ = [
     "quality_result_from_asset",
     "image_data_url",
     "inspect_worldmirror_output",
+    "inspect_codex_self_image2_log",
+    "prepare_viewable_attachment_manifest",
     "load_agent_llm_env",
     "langgraph_thread_config",
     "provider_public_summary",

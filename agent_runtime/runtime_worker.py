@@ -18,6 +18,7 @@ from agent_runtime.artifacts import utc_now_iso
 from agent_runtime.codex_self_mcp import CodexSelfMCPAdapter, extract_last_image_from_codex_mcp_log
 from agent_runtime.concept_image_execution import (
     CodexSelfMCPConceptImageBackend,
+    CodexSelfMCPImage2ConceptBackend,
     ConceptImageBackend,
     execute_concept_image_handoff,
 )
@@ -150,7 +151,7 @@ def execute_next_runtime_worker(
             handoff=selected,
             dry_run=dry_run,
             concept_backend=concept_image_backend
-            or CodexSelfMCPConceptImageBackend(timeout_seconds=timeout_seconds),
+            or CodexSelfMCPImage2ConceptBackend(timeout_seconds=timeout_seconds),
             confirm_execute=confirm_execute,
             rebuild_plan=rebuild_plan,
         )

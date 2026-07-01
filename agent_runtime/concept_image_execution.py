@@ -17,6 +17,12 @@ from pydantic import BaseModel, Field
 
 from agent_runtime.artifacts import utc_now_iso
 from agent_runtime.codex_self_mcp import CodexSelfMCPAdapter
+from agent_runtime.image2_reference_adapter import (
+    CodexSelfMCPImage2Adapter,
+    Image2ReferenceAttachment,
+    build_attachment_manifest,
+    prepare_viewable_attachment_manifest,
+)
 
 
 ConceptGenerationMode = Literal["text_to_image", "image_guided", "multi_image_composite"]
@@ -40,6 +46,7 @@ class ConceptImageExecutionCallRecord(BaseModel):
     input_image_paths: list[str] = Field(default_factory=list)
     source_requirement_ids: list[str] = Field(default_factory=list)
     source_image_paths: list[str] = Field(default_factory=list)
+    attachment_manifest: list[dict[str, Any]] = Field(default_factory=list)
     backend: str
     started_at: str
     finished_at: str | None = None
@@ -67,6 +74,9 @@ class ConceptImageBackendCapability(BaseModel):
     multi_image_composite: bool = False
     output_extraction: bool = False
     structured_file_attachments: bool = False
+    native_images_parameter: bool = False
+    agent_view_image_reference: bool = False
+    agent_view_image_then_generate: bool = False
     probe_log_path: str | None = None
     issues: list[str] = Field(default_factory=list)
 
@@ -81,6 +91,7 @@ class ConceptImageBackendGenerationRequest(BaseModel):
     input_image_paths: list[str] = Field(default_factory=list)
     source_requirement_ids: list[str] = Field(default_factory=list)
     source_image_paths: list[str] = Field(default_factory=list)
+    attachment_manifest: list[Image2ReferenceAttachment] = Field(default_factory=list)
     output_path: str
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -173,6 +184,73 @@ class CodexSelfMCPConceptImageBackend(ConceptImageBackend):
             output_image_path=str(output_path) if output_path.exists() else None,
             issues=issues,
             raw_summary={"returncode": run_result.returncode, "log_path": str(log_path)},
+        )
+
+
+class CodexSelfMCPImage2ConceptBackend(ConceptImageBackend):
+    """Codex-self backend that uses child-agent ``view_image`` before generation."""
+
+    backend_name = "codex_self_mcp_image2"
+
+    def __init__(
+        self,
+        adapter: CodexSelfMCPAdapter | None = None,
+        *,
+        timeout_seconds: float = 900,
+        verify_view_image: bool = False,
+        probe_dir: str | Path | None = None,
+    ) -> None:
+        self.adapter = adapter or CodexSelfMCPAdapter()
+        self.image2 = CodexSelfMCPImage2Adapter(self.adapter, timeout_seconds=timeout_seconds)
+        self.verify_view_image = verify_view_image
+        self.probe_dir = Path(probe_dir).expanduser().resolve() if probe_dir is not None else None
+
+    def capability(self) -> ConceptImageBackendCapability:
+        status = self.adapter.status(run_smoke=False)
+        issues = list(status.issues)
+        view_image_ok = bool(status.ok)
+        probe_log_path = None
+        if status.ok and self.verify_view_image:
+            probe = self.image2.run_view_image_canary(probe_dir=self.probe_dir or Path("/tmp/codex_self_mcp_image2_probe"))
+            view_image_ok = bool(probe.get("ok"))
+            probe_log_path = str(probe.get("log_path") or "") or None
+            issues.extend(probe.get("issues") or [])
+        return ConceptImageBackendCapability(
+            backend_name=self.backend_name,
+            text_to_image=bool(status.ok),
+            image_guided_single_reference=view_image_ok,
+            multi_image_composite=view_image_ok,
+            output_extraction=status.client_script_exists,
+            structured_file_attachments=view_image_ok,
+            native_images_parameter=False,
+            agent_view_image_reference=view_image_ok,
+            agent_view_image_then_generate=view_image_ok,
+            probe_log_path=probe_log_path,
+            issues=_unique(issues),
+        )
+
+    def generate(self, request: ConceptImageBackendGenerationRequest) -> ConceptImageBackendGenerationResult:
+        result = self.image2.generate(
+            prompt=request.prompt,
+            attachments=request.attachment_manifest,
+            output_path=request.output_path,
+            requirement_id=request.requirement_id,
+            output_type=request.output_type,
+            generation_mode=request.generation_mode,
+            negative_prompt=request.negative_prompt,
+        )
+        return ConceptImageBackendGenerationResult(
+            ok=result.ok,
+            backend=self.backend_name,
+            output_image_path=result.output_path,
+            issues=list(result.issues),
+            raw_summary={
+                "log_path": result.log_path,
+                "viewed_image_paths": result.viewed_image_paths,
+                "view_image_payload_paths": result.view_image_payload_paths,
+                "image_generation_count": result.image_generation_count,
+                "evidence": result.evidence,
+            },
         )
 
 
@@ -275,10 +353,22 @@ def _execute_requirement(
     source_paths = [generated_paths[source_id] for source_id in source_ids if source_id in generated_paths]
     missing_sources = [source_id for source_id in source_ids if source_id not in generated_paths]
     prompt = str(requirement.get("prompt") or "")
+    attachment_manifest = build_attachment_manifest(
+        input_reference_image_ids=input_reference_ids,
+        input_image_paths=input_paths,
+        source_requirement_ids=source_ids,
+        source_image_paths=source_paths,
+        output_type=output_type,
+    )
     started_at = utc_now_iso()
     output_path = output_dir / f"{index:02d}_{_safe_name(requirement_id)}.png"
+    attachment_manifest, view_prep_issues = prepare_viewable_attachment_manifest(
+        attachment_manifest,
+        view_dir=output_dir / "reference_views" / _safe_name(requirement_id),
+    )
     issues = list(preflight_issues)
     issues.extend(input_issues)
+    issues.extend(view_prep_issues)
     issues.extend(f"missing_source_requirement_output:{source_id}" for source_id in missing_sources)
     issues.extend(_capability_issues(capability, generation_mode, input_paths=input_paths, source_paths=source_paths))
     if bool(requirement.get("must_use_image_inputs")) and not input_paths and not source_paths:
@@ -295,6 +385,7 @@ def _execute_requirement(
         input_image_paths=input_paths,
         source_requirement_ids=source_ids,
         source_image_paths=source_paths,
+        attachment_manifest=[_model_to_dict(item) for item in attachment_manifest],
         backend=capability.backend_name,
         started_at=started_at,
         issues=_unique(issues),
@@ -313,6 +404,7 @@ def _execute_requirement(
         input_image_paths=input_paths,
         source_requirement_ids=source_ids,
         source_image_paths=source_paths,
+        attachment_manifest=attachment_manifest,
         output_path=str(output_path),
         metadata={"run_dir": str(path), "requirement": requirement},
     )
@@ -342,6 +434,7 @@ def _execute_requirement(
             "input_image_paths": input_paths,
             "source_requirement_ids": source_ids,
             "source_image_paths": source_paths,
+            "attachment_manifest": [_model_to_dict(item) for item in attachment_manifest],
             "prompt_key": requirement.get("prompt_key"),
         },
     }
