@@ -128,8 +128,38 @@ def test_runtime_worker_codex_self_requires_confirm_before_calling_adapter(tmp_p
     assert not (Path(created.run_dir) / "runtime_handoff_apply.jsonl").exists()
 
 
+def test_runtime_worker_codex_self_confirmed_blocks_structured_concept_handoff(tmp_path: Path) -> None:
+    created, handoff = _concept_handoff(tmp_path)
+    adapter = _FakeCodexAdapter(create_image=True)
+
+    result = execute_next_runtime_worker(
+        created.run_dir,
+        backend="codex_self_mcp",
+        dry_run=False,
+        confirm_execute=True,
+        codex_adapter=adapter,
+    )
+    state = json.loads((Path(created.run_dir) / "state.json").read_text(encoding="utf-8"))
+    summary = read_runtime_worker_summary(created.run_dir)
+
+    assert result.ok is False
+    assert result.record is not None
+    assert result.record.status == "failed"
+    assert result.record.backend == "codex_self_mcp"
+    assert result.record.handoff_id == handoff.record.handoff_id
+    assert "codex_self_worker_cannot_execute_multi_requirement_concept_handoff" in result.record.issues
+    assert "codex_self_worker_cannot_resolve_source_requirement_images:target_render:final_preview" in result.record.issues
+    assert len(adapter.calls) == 0
+    assert state["phase"] == "CONCEPT_GENERATION"
+    assert result.record.result_summary["reason"] == "codex_self_mcp_not_sufficient_for_structured_concept_handoff"
+    assert not (Path(created.run_dir) / "runtime_handoff_apply.jsonl").exists()
+    assert summary is not None
+    assert summary["handled_handoff_ids"] == []
+
+
 def test_runtime_worker_codex_self_confirmed_applies_extracted_concept_image(tmp_path: Path) -> None:
     created, handoff = _concept_handoff(tmp_path)
+    _remove_concept_generation(handoff)
     adapter = _FakeCodexAdapter(create_image=True)
 
     result = execute_next_runtime_worker(
@@ -162,7 +192,8 @@ def test_runtime_worker_codex_self_confirmed_applies_extracted_concept_image(tmp
 
 
 def test_runtime_worker_codex_self_missing_image_is_not_handled(tmp_path: Path) -> None:
-    created, _handoff = _concept_handoff(tmp_path)
+    created, handoff = _concept_handoff(tmp_path)
+    _remove_concept_generation(handoff)
     adapter = _FakeCodexAdapter(create_image=False)
 
     result = execute_next_runtime_worker(
@@ -271,6 +302,13 @@ def _concept_handoff(tmp_path: Path):
     assert handoff.record is not None
     assert handoff.record.domain_tool_name == "generate_concept_images"
     return created, handoff
+
+
+def _remove_concept_generation(handoff) -> None:
+    path = Path(handoff.record.handoff_json)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("concept_generation", None)
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
 class _FakeCodexAdapter:

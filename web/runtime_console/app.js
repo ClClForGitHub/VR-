@@ -726,12 +726,31 @@ function renderUserGateActions(bundle) {
     renderBlenderPreviewGate(firstJob, viewerScene, blenderScene);
     return;
   }
-  renderConceptReviewGate(firstJob, concept);
+  renderConceptReviewGate(bundle, firstJob, concept);
 }
 
-function renderConceptReviewGate(firstJob, concept) {
+function renderConceptReviewGate(bundle, firstJob, concept) {
   const previewId = concept.final_preview_image_id || Object.values(concept.subject_concept_images || {}).flat()[0] || '';
   const prompt = concept.prompt_pack?.final_preview_prompt || '';
+  const requirementItems = conceptReviewRequirementItems(bundle, concept);
+  const requirementsHtml = requirementItems.length
+    ? `<div class="concept-review-grid">${requirementItems.map((item) => {
+      const artifact = item.readyArtifactIds.map((artifactId) => artifactInfoById(bundle, artifactId)).find(Boolean);
+      return `
+        <div class="concept-review-card ${artifact ? 'ready' : 'missing'}">
+          ${artifact?.url ? `<img src="${escapeAttr(artifact.url)}" alt="${escapeAttr(item.label)}">` : '<span class="concept-review-placeholder">待生成</span>'}
+          <strong>${escapeHtml(item.label)}</strong>
+          <small>${escapeHtml(item.statusText)}</small>
+          <div class="concept-review-meta">
+            <span>${escapeHtml(conceptGenerationModeLabel(item.generationMode))}</span>
+            ${item.inputReferenceImageIds.length ? `<span>参考图 ${escapeHtml(String(item.inputReferenceImageIds.length))}</span>` : ''}
+            ${item.sourceRequirementIds.length ? `<span>依赖 ${escapeHtml(String(item.sourceRequirementIds.length))}</span>` : ''}
+            ${item.mustUseImageInputs ? '<span>需上传输入图</span>' : ''}
+          </div>
+        </div>
+      `;
+    }).join('')}</div>`
+    : '';
   els.userGateActions.innerHTML = `
     <div class="gate-heading">
       <span>待你确认</span>
@@ -742,6 +761,7 @@ function renderConceptReviewGate(firstJob, concept) {
       <span>${escapeHtml(previewId ? '概念图已生成，确认后会继续生成 3D 资产。' : '已有概念结果，等待确认。')}</span>
       ${DEV_MODE && prompt ? `<small>${escapeHtml(prompt)}</small>` : ''}
     </div>
+    ${requirementsHtml}
     <div class="gate-buttons">
       <button type="button" data-user-action="approve_concept">确认概念图</button>
       <button type="button" data-user-action="request_concept_changes">按输入意见重做</button>
@@ -1237,6 +1257,13 @@ function renderAssetGallery(bundle) {
   };
 
   addImage(conceptPreview?.url, '概念图', conceptPreview?.artifactId);
+  const concept = bundle.state?.concept_bundle || null;
+  for (const item of conceptReviewRequirementItems(bundle, concept)) {
+    for (const artifactId of item.readyArtifactIds) {
+      const artifact = artifactInfoById(bundle, artifactId);
+      addImage(artifact?.url, item.label, artifactId);
+    }
+  }
   const previewImage = blenderPreviewImageInfo(bundle);
   addImage(previewImage?.url, '场景预览图', previewImage?.artifactId);
   for (const artifact of artifacts) {
@@ -2371,6 +2398,76 @@ function conceptPreviewInfo(bundle) {
     artifactId,
     url,
     label: `概念图：${artifactId}`,
+  };
+}
+
+function conceptReviewRequirementItems(bundle, concept) {
+  if (!concept) return [];
+  const statusRequirements = bundle.frontend_status?.concept_requirements || [];
+  const promptRequirements = concept.prompt_pack?.image_requirements || [];
+  const source = statusRequirements.length ? statusRequirements : promptRequirements;
+  return source.map((requirement) => {
+    const outputType = requirement.output_type || requirement.outputType || '';
+    const targetId = requirement.target_id || requirement.targetId || null;
+    const readyArtifactIds = requirement.ready_artifact_ids
+      || requirement.readyArtifactIds
+      || readyConceptArtifactIds(outputType, targetId, concept, bundle)
+      || [];
+    const label = requirement.user_review_label
+      || requirement.userReviewLabel
+      || conceptOutputTypeLabel(outputType);
+    return {
+      outputType,
+      targetId,
+      label,
+      readyArtifactIds,
+      generationMode: requirement.generation_mode || requirement.generationMode || 'text_to_image',
+      inputReferenceImageIds: requirement.input_reference_image_ids || requirement.inputReferenceImageIds || [],
+      sourceRequirementIds: requirement.source_requirement_ids || requirement.sourceRequirementIds || [],
+      mustUseImageInputs: Boolean(requirement.must_use_image_inputs || requirement.mustUseImageInputs),
+      qualityBar: requirement.quality_bar || requirement.qualityBar || '',
+      statusText: readyArtifactIds.length ? `${readyArtifactIds.length} 张已生成` : '等待生成',
+    };
+  });
+}
+
+function readyConceptArtifactIds(outputType, targetId, concept, bundle) {
+  if (outputType === 'target_render') return concept.final_preview_image_id ? [concept.final_preview_image_id] : [];
+  if (outputType === 'subject_concept') return concept.subject_concept_images?.[targetId] || [];
+  if (outputType === 'scene_concept') return concept.scene_concept_image_ids || [];
+  const allSubjectImages = Object.values(concept.subject_concept_images || {}).flat();
+  return [
+    concept.final_preview_image_id,
+    ...allSubjectImages,
+    ...(concept.scene_concept_image_ids || []),
+  ].filter((artifactId) => artifactInfoById(bundle, artifactId));
+}
+
+function conceptOutputTypeLabel(outputType) {
+  return {
+    subject_concept: '主体概念图',
+    scene_concept: '场景概念图',
+    target_render: '最终渲染构图图',
+  }[outputType] || humanizeIdentifier(outputType || 'concept_image');
+}
+
+function conceptGenerationModeLabel(mode) {
+  return {
+    text_to_image: '文生图',
+    image_guided: '图像引导',
+    multi_image_composite: '多图合成',
+  }[mode] || humanizeIdentifier(mode || 'text_to_image');
+}
+
+function artifactInfoById(bundle, artifactId) {
+  if (!artifactId) return null;
+  const artifact = (bundle.state?.artifacts || []).find((item) => item.artifact_id === artifactId);
+  if (!artifact) return null;
+  const url = artifactFileUrl(bundle, artifact.uri);
+  return {
+    artifactId,
+    artifact,
+    url,
   };
 }
 

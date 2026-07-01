@@ -31,7 +31,13 @@ class ComposeScenePlan(BaseModel):
     camera_target_normalized: tuple[float, float] = (0.0, 0.0)
     camera_distance_multiplier: float = 2.8
     camera_ortho_scale_factor: float = 1.55
+    camera_frame: str = "scene"
     render_resolution: tuple[int, int] = (1400, 900)
+    key_light_energy: float = 1200.0
+    fill_light_energy: float = 600.0
+    exposure: float = 0.45
+    subject_clearance_radius_normalized: float = 0.0
+    subject_clearance_min_height_ratio: float = 0.12
     placement_reason: str = "Fallback placement: subject visible in front-left third of the scene."
     orientation_reason: str = "Fallback orientation: keep imported asset yaw unchanged."
     camera_reason: str = "Fallback camera: three-quarter orthographic preview."
@@ -54,6 +60,7 @@ def build_compose_scene_plan(
     render_resolution = _render_resolution_from_scene(scene_spec)
     height_ratio, scale_reason = _height_ratio_from_subject(subject)
     subject_yaw_degrees, orientation_reason = _orientation_from_scene(scene_spec, subject, normalized)
+    clearance_radius, clearance_min_height = _clearance_from_scene(scene_spec, subject)
     subject_id = subject.subject_id if subject is not None else None
     notes = "; ".join(part for part in [scale_reason, _scene_notes(scene_spec)] if part)
     return ComposeScenePlan(
@@ -69,7 +76,10 @@ def build_compose_scene_plan(
         camera_target_normalized=camera_target,
         camera_distance_multiplier=distance,
         camera_ortho_scale_factor=ortho,
+        camera_frame=_camera_frame_from_values(distance, ortho),
         render_resolution=render_resolution,
+        subject_clearance_radius_normalized=clearance_radius,
+        subject_clearance_min_height_ratio=clearance_min_height,
         placement_reason=placement_reason,
         orientation_reason=orientation_reason,
         camera_reason=_append_camera_target_reason(camera_reason, camera_target),
@@ -141,6 +151,7 @@ def build_compose_scene_plan_from_blender_assembly_plan(
         else base.render_resolution
     )
     camera_target = _camera_target_from_placement(state.scene_spec, normalized)
+    clearance_radius, clearance_min_height = _clearance_from_scene(state.scene_spec, _primary_subject(state.scene_spec))
     notes = "; ".join(part for part in [assembly_plan.notes, scale_reason, base.notes] if part)
     return ComposeScenePlan(
         plan_id=assembly_plan.plan_id,
@@ -156,7 +167,10 @@ def build_compose_scene_plan_from_blender_assembly_plan(
         camera_target_normalized=camera_target,
         camera_distance_multiplier=distance,
         camera_ortho_scale_factor=ortho,
+        camera_frame=_camera_frame_from_values(distance, ortho),
         render_resolution=render_resolution,
+        subject_clearance_radius_normalized=clearance_radius,
+        subject_clearance_min_height_ratio=clearance_min_height,
         placement_reason=placement_reason,
         orientation_reason=orientation_reason,
         camera_reason=_append_camera_target_reason(camera_reason, camera_target),
@@ -206,10 +220,14 @@ def _placement_from_text(
         return "front_right", (0.24, -0.24), "SceneSpec requests foreground right-side placement."
     if wants_front and wants_left:
         return "front_left", (-0.24, -0.24), "SceneSpec requests foreground left-side placement."
+    if wants_front and wants_center:
+        return "front_center", (0.0, -0.22), "SceneSpec requests centered foreground placement."
     if wants_back and wants_right:
         return "back_right", (0.24, 0.24), "SceneSpec requests background right-side placement."
     if wants_back and wants_left:
         return "back_left", (-0.24, 0.24), "SceneSpec requests background left-side placement."
+    if wants_back and wants_center:
+        return "back_center", (0.0, 0.24), "SceneSpec requests centered background placement."
     if wants_center:
         return "center", (0.0, 0.0), "SceneSpec requests centered placement."
     if wants_right:
@@ -242,6 +260,23 @@ def _height_ratio_from_subject(subject: SubjectSpec | None) -> tuple[float, str]
 
 
 def _height_ratio_from_text(text: str) -> tuple[float, str | None]:
+    if any(
+        token in text
+        for token in [
+            "prominent",
+            "clearly visible",
+            "visible hero",
+            "larger than chess",
+            "larger than nearby",
+            "larger than surrounding",
+            "醒目",
+            "清楚可见",
+            "明显可见",
+            "比棋子大",
+            "比周围大",
+        ]
+    ):
+        return 1.35, "Subject scale hint asks for a clearly visible hero larger than nearby props."
     if any(token in text for token in ["tiny", "small", "mini", "小"]):
         return 0.24, "Subject scale hint suggests a small asset."
     if any(token in text for token in ["large", "giant", "tall", "huge", "大"]):
@@ -292,15 +327,22 @@ def _orientation_from_text(
             "face camera",
             "facing camera",
             "toward camera",
+            "face viewer",
+            "facing viewer",
+            "toward viewer",
+            "face the viewer",
+            "facing the viewer",
+            "front view",
             "front-facing",
             "front facing",
             "正面",
+            "正脸",
             "面向镜头",
             "看向镜头",
             "面向观众",
         ]
     ):
-        return 0.0, "Orientation hint asks the subject to face the preview camera."
+        return 0.0, "Orientation hint asks the subject to face the preview camera/viewer."
     if any(token in normalized for token in ["toward center", "face center", "facing center", "朝向中心", "面向中心"]):
         return _yaw_toward_center(target_region_normalized), "Orientation hint asks the subject to face the scene center."
     return fallback
@@ -344,6 +386,33 @@ def _camera_from_scene(scene_spec: SceneSpec | None) -> tuple[tuple[float, float
     return _camera_from_text(text, default_reason="SceneSpec camera mapped to medium three-quarter orthographic preview.")
 
 
+def _clearance_from_scene(scene_spec: SceneSpec | None, subject: SubjectSpec | None) -> tuple[float, float]:
+    if scene_spec is None:
+        return 0.0, 0.12
+    text_parts: list[str] = [scene_spec.user_goal, *scene_spec.constraints]
+    if subject is not None:
+        text_parts.extend([subject.placement_hint, subject.scale_hint])
+    text = " ".join(str(part) for part in text_parts if part).lower()
+    if any(
+        token in text
+        for token in [
+            "avoid blocking",
+            "not blocked",
+            "do not block",
+            "without hiding",
+            "unobstructed",
+            "open square",
+            "不要遮挡",
+            "不遮挡",
+            "无遮挡",
+            "避开遮挡",
+            "挡脸",
+        ]
+    ):
+        return 0.12, 0.12
+    return 0.0, 0.12
+
+
 def _camera_from_camera_spec(camera: CameraSpec) -> tuple[tuple[float, float, float], float, float, str]:
     text = " ".join(
         str(part)
@@ -358,7 +427,9 @@ def _camera_from_text(text: str, *, default_reason: str) -> tuple[tuple[float, f
     distance = 2.8
     ortho = 1.55
     reason = default_reason
-    if any(token in text for token in ["close", "portrait", "特写", "近景"]):
+    wants_close = any(token in text for token in ["close", "portrait", "特写", "近景"])
+    wants_front = any(token in text for token in ["front", "正面"])
+    if wants_close:
         distance = 2.25
         ortho = 1.18
         reason = "SceneSpec requests close framing."
@@ -366,8 +437,11 @@ def _camera_from_text(text: str, *, default_reason: str) -> tuple[tuple[float, f
         distance = 3.35
         ortho = 1.90
         reason = "SceneSpec requests wide/full-scene framing."
-    if any(token in text for token in ["front", "正面"]):
-        direction = (0.0, -1.75, 0.65)
+    if wants_front:
+        direction = (0.0, -1.75, 0.55 if wants_close else 0.65)
+        if wants_close:
+            distance = min(distance, 2.0)
+            ortho = min(ortho, 0.88)
         reason += " Front angle requested."
     elif any(token in text for token in ["high", "top", "俯视", "高角度"]):
         direction = (1.0, -1.35, 1.35)
@@ -376,6 +450,12 @@ def _camera_from_text(text: str, *, default_reason: str) -> tuple[tuple[float, f
         direction = (1.35, -1.65, 0.45)
         reason += " Low angle requested."
     return direction, distance, ortho, reason
+
+
+def _camera_frame_from_values(distance: float, ortho: float) -> str:
+    if distance <= 2.05 or ortho <= 0.95:
+        return "subject"
+    return "scene"
 
 
 def _camera_target_from_placement(

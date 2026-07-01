@@ -116,6 +116,41 @@ def test_build_compose_scene_plan_combines_back_left_and_wide_camera_hints() -> 
     assert plan.render_resolution == (1600, 900)
 
 
+def test_build_compose_scene_plan_keeps_chibi_hero_visible_when_larger_than_props() -> None:
+    state = AgentProjectState(
+        project_id="project",
+        thread_id="thread",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=SceneSpec(
+            scene_id="scene_chessboard",
+            title="Chibi hero on chessboard",
+            user_goal="Place a chibi character on a chessboard with nearby chess pieces.",
+            style=StyleSpec(rendering_style="stylized"),
+            environment=EnvironmentSpec(environment_type="chessboard_stage", description="large chessboard"),
+            lighting=LightingSpec(description="cool spotlight"),
+            camera=CameraSpec(shot_type="medium close three quarter", framing="show the hero clearly"),
+            subjects=[
+                SubjectSpec(
+                    subject_id="subject_chibi",
+                    display_name="Chibi Hero",
+                    category="character",
+                    priority="hero",
+                    description="a small chibi game character",
+                    placement_hint="center foreground",
+                    scale_hint="small chibi scale but clearly visible and larger than chess pieces",
+                )
+            ],
+        ),
+    )
+
+    plan = build_compose_scene_plan(state)
+
+    assert plan.target_region == "front_center"
+    assert plan.target_region_normalized[1] < 0
+    assert plan.target_height_ratio == 1.35
+    assert "clearly visible hero" in plan.notes
+
+
 def test_build_compose_scene_plan_uses_portrait_resolution_for_vertical_request() -> None:
     state = AgentProjectState(
         project_id="project",
@@ -144,8 +179,8 @@ def test_build_compose_scene_plan_uses_portrait_resolution_for_vertical_request(
 
     plan = build_compose_scene_plan(state)
 
-    assert plan.target_region == "center"
-    assert plan.camera_target_normalized == (0.0, 0.0)
+    assert plan.target_region == "front_center"
+    assert plan.camera_target_normalized[1] < 0
     assert plan.render_resolution == (1080, 1440)
 
 
@@ -181,6 +216,78 @@ def test_build_compose_scene_plan_infers_subject_orientation_toward_center() -> 
     assert plan.target_region == "front_right"
     assert plan.subject_yaw_degrees == 90.0
     assert "scene center" in plan.orientation_reason
+
+
+def test_build_compose_scene_plan_rotates_front_view_subject_toward_viewer() -> None:
+    state = AgentProjectState(
+        project_id="project",
+        thread_id="thread",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=SceneSpec(
+            scene_id="scene_front_view",
+            title="Front-facing chibi",
+            user_goal="Show the chibi character in a front view facing the viewer.",
+            style=StyleSpec(rendering_style="stylized"),
+            environment=EnvironmentSpec(environment_type="stage", description="simple stage"),
+            lighting=LightingSpec(description="soft key light"),
+            camera=CameraSpec(shot_type="medium close", framing="front view"),
+            subjects=[
+                SubjectSpec(
+                    subject_id="subject_chibi",
+                    display_name="Chibi Hero",
+                    category="character",
+                    priority="hero",
+                    description="a front-facing chibi character",
+                    pose_or_state="facing the viewer",
+                    placement_hint="center foreground",
+                )
+            ],
+        ),
+    )
+
+    plan = build_compose_scene_plan(state)
+
+    assert plan.subject_yaw_degrees == 0.0
+    assert "preview camera/viewer" in plan.orientation_reason
+    assert plan.camera_direction == (0.0, -1.75, 0.55)
+    assert plan.camera_distance_multiplier == 2.0
+    assert plan.camera_ortho_scale_factor == 0.88
+    assert plan.camera_frame == "subject"
+
+
+def test_build_compose_scene_plan_requests_clearance_when_subject_must_not_be_blocked() -> None:
+    state = AgentProjectState(
+        project_id="project",
+        thread_id="thread",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=SceneSpec(
+            scene_id="scene_clearance",
+            title="Unobstructed hero",
+            user_goal="Place the hero on an open square with nearby props.",
+            style=StyleSpec(rendering_style="stylized"),
+            environment=EnvironmentSpec(environment_type="board", description="board with props"),
+            lighting=LightingSpec(description="soft key light"),
+            camera=CameraSpec(shot_type="medium close front view"),
+            constraints=["avoid blocking the hero face"],
+            subjects=[
+                SubjectSpec(
+                    subject_id="subject_chibi",
+                    display_name="Chibi Hero",
+                    category="character",
+                    priority="hero",
+                    description="a front-facing chibi character",
+                    pose_or_state="facing the viewer",
+                    placement_hint="left side of center on an open square",
+                    scale_hint="clearly visible hero, larger than nearby props",
+                )
+            ],
+        ),
+    )
+
+    plan = build_compose_scene_plan(state)
+
+    assert plan.subject_clearance_radius_normalized == 0.12
+    assert plan.subject_clearance_min_height_ratio == 0.12
 
 
 def test_build_compose_scene_plan_keeps_placement_when_orientation_mentions_center() -> None:

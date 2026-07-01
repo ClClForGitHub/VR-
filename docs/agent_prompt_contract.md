@@ -69,6 +69,71 @@ includes:
 runtime-console runs and drives the bounded runtime loop through the same
 Pydantic parse/apply path used by provider output.
 
+The user-provided regression samples for beach duo, Little Gwen on a
+chessboard, and explorer rover on lunar regolith are part of this matrix.
+They must preserve the boundary between:
+
+- subject assets that need subject concept images and Hunyuan3D/existing 3D
+  assets;
+- procedural or scene-service props that belong to scene/world construction;
+- uploaded reference images that bind only to their declared subject, scene,
+  style, pose, texture, or layout target.
+
+`ConceptPromptPlanner` output now materializes `image_requirements` in
+`ConceptPromptPack`. The default review set is:
+
+- one `subject_concept` requirement per SceneSpec subject with
+  `needs_2d_concept=true`;
+- at least one `scene_concept` requirement for environment, props, lighting, and
+  layout;
+- one `target_render` requirement for the intended final composition.
+
+The runtime rejects planner output that sends procedural props into
+`subject_prompts` when the SceneSpec marks those props as not needing subject
+concept generation.
+
+`ConceptImageRequirement` now also records generation dependencies:
+
+- `input_reference_image_ids`: uploaded/reference images that must be passed as
+  image inputs, not merely mentioned in text;
+- `generation_mode`: `text_to_image`, `image_guided`, or
+  `multi_image_composite`;
+- `source_requirement_ids`: generated concept requirements that a later target
+  render must use as visual sources;
+- `must_use_image_inputs`: a hard flag for image-guided or composite requests;
+- `quality_bar`: the review bar for the generated image.
+
+For reference-bound subjects, the subject concept requirement must be
+`image_guided` and include the subject's `reference_image_ids`. For final target
+renders, the requirement must be `multi_image_composite` and depend on the
+subject concept and scene concept requirements. This prevents a text prompt such
+as "use image 1" from silently becoming a text-only generation request.
+
+For any subject that names an IP, franchise, game, anime, brand, or specific
+character, the runtime must obtain explicit identity-research evidence before
+writing final generation prompts. The preferred path is an upstream
+search-capable agent/tool that searches the web, prefers official sources, and
+records the resolved identity, aliases, and uncertainty in the context. The
+`ConceptPromptPlanner` must not rely on hidden model memory for IP identity; if
+research evidence is missing, it should set `requires_clarification=true` or add
+`identity_notes` that block silent identity substitution.
+
+When an image requirement has `input_reference_image_ids`, downstream image MCP
+calls must upload/attach the corresponding files as actual image inputs. When a
+target render requirement has `source_requirement_ids`, downstream image MCP
+calls must resolve those generated subject/scene images and attach them as
+visual references. Mentioning "use image 1" in text is not sufficient.
+
+The user-provided samples are regression cases:
+
+- the Wuthering Waves beach sample preserves user text `弗糯糯` as a source
+  alias while resolving the intended canonical character identity to `弗洛洛`;
+- the Little Gwen sample binds `image_little_gwen_ref` to
+  `subject_little_gwen` and requires the subject concept generation to consume
+  that image input;
+- the rover sample requires fresh subject/scene concept requirements before the
+  final target render, instead of reusing an old QA preview as a concept image.
+
 ## Required Node Boundaries
 
 Key V1 nodes:

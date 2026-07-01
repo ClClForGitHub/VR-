@@ -294,6 +294,25 @@ def _execute_codex_self_worker(
             result_summary={"call_plan": _model_to_dict(plan)},
         )
 
+    execution_issues = _codex_self_concept_execution_issues(handoff_payload)
+    if execution_issues:
+        worker_payload["issues"] = execution_issues
+        worker_json = _write_worker_json(run_dir, worker_id, worker_payload)
+        return _record_common(
+            worker_id=worker_id,
+            handoff=handoff,
+            backend="codex_self_mcp",
+            dry_run=False,
+            status="failed",
+            ok=False,
+            worker_json=worker_json,
+            issues=execution_issues,
+            result_summary={
+                "call_plan": _model_to_dict(plan),
+                "reason": "codex_self_mcp_not_sufficient_for_structured_concept_handoff",
+            },
+        )
+
     run_result = adapter.run_call_plan(plan)
     worker_payload["run_result"] = _model_to_dict(run_result)
     if not run_result.ok:
@@ -313,13 +332,14 @@ def _execute_codex_self_worker(
     if handoff.domain_tool_name in CONCEPT_TOOLS and image_path is not None and image_path.exists():
         apply_payload = {
             "image_results": [
-                {
-                    "image_path": str(image_path),
-                    "subject_id": _first_subject_id(handoff_payload),
-                    "artifact_id": f"{handoff.job_id or 'concept'}_{worker_id}",
-                    "final_preview": True,
-                }
-            ]
+                    {
+                        "image_path": str(image_path),
+                        "subject_id": _first_subject_id(handoff_payload),
+                        "artifact_id": f"{handoff.job_id or 'concept'}_{worker_id}",
+                        "output_type": "subject_concept",
+                        "final_preview": True,
+                    }
+                ]
         }
         apply_result = _apply_worker_payload(run_dir, handoff=handoff, payload=apply_payload, rebuild_plan=rebuild_plan)
         worker_payload["apply_payload"] = apply_payload
@@ -361,6 +381,33 @@ def _execute_codex_self_worker(
     )
 
 
+def _codex_self_concept_execution_issues(handoff_payload: dict[str, Any]) -> list[str]:
+    execution = handoff_payload.get("execution") if isinstance(handoff_payload, dict) else {}
+    domain_tool_name = execution.get("domain_tool_name") if isinstance(execution, dict) else None
+    if domain_tool_name not in CONCEPT_TOOLS:
+        return []
+    concept_generation = handoff_payload.get("concept_generation")
+    if not isinstance(concept_generation, dict):
+        return []
+    requirements = concept_generation.get("requirements") or []
+    if not isinstance(requirements, list):
+        return ["codex_self_worker_invalid_concept_generation_requirements"]
+
+    issues = []
+    if len(requirements) != 1:
+        issues.append("codex_self_worker_cannot_execute_multi_requirement_concept_handoff")
+    for requirement in requirements:
+        if not isinstance(requirement, dict):
+            issues.append("codex_self_worker_invalid_concept_requirement")
+            continue
+        requirement_id = requirement.get("requirement_id") or "unknown_requirement"
+        if requirement.get("must_use_image_inputs") or requirement.get("input_reference_image_ids"):
+            issues.append(f"codex_self_worker_cannot_attach_required_input_images:{requirement_id}")
+        if requirement.get("source_requirement_ids"):
+            issues.append(f"codex_self_worker_cannot_resolve_source_requirement_images:{requirement_id}")
+    return issues
+
+
 def _execute_codex_self_log_worker(
     run_dir: Path,
     *,
@@ -383,6 +430,9 @@ def _execute_codex_self_log_worker(
             "log_path": str(log_path) if log_path is not None else None,
             "extract_last_image_to": str(image_path),
             "subject_id": payload.get("subject_id") or _first_subject_id(handoff_payload),
+            "output_type": payload.get("output_type", "subject_concept"),
+            "requirement_id": payload.get("requirement_id"),
+            "target_id": payload.get("target_id"),
             "artifact_id": payload.get("artifact_id"),
             "final_preview": payload.get("final_preview", True),
         },
@@ -460,6 +510,9 @@ def _execute_codex_self_log_worker(
                 "image_path": extract_result.output_path,
                 "subject_id": payload.get("subject_id") or _first_subject_id(handoff_payload),
                 "artifact_id": payload.get("artifact_id") or f"{handoff.job_id or 'concept'}_{worker_id}",
+                "output_type": payload.get("output_type", "subject_concept"),
+                "requirement_id": payload.get("requirement_id"),
+                "target_id": payload.get("target_id"),
                 "final_preview": bool(payload.get("final_preview", True)),
             }
         ]

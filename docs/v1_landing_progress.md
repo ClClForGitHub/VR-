@@ -7444,3 +7444,484 @@ Boundary:
   image generation or live 3D generation.
 - They keep the existing runtime loop as the execution surface and make the
   prompt/schema/user-gate behavior inspectable for the user's concrete cases.
+
+## 2026-06-30 Live Little Gwen Full Loop
+
+Goal: run one user-provided sample through a real, inspectable loop instead of
+dry-run or fixture-only evidence.
+
+Run:
+
+- `outputs/runs/20260630_live_little_gwen_full_loop_100820Z`
+
+Input and planning:
+
+- Copied the uploaded image-1 Little Gwen reference to
+  `inputs/image1_little_gwen_reference.png`.
+- Wrote `scene_spec.json` for the image-bound Little Gwen chessboard request.
+- Fixed the run SceneSpec after Pydantic validation caught invalid hand-written
+  fields (`display_name`, `hunyuan3d_img2asset`, `prop`, `relation`).
+
+Live generation and scene assets:
+
+- Submitted a real Hunyuan3D 2.1 job:
+  `cfb6680c-52df-4ab3-a773-44862da74c1b`.
+- Profile/params: `hq_textured_1m_768`, `texture=true`,
+  `face_count=1000000`, `octree_resolution=768`, `seed=20260630`.
+- Hunyuan evidence:
+  - shape completed after about `258.8s`;
+  - texture completed after about `998.9s`;
+  - total generation took about `1006.0s`;
+  - saved subject GLB:
+    `subject_asset_save/subject_assets/asset_little_gwen_hq_768_live.glb`
+    (`33,050,860` bytes).
+- Generated the chessboard world/scene asset with Blender procedural geometry:
+  `scene_asset_procedural/scene_chessboard_stage.glb`.
+- Registered the scene asset through the existing `scene-asset` adapter:
+  `scene_asset_register/summary.json`, `has_scene_asset=true`.
+
+Blender/viewer result:
+
+- Ran `workflow_runner local-e2e` on the real subject GLB and generated scene
+  GLB, writing the front-end-visible six-piece run bundle at the run root.
+- Output files now include:
+  - `state.json`
+  - `summary.json`
+  - `frontend_status.json`
+  - `delivery_handoff.json`
+  - `compose/composed_scene.blend`
+  - `compose/composed_preview.png`
+  - `viewer_export/viewer_scene.glb`
+  - `viewer_export/scene_state.json`
+- Final phase: `BLENDER_PREVIEW`.
+- `delivery_handoff.ready=true`, `verified=true`, `issues=[]`.
+- Viewer evidence:
+  - `viewer_scene_object_count=145`;
+  - `viewer_export/viewer_scene.glb` is `114,291,668` bytes;
+  - GLB viewer `/asset` and `/viewer` both returned HTTP 200;
+  - runtime console bundle has `missing_required=[]` and web surface URL:
+    `http://10.2.16.106:8092/viewer?path=/home/team/zouzhiyuan/image23D_Agent/outputs/runs/20260630_live_little_gwen_full_loop_100820Z/viewer_export/viewer_scene.glb`.
+
+Runtime fix made during this run:
+
+- The first Blender preview was technically valid but the hero subject was too
+  small because the deterministic planner treated "small chibi scale but larger
+  than chess pieces" as only `small` and selected `target_height_ratio=0.24`.
+- Updated `agent_runtime/blender_assembly_planner.py` so "prominent",
+  "clearly visible", and "larger than chess/nearby props" scale hints win over
+  generic small/chibi wording.
+- Added
+  `test_build_compose_scene_plan_keeps_chibi_hero_visible_when_larger_than_props`.
+- Re-ran local-e2e; final assembly plan uses `target_height_ratio=1.05`, so the
+  Little Gwen subject is visible in the center of the chessboard.
+
+Verification:
+
+```bash
+python -m pytest tests/test_blender_assembly_planner.py -q
+python -m agent_runtime.workflow_runner subject-asset ... --stages submit
+python -m agent_runtime.workflow_runner subject-asset ... --stages check_status,save_completed
+python -m agent_runtime.workflow_runner scene-asset ... --stages inspect_output,register_existing_output
+python -m agent_runtime.workflow_runner local-e2e ... --stages compose,export_viewer,viewer_check
+```
+
+Results:
+
+```text
+8 passed in 0.38s
+subject-asset submit ok=true, job_id=cfb6680c-52df-4ab3-a773-44862da74c1b
+subject-asset save_completed ok=true
+scene-asset register_existing_output ok=true
+local-e2e ok=true, phase=BLENDER_PREVIEW, missing_required=[]
+```
+
+Boundary:
+
+- This is a real live Hunyuan3D subject-generation loop and real Blender/viewer
+  assembly for the user's second sample.
+- The chessboard world asset is procedural Blender generation, not a fresh
+  WorldMirror/HY-World reconstruction.
+- Visual quality still needs user review: the centered character is now visible,
+  but lighting, facing direction, and character-shape fidelity are not yet
+  final-quality acceptance.
+
+## 2026-06-30 Little Gwen Visual Rejection And Runtime Correction
+
+Current accepted status: not accepted.
+
+The earlier `local-e2e ok=true` / viewer HTTP 200 result only proved that files,
+GLB export, and the web viewer route were alive. It did not prove visual
+acceptance. The user rejected the preview because the subject was too small,
+not reliably front-facing, lighting/inspection quality was weak, and the other
+sample requests had not been live-generated.
+
+Follow-up evidence and fixes:
+
+- Rendered a subject-only preview for
+  `asset_little_gwen_hq_768_live.glb`. The GLB itself is only partly
+  front-facing from the default camera and has imperfect subject fidelity.
+- Ran a real Blender yaw sweep at
+  `outputs/runs/20260630_live_little_gwen_yaw_sweep_110529Z/`.
+  The best current asset yaw was `0`, not `180`; the previous 180-degree fix
+  made the scene worse.
+- Updated `agent_runtime/blender_assembly_planner.py`:
+  - front-facing/viewer-facing now maps to `subject_yaw_degrees=0`;
+  - "clearly visible hero larger than props" now maps to
+    `target_height_ratio=1.35`;
+  - `center foreground` resolves to `front_center`, not pure center;
+  - close front camera requests use a closer, lower orthographic preview;
+  - planner emits `key_light_energy`, `fill_light_energy`, `exposure`, and
+    optional subject-clearance parameters.
+- Updated `tools/compose_blender_scene.py`:
+  - brighter key/fill preview lighting;
+  - a controlled derived-scene clearance pass that removes high nearby
+    occluder props around the subject target when the SceneSpec asks for an
+    unobstructed/open-square subject.
+- Added/updated planner regression tests for hero size, front-view yaw, close
+  front camera, and clearance-triggering.
+
+Revision runs:
+
+- `outputs/runs/20260630_live_little_gwen_full_loop_revision3_111119Z`
+  used yaw `0` and target height `1.35`; the face became visible but the subject
+  was still too centered/occluded.
+- `outputs/runs/20260630_live_little_gwen_full_loop_revision4_111630Z`
+  used `front_center` and a closer front camera; the face/scale improved, but a
+  foreground chess piece blocked the subject.
+- `outputs/runs/20260630_live_little_gwen_full_loop_revision5_112037Z`
+  used a feedback-derived SceneSpec with `front_left`; occlusion improved but
+  nearby pawns/rook parts still blocked the subject.
+- `outputs/runs/20260630_live_little_gwen_full_loop_revision6_112721Z`
+  enabled clearance and removed four nearby occluder parts:
+  `rook_00_stem`, `rook_00_top`, `pawn_01_stem`, `pawn_01_head`.
+  File/viewer checks passed, but the preview is still not accepted because
+  subject fidelity and front-facing quality remain below the user's review bar.
+
+Runtime gate correction:
+
+- Applied the official `request_blender_changes` user action to revision6.
+- Result:
+  - `runtime_user_action.jsonl` and `runtime_user_action_summary.json` written;
+  - action id `user_action_115c5f15498a`;
+  - review patch `review_patch_001b10b7e499`;
+  - phase moved to `BLENDER_EDIT`.
+- This run must not be delivered as approved. It is a failed/diagnostic live
+  run whose next correct action is subject-asset regeneration or stronger
+  concept/reference preprocessing, followed by another Blender assembly pass.
+
+Verification:
+
+```bash
+python -m pytest tests/test_blender_assembly_planner.py -q
+python -m py_compile agent_runtime/blender_assembly_planner.py tools/compose_blender_scene.py
+python -m agent_runtime.workflow_runner local-e2e ... --stages compose,export_viewer,viewer_check
+python - <<'PY'
+from agent_runtime.runtime_user_actions import request_blender_changes
+...
+PY
+```
+
+Results:
+
+```text
+10 passed in 0.34s
+py_compile passed
+revision6 local-e2e ok=true, phase=BLENDER_PREVIEW
+revision6 request_blender_changes ok=true, next_phase=BLENDER_EDIT
+```
+
+## 2026-06-30 natural-language first-step correction
+
+Goal: address the user review that the first agent step was not really solved:
+natural language/reference intake must split subject identity, subject count,
+scene/world, props, concept images, and target render before live 3D generation.
+
+Implemented:
+
+- Added `ConceptImageRequirement` and `ConceptPromptPack.image_requirements`.
+  Concept planning now records reviewable requirements for:
+  - per-subject concept images;
+  - scene concept images;
+  - final target-render composition images.
+- Tightened `ConceptPromptPlanner` application:
+  - missing scene concept prompts are rejected;
+  - missing required subject concept prompts are rejected;
+  - procedural props marked `needs_2d_concept=false` are rejected if they appear
+    in `subject_prompts`.
+- Updated controller subject-asset routing so procedural/scene-service props do
+  not become Hunyuan3D subject-asset requirements.
+- Extended `frontend_status.json` with:
+  - `concept_requirements`;
+  - `scene_spec_summary`;
+  - required subject asset ids;
+  - procedural object ids;
+  - reference-bound subject ids.
+- Updated the runtime console concept review gate to display the separate
+  concept review items instead of only a single generic concept preview.
+- Corrected the user sample fixture semantics:
+  - Little Gwen image 1 binds only to `subject_little_gwen`;
+  - chessboard/chess pieces remain scene/procedural content;
+  - beach chair/sand castle remain scene/procedural props;
+  - rover remains the single Hunyuan subject asset on a lunar scene.
+- Extended concept review user-action coverage so accept and reject branches can
+  operate on the three concept-review artifacts: subject concept, scene concept,
+  and target-render composition.
+
+Verification:
+
+```bash
+python -m py_compile agent_runtime/state.py agent_runtime/agent_prompts.py agent_runtime/concept_planning.py agent_runtime/controller.py agent_runtime/frontend_status.py agent_runtime/scenario_fixtures.py
+python -m json.tool tests/fixtures/natural_language_scene_cases.json >/tmp/image23d_nl_cases.json
+node --check web/runtime_console/app.js
+python -m pytest tests/test_runtime_user_actions.py tests/test_concept_planning.py tests/test_natural_language_scene_fixtures.py tests/test_controller.py tests/test_frontend_status.py tests/test_agent_prompts.py tests/test_llm_nodes.py -q
+```
+
+Results:
+
+```text
+py_compile passed
+fixture JSON passed
+node --check passed
+48 passed in 0.89s
+```
+
+Important boundary: this is a controller/schema/frontend-state correction. It
+does not claim the live concept images or Hunyuan3D/Blender visual results are
+accepted.
+
+Actual runtime evidence added after user challenge:
+
+```text
+outputs/runs/20260630_actual_nl_first_step_check/outputs/runs/scenario_zh_wuthering_chibi_beach_duo
+phase=CONCEPT_GENERATION
+environment_type=beach
+subject_assets_required=subject_phoebe_chibi, subject_fronono_chibi
+procedural_objects=subject_beach_chair, subject_sand_castle
+concept_requirements=subject_concept, subject_concept, scene_concept, target_render
+
+outputs/runs/20260630_actual_nl_first_step_check/outputs/runs/scenario_zh_little_gwen_chessboard_ref
+phase=CONCEPT_GENERATION
+environment_type=chessboard_stage
+reference_bound_subject=subject_little_gwen
+subject_assets_required=subject_little_gwen
+procedural_objects=subject_chess_pieces
+concept_requirements=subject_concept, scene_concept, target_render
+
+outputs/runs/20260630_actual_nl_first_step_check/outputs/runs/scenario_zh_explorer_rover_moon_regolith
+phase=CONCEPT_GENERATION
+environment_type=moon_surface
+subject_assets_required=subject_explorer_rover
+concept_requirements=subject_concept, scene_concept, target_render
+```
+
+User-gate runtime action evidence:
+
+```text
+outputs/runs/20260630_actual_user_gate_check/outputs/runs/concept_accept
+approve_concept -> phase=CONCEPT_APPROVED, approved=true
+
+outputs/runs/20260630_actual_user_gate_check/outputs/runs/concept_reject
+request_concept_changes -> phase=CONCEPT_REVIEW, review_patch_count=1,
+affected_artifact_ids=concept_scene_chessboard_001, concept_subject_little_gwen_001, concept_target_render_001
+
+outputs/runs/20260630_actual_user_gate_check/outputs/runs/blender_accept
+approve_blender_preview -> phase=DELIVERY
+
+outputs/runs/20260630_actual_user_gate_check/outputs/runs/blender_reject
+request_blender_changes -> phase=BLENDER_EDIT, review_patch_count=1
+```
+
+These runs prove the local runtime state transition and file-writing path. They
+are still dry-run/fake-artifact evidence, not live visual generation acceptance.
+
+Live/user-visible review images were then produced under:
+
+```text
+outputs/runs/20260630_live_review_images_codex_self/
+```
+
+User-facing triptychs:
+
+```text
+beach_review_triptych.png
+little_gwen_review_triptych.png
+rover_review_triptych.png
+```
+
+Per-sample artifacts:
+
+```text
+beach_subject_concept.png       codex-self MCP image generation
+beach_scene_concept.png         codex-self MCP image generation
+beach_target_render.png         codex-self MCP image generation
+little_gwen_subject_concept.png codex-self MCP image generation
+little_gwen_scene_concept.png   codex-self MCP image generation
+little_gwen_target_render.png   codex-self MCP image generation after one timeout retry
+rover_subject_concept.png       reused Hunyuan subject-asset QA preview
+rover_scene_concept.png         Blender render of procedural moon-surface GLB
+rover_target_render.png         reused Blender composed preview from rover revision2
+review_image_manifest.json      sizes and sha256 hashes
+```
+
+Important review note: beach and Little Gwen now have subject-only concept,
+scene-only concept, and final target-render composition images. Rover uses a
+subject asset preview rather than a fresh subject concept image because the
+fresh codex-self rover subject call hit a websocket timeout; the rover scene and
+target images are real Blender/procedural outputs.
+
+## 2026-07-01 Concept Prompt Contract Audit Fix
+
+User audit rejected the three sample image results:
+
+- the beach sample mis-resolved the second Wuthering Waves character as a
+  Fronono-like placeholder instead of preserving `弗糯糯` as the user span and
+  resolving the intended identity to `弗洛洛`;
+- the Little Gwen sample did not force the uploaded image to be consumed as an
+  image input for the subject concept;
+- the rover sample reused existing QA/Blender previews instead of proving fresh
+  subject/scene concept generation.
+
+Code changes in this slice:
+
+- `SubjectSpec` now carries optional identity metadata:
+  `source_text_span`, `canonical_identity`, `identity_aliases`, and
+  `identity_confidence`.
+- `ConceptImageRequirement` now carries generation dependencies:
+  `generation_mode`, `input_reference_image_ids`, `source_requirement_ids`,
+  `must_use_image_inputs`, and `quality_bar`.
+- `ConceptPromptPlanner` prompt rules now explicitly require exact subject
+  identity preservation, image-guided requirements for reference-bound subjects,
+  scene-only prompts, and multi-image composite final target renders.
+- `ConceptPromptPlannerContext` now includes relevant `reference_bindings`.
+- Planner application now blocks clarification outputs and validates that
+  reference-bound subjects become `image_guided` requirements, and final target
+  renders depend on subject/scene concept requirements.
+- User sample fixtures were updated so `subject_florollo_chibi` carries the
+  `弗糯糯` -> `弗洛洛` identity resolution, Little Gwen requires
+  `image_little_gwen_ref`, and rover prompts require fresh subject/scene concept
+  inputs before final render composition.
+
+Verification:
+
+```text
+pytest -q tests/test_agent_prompts.py tests/test_concept_planning.py tests/test_natural_language_scene_fixtures.py
+23 passed in 0.85s
+```
+
+This fixes the prompt/schema/runtime contract. The rejected visual artifacts
+remain rejected and must be regenerated under the new contract before they can
+be considered user-acceptable evidence.
+
+## 2026-07-01 Asset And Review Flow Audit
+
+User requested a stricter audit of image files, JSON handoff, chat/frontend
+records, and project asset management before accepting new sample images.
+
+Added:
+
+- `docs/concept_image_prompts_user_samples.md`
+  - full agent/MCP prompt set for the three samples;
+  - phrase-by-phrase Chinese translation;
+  - explicit web identity-research requirement for IP/character subjects;
+  - explicit MCP upload/attachment requirement for reference/source images.
+- `docs/asset_and_review_flow_audit_20260701.md`
+  - current compliance verdict;
+  - fixed vs still-noncompliant asset-management items;
+  - required shape for the next accepted run.
+
+Code fixes:
+
+- `RuntimeConceptImageResult` now carries `output_type`, `requirement_id`, and
+  `target_id`.
+- concept-image handoff apply now registers:
+  - `subject_concept` as `SUBJECT_CONCEPT_IMAGE`;
+  - `scene_concept` as `SCENE_CONCEPT_IMAGE`;
+  - `target_render` as `FINAL_PREVIEW_IMAGE`.
+- `frontend_status.concept_requirements[]` now exposes generation mode, input
+  reference image ids, source requirement ids, mandatory image-input flag, and
+  quality bar.
+- runtime console concept-review cards now display image mode plus reference and
+  dependency counts.
+
+Audit result:
+
+- The old `outputs/runs/20260630_live_review_images_codex_self/` image bundle
+  is rejected as canonical runtime evidence because it is a flat manual image
+  bundle without `state.json`, `frontend_status.json`, `artifacts/`, or
+  checkpoints.
+- The old user-sample dry-run states under
+  `outputs/runs/20260630_actual_nl_first_step_check/` predate the new
+  `generation_mode/input_reference_image_ids/source_requirement_ids` schema and
+  should be superseded.
+- The apply/frontend layers can now represent all three required image classes,
+  but the next live run still needs to prove actual MCP image attachment for
+  Little Gwen and final target renders.
+
+Verification:
+
+```text
+node --check web/runtime_console/app.js
+pytest -q tests/test_frontend_status.py tests/test_runtime_delegation.py tests/test_runtime_worker.py tests/test_natural_language_scene_fixtures.py
+35 passed in 1.56s
+
+pytest -q tests/test_state_views.py tests/test_frontend_status.py tests/test_runtime_execution.py tests/test_runtime_loop.py tests/test_runtime_worker.py tests/test_runtime_delegation.py tests/test_runtime_user_actions.py tests/test_agent_prompts.py tests/test_concept_planning.py tests/test_natural_language_scene_fixtures.py
+82 passed in 2.20s
+```
+
+## 2026-07-01 Concept Generation Handoff Contract Tightening
+
+User clarified that the live image-generation path must be:
+
+```text
+search / identity verification evidence
+  -> ConceptPromptPlanner structured prompts and image_requirements
+  -> GenerateConceptImages MCP calls with real uploaded/attached inputs from
+     input_reference_image_ids and source_requirement_ids
+```
+
+Implemented:
+
+- `agent_runtime/runtime_delegation.py`
+  - concept-image handoff JSON now includes a structured
+    `concept_generation` payload;
+  - each requirement carries prompt text, generation mode, resolved input image
+    paths, source requirement dependencies, blockers, and expected apply schema;
+  - the worker task prompt no longer says "generate exactly one image";
+  - target renders are explicitly required to wait for generated subject/scene
+    concept images and attach those source outputs as visual inputs.
+- `tests/test_runtime_delegation.py`
+  - updated old one-image prompt assertions;
+  - verifies default subject/scene/target requirements in handoff order;
+  - verifies an image-guided subject requirement carries the resolved reference
+    image path and missing-file blocker.
+- `docs/asset_and_review_flow_audit_20260701.md` and
+  `docs/agent_runtime_contract.md`
+  - updated to make the structured requirement/upload contract the current
+    runtime rule.
+- `agent_runtime/runtime_worker.py`
+  - confirmed `codex_self_mcp` concept execution now blocks structured
+    multi-requirement handoffs, mandatory image inputs, and target-render source
+    dependencies instead of extracting one final image and treating it as a full
+    concept-generation pass;
+  - legacy single-image extraction remains test-covered for old handoff shapes.
+- `tests/test_runtime_worker.py`
+  - adds a negative test proving the structured concept handoff is not handled
+    by the current codex-self backend.
+
+Still not closed:
+
+- The background sub-agent image-generation job for
+  `outputs/runs/20260701_live_review_images_contract_v2/` has not yet returned
+  artifacts in this parent session.
+- Actual MCP/image-call evidence still must show every uploaded reference/source
+  image path in `generation_calls.jsonl`, worker JSON, or MCP logs before the
+  new sample images can be accepted.
+
+Verification:
+
+```text
+pytest -q tests/test_runtime_delegation.py tests/test_runtime_worker.py tests/test_concept_planning.py tests/test_frontend_status.py
+32 passed in 1.13s
+
+python -m py_compile agent_runtime/runtime_delegation.py agent_runtime/runtime_worker.py agent_runtime/runtime_handoff_apply.py agent_runtime/frontend_status.py
+```

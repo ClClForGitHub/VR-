@@ -30,6 +30,12 @@ If uploaded images are not bound, the controller must ask for clarification
 instead of guessing. MLLM descriptions may help the user or future prompts, but
 they do not replace explicit binding in V1.
 
+For mixed natural-language/reference requests, the reference image controls only
+the declared target. Example: "小小格温图片1在棋盘上" means image 1 binds to the
+Little Gwen subject identity; the chessboard and chess pieces come from the
+natural-language scene specification and must not be injected into the subject
+reference/concept prompt.
+
 ## Runtime Models
 
 Implemented in `agent_runtime.reference_intake`:
@@ -72,4 +78,3 @@ Invalid or incomplete intake produces:
 - open questions;
 - a clarification prompt;
 - no hidden image-purpose guess.
-

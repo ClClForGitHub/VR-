@@ -36,6 +36,11 @@ class ScenarioExpectedOutcome(BaseModel):
     stop_reason: str
     final_phase: str
     subject_ids: list[str] = Field(default_factory=list)
+    subject_asset_ids_required: list[str] = Field(default_factory=list)
+    procedural_object_ids: list[str] = Field(default_factory=list)
+    concept_requirement_types: list[str] = Field(default_factory=list)
+    scene_environment_type: str | None = None
+    reference_bound_subject_ids: list[str] = Field(default_factory=list)
     reference_binding_count: int = 0
     has_prompt_pack: bool = False
     first_runtime_status: str | None = None

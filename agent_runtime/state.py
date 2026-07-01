@@ -194,6 +194,10 @@ class CameraSpec(BaseModel):
 class SubjectSpec(BaseModel):
     subject_id: str
     display_name: str
+    source_text_span: str | None = None
+    canonical_identity: str | None = None
+    identity_aliases: list[str] = Field(default_factory=list)
+    identity_confidence: float | None = None
     category: Literal[
         "character",
         "animal",
@@ -227,6 +231,10 @@ class SubjectSpec(BaseModel):
     ] = "three_quarter"
     scale_hint: str | None = None
     placement_hint: str | None = None
+
+    @field_validator("identity_confidence")
+    def identity_confidence_in_unit_interval(cls, value: float | None) -> float | None:
+        return _validate_unit_interval(value, field_name="identity_confidence")
 
 
 class SpatialRelation(BaseModel):
@@ -273,10 +281,26 @@ class SceneSpec(BaseModel):
         return _validate_positive_version(value)
 
 
+class ConceptImageRequirement(BaseModel):
+    requirement_id: str
+    output_type: Literal["subject_concept", "scene_concept", "target_render"]
+    target_id: str | None = None
+    prompt_key: str
+    user_review_label: str
+    purpose: str
+    generation_mode: Literal["text_to_image", "image_guided", "multi_image_composite"] = "text_to_image"
+    input_reference_image_ids: list[str] = Field(default_factory=list)
+    source_requirement_ids: list[str] = Field(default_factory=list)
+    must_use_image_inputs: bool = False
+    quality_bar: str | None = None
+    required_before_asset_generation: bool = True
+
+
 class ConceptPromptPack(BaseModel):
     final_preview_prompt: str
     subject_prompts: dict[str, str] = Field(default_factory=dict)
     scene_prompts: list[str] = Field(default_factory=list)
+    image_requirements: list[ConceptImageRequirement] = Field(default_factory=list)
     negative_prompt: str | None = None
     generation_settings: dict[str, Any] = Field(default_factory=dict)
 
@@ -578,6 +602,7 @@ class ConceptPromptPlannerContext(BaseModel):
     scene_spec: SceneSpec
     active_review_patches: list[ReviewPatch] = Field(default_factory=list)
     prior_prompt_pack_summary: str | None = None
+    reference_bindings: list[ReferenceBinding] = Field(default_factory=list)
 
 
 class BlenderAssemblyPlannerContext(BaseModel):

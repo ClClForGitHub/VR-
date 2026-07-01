@@ -97,6 +97,28 @@ def ensure_material(objects, material):
             obj.data.materials.append(material)
 
 
+def clear_scene_occluders(objects, target, *, radius, min_height, ground_z):
+    if radius <= 0:
+        return []
+    removed = []
+    for obj in list(objects):
+        obj_min, obj_max = bounds_of([obj])
+        obj_size = obj_max - obj_min
+        if obj_size.z < min_height:
+            continue
+        center = (obj_min + obj_max) * 0.5
+        distance_xy = math.hypot(center.x - target.x, center.y - target.y)
+        if distance_xy > radius:
+            continue
+        if obj_max.z <= ground_z + min_height:
+            continue
+        removed.append(obj.name)
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if obj in objects:
+            objects.remove(obj)
+    return removed
+
+
 def main():
     try:
         sep = sys.argv.index("--")
@@ -125,6 +147,8 @@ def main():
     scene_center = (scene_min + scene_max) * 0.5
     scene_size = scene_max - scene_min
     scene_height = max(scene_size.z, 1e-3)
+    scene_horizontal = max(scene_size.x, scene_size.y, 1e-3)
+    scene_reference_height = max(scene_height, scene_horizontal * 0.16)
     scene_max_dim = max(scene_size.x, scene_size.y, scene_size.z, 1e-3)
 
     before = set(bpy.context.scene.objects)
@@ -147,7 +171,7 @@ def main():
     asset_size = asset_max - asset_min
     asset_height = max(asset_size.z, 1e-3)
     target_height_ratio = numeric_value(assembly_plan.get("target_height_ratio"), 0.42, minimum=0.05, maximum=1.5)
-    target_height = scene_height * target_height_ratio
+    target_height = scene_reference_height * target_height_ratio
     scale = target_height / asset_height
     subject_yaw_degrees = numeric_value(assembly_plan.get("subject_yaw_degrees"), 0.0, minimum=-180.0, maximum=180.0)
 
@@ -157,6 +181,25 @@ def main():
         scene_center.y + scene_size.y * region_y,
         scene_min.z,
     ))
+    clearance_radius_normalized = numeric_value(
+        assembly_plan.get("subject_clearance_radius_normalized"),
+        0.0,
+        minimum=0.0,
+        maximum=0.5,
+    )
+    clearance_min_height_ratio = numeric_value(
+        assembly_plan.get("subject_clearance_min_height_ratio"),
+        0.12,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    cleared_scene_objects = clear_scene_occluders(
+        scene_objects,
+        target,
+        radius=max(scene_size.x, scene_size.y) * clearance_radius_normalized,
+        min_height=scene_height * clearance_min_height_ratio,
+        ground_z=scene_min.z,
+    )
     asset_transform = (
         Matrix.Translation(target + Vector((0, 0, target_height * 0.5)))
         @ Matrix.Rotation(math.radians(subject_yaw_degrees), 4, "Z")
@@ -173,12 +216,30 @@ def main():
     all_center = (all_min + all_max) * 0.5
     all_size = all_max - all_min
     max_dim = max(all_size.x, all_size.y, all_size.z, 1e-3)
+    framed_min, framed_max = bounds_of(asset_objects)
+    framed_center = (framed_min + framed_max) * 0.5
+    framed_size = framed_max - framed_min
+    camera_frame = str(assembly_plan.get("camera_frame") or "scene").lower()
+    if camera_frame == "subject":
+        camera_bounds_center = framed_center
+        camera_bounds_size = framed_size
+        camera_max_dim = max(
+            framed_size.x * 1.25,
+            framed_size.y * 1.25,
+            framed_size.z * 1.55,
+            scene_horizontal * 0.18,
+            1e-3,
+        )
+    else:
+        camera_bounds_center = all_center
+        camera_bounds_size = all_size
+        camera_max_dim = max_dim
 
     bpy.ops.object.light_add(type="AREA", location=(all_center.x, all_center.y - max_dim * 1.2, all_center.z + max_dim * 1.8))
     light = bpy.context.object
     light.name = "Preview_Area_Light"
-    light.data.energy = 320
-    light.data.size = max_dim * 1.4
+    light.data.energy = numeric_value(assembly_plan.get("key_light_energy"), 780, minimum=50, maximum=5000)
+    light.data.size = max_dim * 1.6
 
     bpy.ops.object.camera_add()
     camera = bpy.context.object
@@ -191,14 +252,27 @@ def main():
         camera_direction = Vector((1.25, -1.55, 0.85))
     camera_target_x, camera_target_y = clamped_pair(assembly_plan.get("camera_target_normalized"), (0.0, 0.0))
     camera_target = Vector((
-        all_center.x + all_size.x * camera_target_x,
-        all_center.y + all_size.y * camera_target_y,
-        all_center.z,
+        camera_bounds_center.x + camera_bounds_size.x * camera_target_x,
+        camera_bounds_center.y + camera_bounds_size.y * camera_target_y,
+        camera_bounds_center.z,
     ))
-    camera.data.ortho_scale = max_dim * ortho_scale_factor
-    camera.location = camera_target + camera_direction.normalized() * max_dim * camera_distance_multiplier
-    camera.data.clip_end = max_dim * 30
+    camera.data.ortho_scale = camera_max_dim * ortho_scale_factor
+    camera.location = camera_target + camera_direction.normalized() * camera_max_dim * camera_distance_multiplier
+    camera.data.clip_end = max(max_dim, camera_max_dim) * 30
     look_at(camera, camera_target)
+
+    bpy.ops.object.light_add(
+        type="AREA",
+        location=(
+            camera.location.x,
+            camera.location.y,
+            camera.location.z + max_dim * 0.35,
+        ),
+    )
+    fill = bpy.context.object
+    fill.name = "Preview_Camera_Fill_Light"
+    fill.data.energy = numeric_value(assembly_plan.get("fill_light_energy"), 260, minimum=0, maximum=3000)
+    fill.data.size = max_dim * 2.2
 
     scene = bpy.context.scene
     scene.camera = camera
@@ -206,12 +280,13 @@ def main():
     scene.cycles.device = "CPU"
     scene.cycles.samples = 16
     scene.cycles.use_denoising = True
-    scene.world.color = (0.50, 0.50, 0.50)
+    scene.world.color = (0.68, 0.68, 0.68)
     resolution_x, resolution_y = numeric_pair(assembly_plan.get("render_resolution"), (1400, 900))
     scene.render.resolution_x = int(max(320, min(resolution_x, 4096)))
     scene.render.resolution_y = int(max(240, min(resolution_y, 4096)))
     scene.view_settings.view_transform = "Standard"
     scene.view_settings.look = "Medium High Contrast"
+    scene.view_settings.exposure = numeric_value(assembly_plan.get("exposure"), 0.25, minimum=-3.0, maximum=3.0)
 
     preview_png.parent.mkdir(parents=True, exist_ok=True)
     output_blend.parent.mkdir(parents=True, exist_ok=True)
@@ -226,9 +301,12 @@ def main():
     if assembly_plan:
         print(f"Assembly plan: {assembly_plan.get('plan_id', 'unnamed')}")
     print(f"Asset scale: {scale:.6f}")
+    print(f"Scene reference height: {scene_reference_height:.6f}")
     print(f"Asset yaw degrees: {subject_yaw_degrees:.3f}")
     print(f"Asset target: {tuple(round(v, 4) for v in target)}")
+    print(f"Cleared scene occluders: {cleared_scene_objects}")
     print(f"Camera direction: {tuple(round(v, 4) for v in camera_direction)}")
+    print(f"Camera frame: {camera_frame}")
     print(f"Camera target: {tuple(round(v, 4) for v in camera_target)}")
     print(f"Camera ortho scale factor: {ortho_scale_factor:.6f}")
     print(f"Saved preview: {preview_png}")

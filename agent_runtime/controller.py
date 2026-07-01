@@ -240,6 +240,8 @@ def _subject_asset_plan(
     reason: str = "concept_approved_for_subject_generation",
     payload: dict[str, object] | None = None,
 ) -> ControllerPlan:
+    effective_payload = dict(payload or {})
+    effective_payload.setdefault("subject_ids", _missing_subject_asset_ids(state) or _needed_subject_ids(state))
     return ControllerPlan(
         phase=phase,
         next_phase=WorkflowPhase.SUBJECT_ASSET_GENERATION,
@@ -248,7 +250,7 @@ def _subject_asset_plan(
                 WorkflowPhase.SUBJECT_ASSET_GENERATION,
                 "build_subject_asset",
                 reason,
-                payload=payload or {},
+                payload=effective_payload,
             ),
             _tool_action(
                 WorkflowPhase.SUBJECT_ASSET_GENERATION,
@@ -479,7 +481,11 @@ def _concept_approved(state: AgentProjectState) -> bool:
 def _needed_subject_ids(state: AgentProjectState) -> list[str]:
     if state.scene_spec is None:
         return []
-    return [subject.subject_id for subject in state.scene_spec.subjects if subject.needs_3d_asset]
+    return [
+        subject.subject_id
+        for subject in state.scene_spec.subjects
+        if subject.needs_3d_asset and subject.asset_strategy in {"hunyuan3d_img2asset", "existing_asset"}
+    ]
 
 
 def _accepted_subject_asset_ids_by_subject(state: AgentProjectState) -> set[str]:

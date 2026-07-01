@@ -34,6 +34,9 @@ RuntimeHandoffApplyStatus = Literal["applied", "skipped", "failed"]
 class RuntimeConceptImageResult(BaseModel):
     image_path: str
     subject_id: str | None = None
+    output_type: Literal["subject_concept", "scene_concept", "target_render"] = "subject_concept"
+    requirement_id: str | None = None
+    target_id: str | None = None
     artifact_id: str | None = None
     final_preview: bool = False
     copy_into_store: bool = True
@@ -522,34 +525,45 @@ def _apply_concept_images(
     store = FileArtifactStore(run_dir / "artifacts")
     artifacts = []
     subject_images = {key: list(value) for key, value in state.concept_bundle.subject_concept_images.items()}
+    scene_images = list(state.concept_bundle.scene_concept_image_ids)
     final_preview = state.concept_bundle.final_preview_image_id
     default_subject_id = state.scene_spec.subjects[0].subject_id if state.scene_spec is not None and state.scene_spec.subjects else "subject_001"
     for index, result in enumerate(image_results, start=1):
+        output_type = result.output_type
         subject_id = result.subject_id or default_subject_id
+        artifact_type = _artifact_type_for_concept_output(output_type)
         artifact = store.register_file(
             result.image_path,
-            ArtifactType.SUBJECT_CONCEPT_IMAGE,
-            artifact_id=result.artifact_id or f"subject_concept_image_{uuid4().hex[:12]}",
-            semantic_role="subject_concept_image",
+            artifact_type,
+            artifact_id=result.artifact_id or f"{output_type}_{uuid4().hex[:12]}",
+            semantic_role=_semantic_role_for_concept_output(output_type),
             copy_into_store=result.copy_into_store,
             metadata={
                 "stage": "runtime_handoff_apply",
                 "handoff_id": handoff.handoff_id,
                 "execution_id": handoff.execution_id,
+                "output_type": output_type,
+                "requirement_id": result.requirement_id,
+                "target_id": result.target_id,
                 "subject_id": subject_id,
                 "image_index": index,
                 **result.metadata,
             },
         )
         artifacts.append(artifact)
-        subject_images.setdefault(subject_id, []).append(artifact.artifact_id)
-        if result.final_preview or final_preview is None:
+        if output_type == "subject_concept":
+            subject_images.setdefault(subject_id, []).append(artifact.artifact_id)
+            if result.final_preview or final_preview is None:
+                final_preview = artifact.artifact_id
+        elif output_type == "scene_concept":
+            scene_images.append(artifact.artifact_id)
+        elif output_type == "target_render":
             final_preview = artifact.artifact_id
     concept_bundle = ConceptBundle(
         concept_version=state.concept_bundle.concept_version,
         final_preview_image_id=final_preview,
         subject_concept_images=subject_images,
-        scene_concept_image_ids=list(state.concept_bundle.scene_concept_image_ids),
+        scene_concept_image_ids=scene_images,
         prompt_pack=state.concept_bundle.prompt_pack,
         visual_qa=None,
         approved=False,
@@ -565,6 +579,22 @@ def _apply_concept_images(
         },
     )
     return updated, artifacts
+
+
+def _artifact_type_for_concept_output(output_type: str) -> ArtifactType:
+    if output_type == "scene_concept":
+        return ArtifactType.SCENE_CONCEPT_IMAGE
+    if output_type == "target_render":
+        return ArtifactType.FINAL_PREVIEW_IMAGE
+    return ArtifactType.SUBJECT_CONCEPT_IMAGE
+
+
+def _semantic_role_for_concept_output(output_type: str) -> str:
+    if output_type == "scene_concept":
+        return "scene_concept_image"
+    if output_type == "target_render":
+        return "final_preview_image"
+    return "subject_concept_image"
 
 
 def _apply_subject_assets(

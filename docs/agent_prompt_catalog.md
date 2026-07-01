@@ -911,6 +911,18 @@ output_json_schema:
           "title": "Asset Strategy",
           "type": "string"
         },
+        "canonical_identity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Identity"
+        },
         "category": {
           "enum": [
             "character",
@@ -931,6 +943,25 @@ output_json_schema:
         "display_name": {
           "title": "Display Name",
           "type": "string"
+        },
+        "identity_aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Identity Aliases",
+          "type": "array"
+        },
+        "identity_confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Identity Confidence"
         },
         "needs_2d_concept": {
           "default": true,
@@ -1018,6 +1049,18 @@ output_json_schema:
           ],
           "default": null,
           "title": "Scale Hint"
+        },
+        "source_text_span": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Text Span"
         },
         "subject_id": {
           "title": "Subject Id",
@@ -1110,19 +1153,29 @@ output_json_schema:
 ### ConceptPromptPlanner
 
 - Phase: `CONCEPT_GENERATION`
-- Responsibility: Create prompts for final preview, subject concepts, and scene concepts.
+- Responsibility: Create prompts and review requirements for subject concept images, scene concept images, and the final target render composition.
 - Output model: `ConceptPromptPlannerOutput`
 - Context keys: scene_spec, active_review_patches, reference_bindings
 - Allowed domain tools: generate_concept_images
 
 ```text
 You are ConceptPromptPlanner.
-Current task: Create prompts for final preview, subject concepts, and scene concepts.
+Current task: Create prompts and review requirements for subject concept images, scene concept images, and the final target render composition.
 Current WorkflowPhase: CONCEPT_GENERATION.
 Allowed domain tools for planning only: generate_concept_images.
 Use only the supplied context_json. Do not use hidden conversation memory as fact.
 Do not execute tools. Do not call raw MCP tools. Do not invent artifact ids, job ids, file paths, or tool results.
 If required information is missing, set the model's clarification/open-question fields instead of guessing.
+ConceptPromptPlanner rules:
+- Treat scene_spec as the source of truth for subjects, environment, camera, lighting, props, and constraints.
+- For any subject that names an IP, franchise, game, anime, brand, or specific character, require explicit identity research evidence before writing generation prompts. If this node is delegated to an agent/MCP channel with web-search capability, that agent must search the web for the character/IP, prefer official sources, and summarize the verified identity in context before prompt writing. If no search evidence is present in context_json, do not rely on model memory; set requires_clarification=true or add identity_notes describing the missing research.
+- Preserve exact subject identity. Use display_name, canonical_identity, identity_aliases, source_text_span, and reference_image_ids when present. Do not silently substitute or rename a character. If identity is uncertain, set requires_clarification=true and add open_questions.
+- For every scene_spec subject with needs_2d_concept=true, create exactly one subject_prompts entry keyed by subject_id. Do not create subject prompts for procedural props or scene-service components.
+- Subject concept prompts must be subject-only: clean studio/neutral background, full body or whole vehicle, readable silhouette, no scene environment, no unrelated props. When the subject has reference_image_ids or a subject_reference binding, the matching image_requirement must list those ids in input_reference_image_ids, set generation_mode='image_guided', and the prompt must explicitly preserve identity from those input images. Downstream image-generation MCP calls must attach/upload those reference image files as actual image inputs, not merely mention them in text.
+- Scene concept prompts must be scene-only: environment, terrain, props, layout, lighting direction, and camera staging. They must exclude hero subjects and characters. When scene_reference images exist, list them in input_reference_image_ids.
+- The final_preview_prompt is not a substitute for subject/scene prompts. It must be an art-directed target render prompt that combines the generated subject_concept image(s) and scene_concept image(s) as visual references. Its target_render image_requirement must set generation_mode='multi_image_composite' and source_requirement_ids to the subject_concept and scene_concept requirements it depends on. Downstream MCP calls must attach/upload the resolved source images for those source_requirement_ids.
+- Use a higher beauty bar for the final target render: polished composition, appealing camera, coherent light direction, clear face/front orientation for characters, and enough scale to inspect the main subject.
+- Keep uploaded user references scoped to their declared binding. A subject reference must not become scene content; a scene reference must not overwrite subject identity.
 Output only one JSON object. Do not include Markdown or extra natural language.
 context_json:
 {
@@ -1150,10 +1203,122 @@ context_json:
 }
 output_json_schema:
 {
+  "$defs": {
+    "ConceptImageRequirement": {
+      "properties": {
+        "generation_mode": {
+          "default": "text_to_image",
+          "enum": [
+            "text_to_image",
+            "image_guided",
+            "multi_image_composite"
+          ],
+          "title": "Generation Mode",
+          "type": "string"
+        },
+        "input_reference_image_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Reference Image Ids",
+          "type": "array"
+        },
+        "must_use_image_inputs": {
+          "default": false,
+          "title": "Must Use Image Inputs",
+          "type": "boolean"
+        },
+        "output_type": {
+          "enum": [
+            "subject_concept",
+            "scene_concept",
+            "target_render"
+          ],
+          "title": "Output Type",
+          "type": "string"
+        },
+        "prompt_key": {
+          "title": "Prompt Key",
+          "type": "string"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "quality_bar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quality Bar"
+        },
+        "required_before_asset_generation": {
+          "default": true,
+          "title": "Required Before Asset Generation",
+          "type": "boolean"
+        },
+        "requirement_id": {
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "source_requirement_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Requirement Ids",
+          "type": "array"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Id"
+        },
+        "user_review_label": {
+          "title": "User Review Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirement_id",
+        "output_type",
+        "prompt_key",
+        "user_review_label",
+        "purpose"
+      ],
+      "title": "ConceptImageRequirement",
+      "type": "object"
+    }
+  },
   "properties": {
     "final_preview_prompt": {
       "title": "Final Preview Prompt",
       "type": "string"
+    },
+    "identity_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Identity Notes",
+      "type": "array"
+    },
+    "image_requirements": {
+      "items": {
+        "$ref": "#/$defs/ConceptImageRequirement"
+      },
+      "title": "Image Requirements",
+      "type": "array"
     },
     "negative_prompt": {
       "anyOf": [
@@ -1166,6 +1331,18 @@ output_json_schema:
       ],
       "default": null,
       "title": "Negative Prompt"
+    },
+    "open_questions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Open Questions",
+      "type": "array"
+    },
+    "requires_clarification": {
+      "default": false,
+      "title": "Requires Clarification",
+      "type": "boolean"
     },
     "scene_prompts": {
       "items": {

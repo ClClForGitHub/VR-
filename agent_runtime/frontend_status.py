@@ -37,6 +37,31 @@ class FrontendPendingActionSummary(BaseModel):
     user_visible: bool = True
 
 
+class FrontendConceptRequirementSummary(BaseModel):
+    requirement_id: str
+    output_type: str
+    target_id: str | None = None
+    user_review_label: str
+    ready_artifact_ids: list[str] = Field(default_factory=list)
+    generation_mode: str = "text_to_image"
+    input_reference_image_ids: list[str] = Field(default_factory=list)
+    source_requirement_ids: list[str] = Field(default_factory=list)
+    must_use_image_inputs: bool = False
+    quality_bar: str | None = None
+    required_before_asset_generation: bool = True
+
+
+class FrontendSceneSpecSummary(BaseModel):
+    title: str
+    user_goal: str
+    environment_type: str
+    subject_count: int
+    subject_ids: list[str] = Field(default_factory=list)
+    subject_asset_ids_required: list[str] = Field(default_factory=list)
+    procedural_object_ids: list[str] = Field(default_factory=list)
+    reference_bound_subject_ids: list[str] = Field(default_factory=list)
+
+
 class FrontendStatus(BaseModel):
     project_id: str
     thread_id: str
@@ -54,6 +79,8 @@ class FrontendStatus(BaseModel):
     pending_action: FrontendPendingActionSummary | None = None
     artifact_ids: list[str] = Field(default_factory=list)
     subject_asset_ids: list[str] = Field(default_factory=list)
+    concept_requirements: list[FrontendConceptRequirementSummary] = Field(default_factory=list)
+    scene_spec_summary: FrontendSceneSpecSummary | None = None
     review_patch_ids: list[str] = Field(default_factory=list)
     scene_asset_id: str | None = None
     viewer_scene_id: str | None = None
@@ -108,6 +135,8 @@ def build_frontend_status(*, state: AgentProjectState, summary: dict[str, Any]) 
         pending_action=pending_action,
         artifact_ids=sorted(state.artifact_ids()),
         subject_asset_ids=_subject_asset_ids(state),
+        concept_requirements=_concept_requirements(state),
+        scene_spec_summary=_scene_spec_summary(state),
         review_patch_ids=[patch.patch_id for patch in state.review_patches],
         scene_asset_id=_scene_asset_id(state),
         viewer_scene_id=state.viewer_scene.viewer_scene_id if state.viewer_scene is not None else None,
@@ -136,6 +165,81 @@ def _scene_asset_id(state: AgentProjectState) -> str | None:
         if artifact.artifact_type == ArtifactType.SCENE_3D_ASSET:
             return artifact.artifact_id
     return None
+
+
+def _concept_requirements(state: AgentProjectState) -> list[FrontendConceptRequirementSummary]:
+    concept = state.concept_bundle
+    if concept is None or concept.prompt_pack is None:
+        return []
+    ready_by_type_target = _concept_ready_artifacts(state)
+    output = []
+    for requirement in concept.prompt_pack.image_requirements:
+        key = (requirement.output_type, requirement.target_id)
+        output.append(
+            FrontendConceptRequirementSummary(
+                requirement_id=requirement.requirement_id,
+                output_type=requirement.output_type,
+                target_id=requirement.target_id,
+                user_review_label=requirement.user_review_label,
+                ready_artifact_ids=ready_by_type_target.get(key, []),
+                generation_mode=requirement.generation_mode,
+                input_reference_image_ids=list(requirement.input_reference_image_ids),
+                source_requirement_ids=list(requirement.source_requirement_ids),
+                must_use_image_inputs=requirement.must_use_image_inputs,
+                quality_bar=requirement.quality_bar,
+                required_before_asset_generation=requirement.required_before_asset_generation,
+            )
+        )
+    return output
+
+
+def _concept_ready_artifacts(state: AgentProjectState) -> dict[tuple[str, str | None], list[str]]:
+    concept = state.concept_bundle
+    ready: dict[tuple[str, str | None], list[str]] = {}
+    if concept is None:
+        return ready
+    if concept.final_preview_image_id:
+        ready.setdefault(("target_render", state.scene_spec.scene_id if state.scene_spec is not None else None), []).append(
+            concept.final_preview_image_id
+        )
+    for subject_id, image_ids in concept.subject_concept_images.items():
+        ready.setdefault(("subject_concept", subject_id), []).extend(image_ids)
+    for image_id in concept.scene_concept_image_ids:
+        ready.setdefault(("scene_concept", state.scene_spec.scene_id if state.scene_spec is not None else None), []).append(
+            image_id
+        )
+    return ready
+
+
+def _scene_spec_summary(state: AgentProjectState) -> FrontendSceneSpecSummary | None:
+    scene_spec = state.scene_spec
+    if scene_spec is None:
+        return None
+    subject_asset_ids_required = [
+        subject.subject_id
+        for subject in scene_spec.subjects
+        if subject.needs_3d_asset and subject.asset_strategy in {"hunyuan3d_img2asset", "existing_asset"}
+    ]
+    procedural_object_ids = [
+        subject.subject_id
+        for subject in scene_spec.subjects
+        if subject.asset_strategy in {"procedural_blender", "scene_service_component", "blender_primitive"}
+    ]
+    reference_bound_subject_ids = [
+        subject.subject_id
+        for subject in scene_spec.subjects
+        if subject.reference_image_ids
+    ]
+    return FrontendSceneSpecSummary(
+        title=scene_spec.title,
+        user_goal=scene_spec.user_goal,
+        environment_type=scene_spec.environment.environment_type,
+        subject_count=len(scene_spec.subjects),
+        subject_ids=[subject.subject_id for subject in scene_spec.subjects],
+        subject_asset_ids_required=subject_asset_ids_required,
+        procedural_object_ids=procedural_object_ids,
+        reference_bound_subject_ids=reference_bound_subject_ids,
+    )
 
 
 def _stage_progress(

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from agent_runtime.runtime_dispatch import read_runtime_dispatch_plan
 from agent_runtime.artifacts import utc_now_iso
 from agent_runtime.runtime_execution import RuntimeJobExecutionRecord, read_runtime_execution_records
-from agent_runtime.state import AgentProjectState
+from agent_runtime.state import AgentProjectState, ConceptPromptPack
 
 
 RuntimeHandoffStatus = Literal["planned", "skipped", "failed"]
@@ -134,6 +134,7 @@ def _create_handoff_record(
     handoff_id = f"handoff_{uuid4().hex[:12]}"
     input_files = _input_files(run_dir)
     expected_outputs = _expected_outputs(execution)
+    concept_generation = _concept_generation_handoff_payload(state, execution)
     payload = {
         "handoff_id": handoff_id,
         "created_at": utc_now_iso(),
@@ -143,13 +144,15 @@ def _create_handoff_record(
         "state_summary": _state_summary(state),
         "input_files": input_files,
         "expected_outputs": expected_outputs,
-        "task_prompt": _task_prompt(state, execution),
+        "task_prompt": _task_prompt(state, execution, concept_generation=concept_generation),
         "operator_notes": [
             "Do not mutate state.json directly; register outputs through the existing workflow/runtime apply path.",
             "Keep generated binaries under this run directory or its artifact store.",
             "Return a JSON summary with output paths, artifact ids, and any user-visible issues.",
         ],
     }
+    if concept_generation is not None:
+        payload["concept_generation"] = concept_generation
     handoff_path = run_dir / "runtime_handoff" / f"{handoff_id}.json"
     _write_json(handoff_path, payload)
     return RuntimeDelegatedHandoffRecord(
@@ -171,6 +174,7 @@ def _create_handoff_record(
             "subject_count": len(state.scene_spec.subjects) if state.scene_spec is not None else 0,
             "has_prompt_pack": state.concept_bundle is not None and state.concept_bundle.prompt_pack is not None,
             "has_runtime_job_snapshot": payload["runtime_job"] is not None,
+            "concept_requirement_count": len(concept_generation.get("requirements", [])) if concept_generation else 0,
         },
     )
 
@@ -200,9 +204,12 @@ def _input_files(run_dir: Path) -> list[str]:
 def _expected_outputs(execution: RuntimeJobExecutionRecord) -> list[str]:
     if execution.domain_tool_name in {"generate_concept_images", "regenerate_concept_images"}:
         return [
-            "concept image file(s) under the run artifact store",
-            "registered ConceptBundle image ids",
-            "updated state/checkpoint summary through concept-seed or concept-regeneration workflow",
+            "one image result per ConceptImageRequirement, unless a requirement is explicitly blocked with an issue",
+            "subject concept image(s) registered as SUBJECT_CONCEPT_IMAGE",
+            "scene concept image(s) registered as SCENE_CONCEPT_IMAGE",
+            "target render registered as FINAL_PREVIEW_IMAGE after source_requirement_ids resolve to real image files",
+            "generation log showing each MCP/image call and the actual input image paths uploaded",
+            "updated state/checkpoint/frontend_status through the existing handoff-apply workflow",
         ]
     if execution.domain_tool_name == "build_subject_asset":
         return [
@@ -219,7 +226,12 @@ def _expected_outputs(execution: RuntimeJobExecutionRecord) -> list[str]:
     return list(execution.required_outputs) or ["worker JSON summary"]
 
 
-def _task_prompt(state: AgentProjectState, execution: RuntimeJobExecutionRecord) -> str:
+def _task_prompt(
+    state: AgentProjectState,
+    execution: RuntimeJobExecutionRecord,
+    *,
+    concept_generation: dict[str, Any] | None = None,
+) -> str:
     if execution.domain_tool_name in {"generate_concept_images", "regenerate_concept_images"}:
         prompt_pack = state.concept_bundle.prompt_pack if state.concept_bundle is not None else None
         prompt = prompt_pack.final_preview_prompt if prompt_pack is not None else ""
@@ -230,6 +242,13 @@ def _task_prompt(state: AgentProjectState, execution: RuntimeJobExecutionRecord)
             "reference_bindings": _reference_binding_prompt_snapshot(state),
             "final_preview_prompt": prompt,
             "subject_prompts": subject_prompts,
+            "scene_prompts": prompt_pack.scene_prompts if prompt_pack is not None else [],
+            "image_requirements": (
+                [requirement.model_dump(mode="json") for requirement in prompt_pack.image_requirements]
+                if prompt_pack is not None
+                else []
+            ),
+            "concept_generation": concept_generation,
             "expected_subject_ids": (
                 [subject.subject_id for subject in state.scene_spec.subjects]
                 if state.scene_spec is not None
@@ -241,20 +260,26 @@ def _task_prompt(state: AgentProjectState, execution: RuntimeJobExecutionRecord)
             "You are a bounded concept-image worker for the image23D Blender scene agent.\n"
             "\n"
             "Task:\n"
-            "- Generate exactly one new concept image for the current scene/request.\n"
-            "- Use the final preview prompt and subject prompts below as the visual source of truth.\n"
-            "- If an image-generation tool is available, call it exactly once and make the image the final visual output.\n"
-            "- The parent runtime will extract the last image_generation result from the MCP event log; do not save, move, "
-            "or base64-encode the image yourself.\n"
+            "- Execute the ConceptImageRequirement list below, in execution_order.\n"
+            "- For subject_concept requirements, generate subject-only source images with neutral or studio backgrounds.\n"
+            "- For scene_concept requirements, generate scene-only environment/layout images with no hero subjects.\n"
+            "- For target_render requirements, first resolve every source_requirement_id to the previously generated "
+            "subject/scene concept image file, then attach those files as visual inputs for a high-artistry composite render.\n"
+            "- Use every resolved input_reference_image_ids file as an actual uploaded/attached image input to the MCP/image tool; "
+            "do not merely mention the reference in text.\n"
+            "- Record each MCP/image call with requirement_id, prompt, input image paths, output path, and issues.\n"
             "\n"
             "Hard boundaries:\n"
             "- Do not edit state.json, summary.json, frontend_status.json, runtime_plan.json, or any runtime logs.\n"
             "- Do not run Blender, Hunyuan3D, HY-World, model conversion, package, or viewer-export commands.\n"
             "- Do not create a parallel artifact store, queue, schema, or state file.\n"
-            "- If you cannot generate an image, return a failure JSON instead of inventing a fake file path.\n"
+            "- If the MCP/image tool cannot attach the required image inputs for a requirement, mark that requirement blocked "
+            "with a clear issue instead of inventing a fake file path or silently degrading to text-only generation.\n"
             "\n"
             "Final assistant response after the image call:\n"
-            "Return only compact JSON with keys: ok, generated_image_count, subject_ids, notes, issues.\n"
+            "Return only compact JSON with keys: ok, generated_image_count, blocked_requirement_ids, image_results, "
+            "generation_calls_jsonl, notes, issues. Each image_results item must include image_path, output_type, "
+            "requirement_id, target_id, subject_id when applicable, artifact_id suggestion, and metadata.input_image_paths.\n"
             "\n"
             "Inputs JSON:\n"
             f"{json.dumps(prompt_inputs, ensure_ascii=False, indent=2, sort_keys=True)}"
@@ -309,6 +334,158 @@ def _task_prompt(state: AgentProjectState, execution: RuntimeJobExecutionRecord)
             f"{json.dumps(prompt_inputs, ensure_ascii=False, indent=2, sort_keys=True)}"
         )
     return f"Execute delegated runtime job {execution.job_id} for domain tool {execution.domain_tool_name}."
+
+
+def _concept_generation_handoff_payload(
+    state: AgentProjectState,
+    execution: RuntimeJobExecutionRecord,
+) -> dict[str, Any] | None:
+    if execution.domain_tool_name not in {"generate_concept_images", "regenerate_concept_images"}:
+        return None
+    prompt_pack = state.concept_bundle.prompt_pack if state.concept_bundle is not None else None
+    if prompt_pack is None:
+        return {
+            "ok": False,
+            "issues": ["missing_concept_prompt_pack"],
+            "requirements": [],
+            "execution_order": [],
+        }
+
+    requirements = [
+        _concept_requirement_handoff_item(state, prompt_pack, requirement)
+        for requirement in prompt_pack.image_requirements
+    ]
+    return {
+        "ok": True,
+        "requirements": requirements,
+        "execution_order": [item["requirement_id"] for item in requirements],
+        "mcp_upload_rules": [
+            "Attach every resolved_input_images[].uri for image_guided requirements.",
+            "For multi_image_composite requirements, resolve source_requirement_ids to generated output paths from earlier requirements and attach them.",
+            "A requirement with must_use_image_inputs=true is blocked if its input images cannot be attached.",
+        ],
+        "apply_result_schema": {
+            "image_results": [
+                {
+                    "image_path": "absolute path to generated image",
+                    "output_type": "subject_concept | scene_concept | target_render",
+                    "requirement_id": "ConceptImageRequirement.requirement_id",
+                    "target_id": "ConceptImageRequirement.target_id",
+                    "subject_id": "subject id for subject_concept only, otherwise null",
+                    "artifact_id": "stable suggested artifact id",
+                    "final_preview": "true only for target_render or intentionally selected preview",
+                    "metadata": {
+                        "input_reference_image_ids": [],
+                        "input_image_paths": [],
+                        "source_requirement_ids": [],
+                        "prompt_key": "ConceptImageRequirement.prompt_key",
+                    },
+                }
+            ]
+        },
+    }
+
+
+def _concept_requirement_handoff_item(
+    state: AgentProjectState,
+    prompt_pack: ConceptPromptPack,
+    requirement: Any,
+) -> dict[str, Any]:
+    return {
+        "requirement_id": requirement.requirement_id,
+        "output_type": requirement.output_type,
+        "target_id": requirement.target_id,
+        "prompt_key": requirement.prompt_key,
+        "prompt": _prompt_text_for_requirement(prompt_pack, requirement.prompt_key),
+        "negative_prompt": prompt_pack.negative_prompt,
+        "user_review_label": requirement.user_review_label,
+        "purpose": requirement.purpose,
+        "generation_mode": requirement.generation_mode,
+        "input_reference_image_ids": list(requirement.input_reference_image_ids),
+        "resolved_input_images": _resolved_input_images(state, requirement.input_reference_image_ids),
+        "source_requirement_ids": list(requirement.source_requirement_ids),
+        "source_requirements": [
+            _source_requirement_summary(prompt_pack, source_id)
+            for source_id in requirement.source_requirement_ids
+        ],
+        "must_use_image_inputs": requirement.must_use_image_inputs,
+        "quality_bar": requirement.quality_bar,
+        "blocked_if": _concept_requirement_blockers(state, prompt_pack, requirement),
+    }
+
+
+def _prompt_text_for_requirement(prompt_pack: ConceptPromptPack, prompt_key: str) -> str:
+    if prompt_key == "final_preview_prompt":
+        return prompt_pack.final_preview_prompt
+    if prompt_key.startswith("subject_prompts."):
+        subject_id = prompt_key.removeprefix("subject_prompts.")
+        return prompt_pack.subject_prompts.get(subject_id, "")
+    if prompt_key.startswith("scene_prompts."):
+        index_text = prompt_key.removeprefix("scene_prompts.")
+        try:
+            index = int(index_text)
+        except ValueError:
+            return ""
+        if 0 <= index < len(prompt_pack.scene_prompts):
+            return prompt_pack.scene_prompts[index]
+    return ""
+
+
+def _resolved_input_images(state: AgentProjectState, image_ids: list[str]) -> list[dict[str, Any]]:
+    inputs_by_id = {image.image_id: image for image in state.input_images}
+    resolved = []
+    for image_id in image_ids:
+        image = inputs_by_id.get(image_id)
+        if image is None:
+            resolved.append({"image_id": image_id, "uri": None, "exists": False, "issue": "input_image_not_found"})
+            continue
+        path = Path(image.uri).expanduser()
+        resolved.append(
+            {
+                "image_id": image.image_id,
+                "artifact_id": image.artifact_id,
+                "uri": image.uri,
+                "mime_type": image.mime_type,
+                "user_declared_label": image.user_declared_label,
+                "notes": image.notes,
+                "exists": path.exists(),
+            }
+        )
+    return resolved
+
+
+def _source_requirement_summary(prompt_pack: ConceptPromptPack, requirement_id: str) -> dict[str, Any]:
+    for requirement in prompt_pack.image_requirements:
+        if requirement.requirement_id == requirement_id:
+            return {
+                "requirement_id": requirement.requirement_id,
+                "output_type": requirement.output_type,
+                "target_id": requirement.target_id,
+                "prompt_key": requirement.prompt_key,
+                "must_be_generated_before_use": True,
+            }
+    return {
+        "requirement_id": requirement_id,
+        "issue": "source_requirement_not_found",
+        "must_be_generated_before_use": True,
+    }
+
+
+def _concept_requirement_blockers(
+    state: AgentProjectState,
+    prompt_pack: ConceptPromptPack,
+    requirement: Any,
+) -> list[str]:
+    blockers = []
+    resolved_images = _resolved_input_images(state, requirement.input_reference_image_ids)
+    for image in resolved_images:
+        if not image.get("exists"):
+            blockers.append(f"missing_input_reference_file:{image.get('image_id')}")
+    requirement_ids = {item.requirement_id for item in prompt_pack.image_requirements}
+    for source_id in requirement.source_requirement_ids:
+        if source_id not in requirement_ids:
+            blockers.append(f"missing_source_requirement:{source_id}")
+    return blockers
 
 
 def _state_summary(state: AgentProjectState) -> dict[str, Any]:

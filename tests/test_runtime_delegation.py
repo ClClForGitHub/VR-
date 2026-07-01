@@ -55,10 +55,22 @@ def test_runtime_delegation_plans_handoff_for_loop_delegated_job(tmp_path: Path)
     assert "state.json" in " ".join(result.record.input_files)
     assert "concept image" in " ".join(result.record.expected_outputs)
     assert "A compact robot on a clean pedestal." in handoff["task_prompt"]
-    assert "Generate exactly one new concept image" in handoff["task_prompt"]
+    assert "Execute the ConceptImageRequirement list" in handoff["task_prompt"]
     assert "Do not edit state.json" in handoff["task_prompt"]
     assert "Do not run Blender, Hunyuan3D, HY-World" in handoff["task_prompt"]
-    assert "extract the last image_generation result" in handoff["task_prompt"]
+    assert "actual uploaded/attached image input" in handoff["task_prompt"]
+    assert handoff["concept_generation"]["execution_order"] == [
+        "subject_concept:subject_robot",
+        "scene_concept:1",
+        "target_render:final_preview",
+    ]
+    target_requirement = handoff["concept_generation"]["requirements"][-1]
+    assert target_requirement["output_type"] == "target_render"
+    assert target_requirement["generation_mode"] == "multi_image_composite"
+    assert target_requirement["source_requirement_ids"] == [
+        "subject_concept:subject_robot",
+        "scene_concept:1",
+    ]
     assert handoff["state_summary"]["has_prompt_pack"] is True
     assert summary is not None
     assert summary["handed_off_execution_ids"] == [result.record.execution_id]
@@ -98,6 +110,9 @@ def test_runtime_delegation_concept_handoff_prompt_includes_reference_image_cont
             notes="Use for character appearance only.",
         )
     )
+    state.concept_bundle.prompt_pack.image_requirements[0].generation_mode = "image_guided"
+    state.concept_bundle.prompt_pack.image_requirements[0].input_reference_image_ids = ["image_ref_001"]
+    state.concept_bundle.prompt_pack.image_requirements[0].must_use_image_inputs = True
     state_path.write_text(json.dumps(state.model_dump(mode="json"), ensure_ascii=False), encoding="utf-8")
 
     result = plan_next_delegated_handoff(created.run_dir)
@@ -110,6 +125,11 @@ def test_runtime_delegation_concept_handoff_prompt_includes_reference_image_cont
     assert "subject_reference" in prompt
     assert "subject_robot" in prompt
     assert "Use for character appearance only." in prompt
+    subject_requirement = handoff["concept_generation"]["requirements"][0]
+    assert subject_requirement["generation_mode"] == "image_guided"
+    assert subject_requirement["input_reference_image_ids"] == ["image_ref_001"]
+    assert subject_requirement["resolved_input_images"][0]["uri"] == "/tmp/reference.png"
+    assert subject_requirement["blocked_if"] == ["missing_input_reference_file:image_ref_001"]
 
 
 def test_runtime_handoff_apply_registers_concept_image_and_rebuilds_plan(tmp_path: Path) -> None:
@@ -154,6 +174,57 @@ def test_runtime_handoff_apply_registers_concept_image_and_rebuilds_plan(tmp_pat
     assert plan["runtime_plan"]["jobs"][0]["kind"] == "user_gate"
     assert bundle.runtime_handoff_apply_summary is not None
     assert audit.ok is True
+
+
+def test_runtime_handoff_apply_registers_scene_and_target_concept_images(tmp_path: Path) -> None:
+    created = create_runtime_console_run(root=tmp_path, run_id="run_concept_handoff_scene_target")
+    append_console_message(created.run_dir, role="user", text="Make a robot on a clean pedestal.")
+    run_bounded_runtime_loop(
+        created.run_dir,
+        max_steps=8,
+        dry_run=True,
+        response_text_by_node=_fixture_responses(),
+    )
+    handoff = plan_next_delegated_handoff(created.run_dir)
+    scene_image = tmp_path / "scene_concept.png"
+    target_image = tmp_path / "target_render.png"
+    scene_image.write_bytes(b"scene concept image")
+    target_image.write_bytes(b"target render image")
+
+    result = apply_concept_handoff_result(
+        created.run_dir,
+        handoff_id=handoff.record.handoff_id,
+        image_results=[
+            {
+                "image_path": str(scene_image),
+                "artifact_id": "scene_concept_001",
+                "output_type": "scene_concept",
+                "requirement_id": "scene_concept:1",
+                "target_id": "scene_robot_studio",
+            },
+            {
+                "image_path": str(target_image),
+                "artifact_id": "target_render_001",
+                "output_type": "target_render",
+                "requirement_id": "target_render:final_preview",
+                "target_id": "scene_robot_studio",
+            },
+        ],
+    )
+    state = json.loads((Path(created.run_dir) / "state.json").read_text(encoding="utf-8"))
+
+    assert result.ok is True
+    assert result.record.artifact_ids == ["scene_concept_001", "target_render_001"]
+    assert state["concept_bundle"]["scene_concept_image_ids"] == ["scene_concept_001"]
+    assert state["concept_bundle"]["final_preview_image_id"] == "target_render_001"
+    assert [artifact["artifact_type"] for artifact in state["artifacts"]] == [
+        "SCENE_CONCEPT_IMAGE",
+        "FINAL_PREVIEW_IMAGE",
+    ]
+    assert [artifact["semantic_role"] for artifact in state["artifacts"]] == [
+        "scene_concept_image",
+        "final_preview_image",
+    ]
 
 
 def test_runtime_handoff_apply_registers_subject_asset_and_rebuilds_plan(tmp_path: Path) -> None:

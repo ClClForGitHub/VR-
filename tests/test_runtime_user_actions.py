@@ -15,6 +15,7 @@ from agent_runtime.state import (
     BlenderSceneState,
     CameraSpec,
     ConceptBundle,
+    ConceptImageRequirement,
     ConceptPromptPack,
     EnvironmentSpec,
     LightingSpec,
@@ -161,6 +162,7 @@ def test_user_requested_samples_cover_accept_and_reject_review_branches(tmp_path
         subject_id="subject_phoebe_chibi",
         concept_id="concept_beach_duo_001",
         prompt="菲比和弗糯糯 Q 版角色在海滩上，旁边有沙滩椅和沙子城堡。",
+        include_full_concept_set=True,
     )
     beach_accept_result = approve_concept_review(beach_accept, note="同意角色与海滩道具设定")
     beach_accept_state = json.loads((Path(beach_accept) / "state.json").read_text(encoding="utf-8"))
@@ -180,6 +182,7 @@ def test_user_requested_samples_cover_accept_and_reject_review_branches(tmp_path
         subject_id="subject_little_gwen",
         concept_id="concept_little_gwen_001",
         prompt="图片1小小格温站在棋盘上，周围是很多国际象棋棋子。",
+        include_full_concept_set=True,
     )
     gwen_reject_result = request_concept_changes(
         gwen_reject,
@@ -230,7 +233,17 @@ def test_user_requested_samples_cover_accept_and_reject_review_branches(tmp_path
     assert gwen_reject_result.ok is True
     assert gwen_reject_state["phase"] == "CONCEPT_REVIEW"
     assert gwen_reject_state["review_patches"][0]["instruction"].startswith("不同意图片1参考匹配")
-    assert gwen_reject_state["review_patches"][0]["affected_artifact_ids"] == ["concept_little_gwen_001"]
+    assert gwen_reject_state["concept_bundle"]["prompt_pack"]["image_requirements"]
+    assert [item["output_type"] for item in gwen_reject_state["concept_bundle"]["prompt_pack"]["image_requirements"]] == [
+        "subject_concept",
+        "scene_concept",
+        "target_render",
+    ]
+    assert gwen_reject_state["review_patches"][0]["affected_artifact_ids"] == [
+        "concept_little_gwen_001",
+        "concept_little_gwen_001_render",
+        "concept_little_gwen_001_scene",
+    ]
     assert rover_accept_result.ok is True
     assert rover_accept_state["phase"] == "DELIVERY"
     assert beach_preview_reject_result.ok is True
@@ -261,9 +274,45 @@ def _concept_review_run(
     subject_id: str = "subject_robot",
     concept_id: str = "concept_robot_001",
     prompt: str = "A compact friendly robot on a pedestal.",
+    include_full_concept_set: bool = False,
 ) -> Path:
     created = create_runtime_console_run(root=tmp_path, run_id=run_id)
     run_dir = Path(created.run_dir)
+    final_preview_image_id = f"{concept_id}_render" if include_full_concept_set else concept_id
+    scene_concept_image_ids = [f"{concept_id}_scene"] if include_full_concept_set else []
+    prompt_pack = ConceptPromptPack(final_preview_prompt=prompt)
+    if include_full_concept_set:
+        prompt_pack = ConceptPromptPack(
+            final_preview_prompt=prompt,
+            subject_prompts={subject_id: f"Subject-only concept for {subject_id}."},
+            scene_prompts=[f"Scene concept for {scene_spec.scene_id if scene_spec is not None else 'scene'}."],
+            image_requirements=[
+                ConceptImageRequirement(
+                    requirement_id=f"subject_concept:{subject_id}",
+                    output_type="subject_concept",
+                    target_id=subject_id,
+                    prompt_key=f"subject_prompts.{subject_id}",
+                    user_review_label=f"主体概念图：{subject_id}",
+                    purpose="review subject identity",
+                ),
+                ConceptImageRequirement(
+                    requirement_id="scene_concept:1",
+                    output_type="scene_concept",
+                    target_id=(scene_spec.scene_id if scene_spec is not None else "scene_001"),
+                    prompt_key="scene_prompts.0",
+                    user_review_label="场景概念图",
+                    purpose="review scene and props",
+                ),
+                ConceptImageRequirement(
+                    requirement_id="target_render:final_preview",
+                    output_type="target_render",
+                    target_id=(scene_spec.scene_id if scene_spec is not None else "scene_001"),
+                    prompt_key="final_preview_prompt",
+                    user_review_label="最终渲染构图图",
+                    purpose="review final composition",
+                ),
+            ],
+        )
     state = AgentProjectState(
         project_id=run_id,
         thread_id="runtime_console",
@@ -279,9 +328,10 @@ def _concept_review_run(
         scene_spec=scene_spec or _scene_spec(),
         concept_bundle=ConceptBundle(
             concept_version=1,
-            final_preview_image_id=concept_id,
+            final_preview_image_id=final_preview_image_id,
             subject_concept_images={subject_id: [concept_id]},
-            prompt_pack=ConceptPromptPack(final_preview_prompt=prompt),
+            scene_concept_image_ids=scene_concept_image_ids,
+            prompt_pack=prompt_pack,
             approved=False,
         ),
     )

@@ -14,6 +14,11 @@ def test_concept_prompt_planner_prompt_is_json_only_contract() -> None:
     assert "Output only one JSON object" in prompt.system_prompt
     assert "Do not call raw MCP tools" in prompt.system_prompt
     assert "final_preview_prompt" in prompt.output_schema["properties"]
+    assert "image_requirements" in prompt.output_schema["properties"]
+    assert "requires_clarification" in prompt.output_schema["properties"]
+    assert "Preserve exact subject identity" in prompt.system_prompt
+    assert "input_reference_image_ids" in prompt.system_prompt
+    assert "multi_image_composite" in prompt.system_prompt
     assert "generate_concept_images" in prompt.allowed_domain_tools
 
 

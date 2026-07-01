@@ -5,7 +5,14 @@ from agent_runtime.state import (
     ArtifactType,
     BlenderSceneState,
     ConceptBundle,
+    ConceptImageRequirement,
+    ConceptPromptPack,
+    EnvironmentSpec,
+    LightingSpec,
     PendingAction,
+    SceneSpec,
+    StyleSpec,
+    SubjectSpec,
     ViewerSceneState,
     WorkflowPhase,
 )
@@ -145,6 +152,111 @@ def test_frontend_status_marks_concept_review_outputs_as_user_gate() -> None:
     assert status.current_stage == "concept_approval"
     assert status.current_node == "ConceptReviewGate"
     assert status.progress_label == "Waiting for approve_concept"
+
+
+def test_frontend_status_exposes_scene_spec_and_concept_review_requirements() -> None:
+    state = AgentProjectState(
+        project_id="project_001",
+        thread_id="thread_001",
+        phase=WorkflowPhase.CONCEPT_REVIEW,
+        scene_spec=SceneSpec(
+            scene_id="scene_little_gwen_chessboard",
+            title="Little Gwen On Chessboard",
+            user_goal="Put Little Gwen on a chessboard.",
+            style=StyleSpec(style_keywords=["chibi"]),
+            environment=EnvironmentSpec(environment_type="chessboard_stage", description="Chessboard stage."),
+            lighting=LightingSpec(description="Cool light."),
+            camera={},
+            subjects=[
+                SubjectSpec(
+                    subject_id="subject_little_gwen",
+                    display_name="Little Gwen",
+                    category="character",
+                    description="Hero character from image 1.",
+                    reference_image_ids=["image_little_gwen_ref"],
+                ),
+                SubjectSpec(
+                    subject_id="subject_chess_pieces",
+                    display_name="Chess Pieces",
+                    category="prop",
+                    description="Procedural chess pieces.",
+                    needs_2d_concept=False,
+                    needs_3d_asset=False,
+                    asset_strategy="procedural_blender",
+                ),
+            ],
+        ),
+        concept_bundle=ConceptBundle(
+            concept_version=1,
+            final_preview_image_id="render_001",
+            subject_concept_images={"subject_little_gwen": ["concept_subject_001"]},
+            scene_concept_image_ids=["concept_scene_001"],
+            prompt_pack=ConceptPromptPack(
+                final_preview_prompt="Little Gwen on a chessboard.",
+                subject_prompts={"subject_little_gwen": "Use image 1 for Little Gwen only."},
+                scene_prompts=["Chessboard with many chess pieces."],
+                image_requirements=[
+                    ConceptImageRequirement(
+                        requirement_id="subject_concept:subject_little_gwen",
+                        output_type="subject_concept",
+                        target_id="subject_little_gwen",
+                        prompt_key="subject_prompts.subject_little_gwen",
+                        user_review_label="主体概念图：Little Gwen",
+                        purpose="review subject",
+                        generation_mode="image_guided",
+                        input_reference_image_ids=["image_little_gwen_ref"],
+                        must_use_image_inputs=True,
+                    ),
+                    ConceptImageRequirement(
+                        requirement_id="scene_concept:1",
+                        output_type="scene_concept",
+                        target_id="scene_little_gwen_chessboard",
+                        prompt_key="scene_prompts.0",
+                        user_review_label="场景概念图",
+                        purpose="review scene",
+                    ),
+                    ConceptImageRequirement(
+                        requirement_id="target_render:final_preview",
+                        output_type="target_render",
+                        target_id="scene_little_gwen_chessboard",
+                        prompt_key="final_preview_prompt",
+                        user_review_label="最终渲染构图图",
+                        purpose="review composition",
+                        generation_mode="multi_image_composite",
+                        source_requirement_ids=["subject_concept:subject_little_gwen", "scene_concept:1"],
+                        must_use_image_inputs=True,
+                    ),
+                ],
+            ),
+            approved=False,
+        ),
+    )
+
+    status = build_frontend_status(state=state, summary={"ok": True, "dry_run": False})
+
+    assert status.scene_spec_summary is not None
+    assert status.scene_spec_summary.environment_type == "chessboard_stage"
+    assert status.scene_spec_summary.subject_asset_ids_required == ["subject_little_gwen"]
+    assert status.scene_spec_summary.procedural_object_ids == ["subject_chess_pieces"]
+    assert status.scene_spec_summary.reference_bound_subject_ids == ["subject_little_gwen"]
+    assert [item.output_type for item in status.concept_requirements] == [
+        "subject_concept",
+        "scene_concept",
+        "target_render",
+    ]
+    assert [item.ready_artifact_ids for item in status.concept_requirements] == [
+        ["concept_subject_001"],
+        ["concept_scene_001"],
+        ["render_001"],
+    ]
+    assert status.concept_requirements[0].generation_mode == "image_guided"
+    assert status.concept_requirements[0].input_reference_image_ids == ["image_little_gwen_ref"]
+    assert status.concept_requirements[0].must_use_image_inputs is True
+    assert status.concept_requirements[2].generation_mode == "multi_image_composite"
+    assert status.concept_requirements[2].source_requirement_ids == [
+        "subject_concept:subject_little_gwen",
+        "scene_concept:1",
+    ]
 
 
 def test_frontend_status_falls_back_to_asset_artifacts_for_legacy_full_asset_runs() -> None:

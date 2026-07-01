@@ -44,6 +44,22 @@ def _scene_spec(open_questions=None) -> SceneSpec:
     )
 
 
+def _scene_spec_with_procedural_prop() -> SceneSpec:
+    spec = _scene_spec()
+    spec.subjects.append(
+        SubjectSpec(
+            subject_id="subject_chess_pieces",
+            display_name="Chess Pieces",
+            category="prop",
+            description="Many procedural chess pieces around the hero.",
+            needs_2d_concept=False,
+            needs_3d_asset=False,
+            asset_strategy="procedural_blender",
+        )
+    )
+    return spec
+
+
 def test_controller_blocks_intake_when_reference_image_is_unbound() -> None:
     state = AgentProjectState(
         project_id="project_001",
@@ -157,6 +173,25 @@ def test_controller_runs_subject_generation_after_concept_approval() -> None:
         "build_subject_asset",
         "check_subject_asset_quality",
     ]
+
+
+def test_controller_subject_generation_ignores_procedural_scene_props() -> None:
+    state = AgentProjectState(
+        project_id="project_001",
+        thread_id="thread_001",
+        phase=WorkflowPhase.CONCEPT_APPROVED,
+        scene_spec=_scene_spec_with_procedural_prop(),
+        concept_bundle=ConceptBundle(
+            concept_version=1,
+            final_preview_image_id="artifact_preview_001",
+            approved=True,
+        ),
+    )
+
+    plan = build_controller_plan(state)
+
+    assert plan.next_phase == WorkflowPhase.SUBJECT_ASSET_GENERATION
+    assert plan.actions[0].payload["subject_ids"] == ["subject_robot"]
 
 
 def test_controller_waits_for_blender_preview_approval() -> None:

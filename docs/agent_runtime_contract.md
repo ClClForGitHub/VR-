@@ -145,6 +145,13 @@ The console currently supports:
   `runtime_handoff/`. This records inputs, expected outputs, command hints,
   and task prompts for long jobs without executing those jobs in the console
   request.
+  Concept-image handoffs must include a structured `concept_generation`
+  payload with ordered `image_requirements`, per-requirement prompt text,
+  resolved `input_reference_image_ids` file paths, `source_requirement_ids`,
+  and the expected `image_results` apply schema. Workers must execute
+  subject/scene requirements before target renders, attach all mandatory input
+  images to the MCP/image call, and mark requirements blocked when required
+  images cannot be attached.
 - executing or dry-running the next planned worker/sub-agent handoff with
   `POST /api/runs/<run_key>/worker`, saved as `runtime_worker.jsonl`,
   `runtime_worker_summary.json`, and per-attempt JSON under
@@ -156,7 +163,11 @@ The console currently supports:
   - `fixture`: deterministic local payload adapter for tests and explicit
     result registration;
   - `codex_self_mcp`: guarded live codex-self call planning/execution, with
-    non-dry-run execution requiring `confirm_execute=true`;
+    non-dry-run execution requiring `confirm_execute=true`. For structured
+    concept-image handoffs it is not a complete `GenerateConceptImages`
+    executor: confirmed execution is blocked when multiple requirements,
+    mandatory uploaded inputs, or source image dependencies are present unless
+    a backend proves those image attachments in its worker evidence.
   - `codex_self_log`: completed codex-self MCP JSONL image-log ingestion. The
     caller passes `fixture_payload.log_path`; the runtime decodes the last
     image-generation result, writes the extracted image under `runtime_worker/`

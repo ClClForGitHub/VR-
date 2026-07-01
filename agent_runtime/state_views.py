@@ -120,6 +120,10 @@ def build_concept_prompt_planner_context(
         scene_spec=state.scene_spec,
         active_review_patches=_active_review_patches(state.review_patches),
         prior_prompt_pack_summary=summarize_prompt_pack(state.concept_bundle),
+        reference_bindings=_select_reference_bindings(
+            state.reference_bindings,
+            _scene_spec_reference_image_ids(state.scene_spec),
+        ),
     )
 
 
@@ -271,6 +275,16 @@ def _select_reference_bindings(
         if binding.explicit_in_user_text and (not image_ids or binding.image_id in image_ids)
     ]
     return selected
+
+
+def _scene_spec_reference_image_ids(scene_spec: SceneSpec | None) -> list[str] | None:
+    if scene_spec is None:
+        return None
+    image_ids: list[str] = []
+    image_ids.extend(scene_spec.environment.scene_reference_image_ids)
+    for subject in scene_spec.subjects:
+        image_ids.extend(subject.reference_image_ids)
+    return image_ids or None
 
 
 def _active_review_patches(review_patches: list[ReviewPatch]) -> list[ReviewPatch]:
