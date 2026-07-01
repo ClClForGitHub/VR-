@@ -28,6 +28,21 @@ coding-agent work:
 - `agent_execution_harness/progress_log.md`: append-only harness progress.
 - `agent_execution_harness/decision_log.md`: durable harness decisions.
 - `agent_execution_harness/design_notes.md`: current design notes.
+- `agent_execution_harness/round_02_backend_asset_library_selection.md`: backend asset library and user-selection contract.
+- `agent_execution_harness/round_03_core_pipeline_semantics.md`: core pipeline semantic contract from intake through handoff/frontend status.
+- `agent_execution_harness/core_pipeline_test_matrix.md`: Round 03 dry-run/delegated semantic test matrix.
+- `agent_execution_harness/live_test_readiness_matrix.md`: Round 04 live-call readiness checklist.
+
+## Frontend Reset
+
+The locked v0.5 frontend reset package is under
+`image23d_frontend_FULL_design_handoff_v0_5/`.
+
+The migrated mock Creator App lives at `../web/creator_app/`. It is the new
+React/Vite frontend landing directory for the Premium Cinematic Dark Creation
+Studio design. It currently runs on mock data only; `web/runtime_console/`
+remains the dev/debug UI until a later task explicitly replaces the public
+entrypoint.
 
 ## Current Operating Rules
 

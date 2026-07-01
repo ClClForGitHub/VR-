@@ -70,3 +70,35 @@ Consequences:
   `frontend_status.json`, and rebuilt plans.
 - Rejected assets remain in the library and can be selected unless explicitly
   archived or superseded by future policy.
+
+## DEC-20260701-core-pipeline-semantics: Make semantic requirements explicit before live generation
+
+Decision:
+- Treat `ConceptImageRequirement[]`, `asset_library`, delegated handoff JSON,
+  controller payloads, and derived `frontend_status.json` as the local contract
+  for the core pipeline before any live model/service execution.
+- Require scene references, subject references, target-render dependencies, and
+  named identity evidence to be represented as typed fields, not only in prompt
+  prose.
+
+Reason:
+- Round04 live calls will be expensive and harder to debug if subject/scene
+  scope, selected assets, or upload inputs are ambiguous.
+- The existing state/checkpoint/handoff paths are already sufficient; adding a
+  second queue/state/service wrapper would violate reuse-first and hide facts
+  from tests.
+
+Alternatives considered:
+- Let the live image worker infer source images from natural-language prompt
+  text such as "use image 1".
+- Store frontend action state separately from `AgentProjectState`.
+- Delay concept/selection/handoff contract tests until after live generation.
+
+Consequences:
+- Planner output can be rejected locally before image generation when scene
+  refs, subject refs, target dependencies, or identity evidence are missing.
+- Delegated workers receive explicit input files, resolved image paths, source
+  requirement ids, upload rules, selected concepts, selected scene/target refs,
+  and apply-result schemas.
+- `frontend_status.json` may show backend action payload examples, but it
+  remains a derived view and not a writable state source.

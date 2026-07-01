@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "purpose": "Round 03 core pipeline semantic user-journey fixtures. These are generic placeholders; user-provided final samples will be added in later rounds.",
+  "cases": [
+    {
+      "case_id": "case_text_only_robot_display",
+      "user_text": "Create a compact friendly robot in a clean studio display scene. It should be easy to inspect and later generate as one subject model.",
+      "expected": {
+        "requires_reference_binding": false,
+        "concept_requirements": [
+          "subject_concept",
+          "scene_concept",
+          "target_render"
+        ],
+        "target_render_mode": "multi_image_composite",
+        "expected_stop_before_live_generation": "delegated_or_waiting_worker"
+      }
+    },
+    {
+      "case_id": "case_reference_bound_subject_and_scene",
+      "user_text": "Use image 1 only as the hero subject reference and image 2 only as the clean tabletop scene reference. Generate a subject concept, a scene concept, and a final composition.",
+      "input_images": [
+        {
+          "image_id": "image_subject_ref",
+          "user_declared_label": "image 1 subject only"
+        },
+        {
+          "image_id": "image_scene_ref",
+          "user_declared_label": "image 2 scene only"
+        }
+      ],
+      "declared_bindings": [
+        {
+          "image_id": "image_subject_ref",
+          "target_type": "subject",
+          "target_id": "subject_hero",
+          "usage": "subject_reference"
+        },
+        {
+          "image_id": "image_scene_ref",
+          "target_type": "scene",
+          "target_id": "scene_tabletop",
+          "usage": "scene_reference"
+        }
+      ],
+      "expected": {
+        "subject_requirement_mode": "image_guided",
+        "scene_requirement_mode": "image_guided",
+        "must_not_cross_contaminate_subject_and_scene_refs": true
+      }
+    },
+    {
+      "case_id": "case_reject_then_reselect_old_concept",
+      "user_text": "Generate two concept rounds; reject the first as not cute enough, but later choose it anyway for model generation.",
+      "expected": {
+        "rejected_asset_remains_visible": true,
+        "rejected_asset_can_be_selected_for_subject_generation": true,
+        "lineage_preserved": true
+      }
+    },
+    {
+      "case_id": "case_multi_subject_selection_payload",
+      "user_text": "Create two small characters in one scene. Let the user pick model A for subject one and model B for subject two, then assemble both with placement hints.",
+      "expected": {
+        "active_assembly_selection_has_selected_subject_assets": true,
+        "placement_hints_reach_blender_payload": true
+      }
+    },
+    {
+      "case_id": "case_ip_identity_research_placeholder",
+      "user_text": "Create a chibi version of a named game character in a themed scene.",
+      "expected": {
+        "requires_identity_research_evidence_or_clarification": true,
+        "must_not_use_hidden_memory_as_identity_source": true
+      }
+    }
+  ]
+}

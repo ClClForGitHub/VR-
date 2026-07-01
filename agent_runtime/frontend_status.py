@@ -78,6 +78,12 @@ class FrontendAssetLibraryItemSummary(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class FrontendAssetActionPayloadExample(BaseModel):
+    action_type: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    label: str | None = None
+
+
 class FrontendAssemblyObjectSelectionSummary(BaseModel):
     subject_id: str
     selected_subject_asset_id: str | None = None
@@ -119,6 +125,7 @@ class FrontendStatus(BaseModel):
     asset_library: list[FrontendAssetLibraryItemSummary] = Field(default_factory=list)
     active_assembly_selection: FrontendAssemblySelectionSummary | None = None
     available_asset_actions: list[str] = Field(default_factory=list)
+    available_asset_action_payloads: list[FrontendAssetActionPayloadExample] = Field(default_factory=list)
     scene_spec_summary: FrontendSceneSpecSummary | None = None
     review_patch_ids: list[str] = Field(default_factory=list)
     scene_asset_id: str | None = None
@@ -178,6 +185,7 @@ def build_frontend_status(*, state: AgentProjectState, summary: dict[str, Any]) 
         asset_library=_asset_library(state),
         active_assembly_selection=_active_assembly_selection(state),
         available_asset_actions=_available_asset_actions(state),
+        available_asset_action_payloads=_available_asset_action_payloads(state),
         scene_spec_summary=_scene_spec_summary(state),
         review_patch_ids=[patch.patch_id for patch in state.review_patches],
         scene_asset_id=_scene_asset_id(state),
@@ -291,6 +299,89 @@ def _available_asset_actions(state: AgentProjectState) -> list[str]:
     if any(item.asset_kind == "subject_model" for item in state.asset_library):
         actions.append("select_asset_for_assembly")
     return actions
+
+
+def _available_asset_action_payloads(state: AgentProjectState) -> list[FrontendAssetActionPayloadExample]:
+    examples: list[FrontendAssetActionPayloadExample] = []
+    review_item = state.asset_library[0] if state.asset_library else None
+    if review_item is not None:
+        examples.append(
+            FrontendAssetActionPayloadExample(
+                action_type="set_asset_review_status",
+                label="Mark asset review status",
+                payload={
+                    "action_type": "set_asset_review_status",
+                    "artifact_id": review_item.artifact_id,
+                    "review_status": "rejected",
+                    "note": "short user note",
+                },
+            )
+        )
+
+    concept_item = next((item for item in state.asset_library if item.asset_kind == "subject_concept" and item.subject_id), None)
+    if concept_item is not None:
+        examples.append(
+            FrontendAssetActionPayloadExample(
+                action_type="select_concept_for_subject_generation",
+                label="Select subject concept for model generation",
+                payload={
+                    "action_type": "select_concept_for_subject_generation",
+                    "subject_id": concept_item.subject_id,
+                    "concept_artifact_id": concept_item.artifact_id,
+                    "note": "user-selected source concept",
+                },
+            )
+        )
+
+    subject_asset_payload = _assembly_action_payload_example(state)
+    if subject_asset_payload:
+        examples.append(
+            FrontendAssetActionPayloadExample(
+                action_type="select_asset_for_assembly",
+                label="Select assets for Blender assembly",
+                payload=subject_asset_payload,
+            )
+        )
+    return examples
+
+
+def _assembly_action_payload_example(state: AgentProjectState) -> dict[str, Any] | None:
+    selected_subject_assets: dict[str, str] = {}
+    for item in state.asset_library:
+        if item.asset_kind != "subject_model" or item.subject_id is None:
+            continue
+        selected_subject_assets.setdefault(item.subject_id, item.artifact_id)
+    for asset in state.subject_assets:
+        selected_subject_assets.setdefault(asset.subject_id, asset.asset_id)
+    if not selected_subject_assets:
+        return None
+
+    scene_asset_id = _scene_asset_id(state)
+    scene_concept_id = _first_asset_kind_artifact_id(state, "scene_concept")
+    target_render_id = _first_asset_kind_artifact_id(state, "target_render")
+    payload: dict[str, Any] = {
+        "action_type": "select_asset_for_assembly",
+        "subject_asset_ids_by_subject": selected_subject_assets,
+        "placement_hints": [
+            {"subject_id": subject_id, "target_region": "front_center"}
+            for subject_id in selected_subject_assets
+        ],
+        "note": "user-selected assembly set",
+    }
+    if scene_asset_id:
+        payload["scene_asset_id"] = scene_asset_id
+    if scene_concept_id:
+        payload["scene_concept_image_id"] = scene_concept_id
+    if target_render_id:
+        payload["target_render_image_id"] = target_render_id
+    return payload
+
+
+def _first_asset_kind_artifact_id(state: AgentProjectState, asset_kind: str) -> str | None:
+    for item in state.asset_library:
+        if item.asset_kind == asset_kind:
+            return item.artifact_id
+    return None
 
 
 def _concept_ready_artifacts(state: AgentProjectState) -> dict[tuple[str, str | None], list[str]]:

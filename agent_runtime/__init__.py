@@ -58,6 +58,7 @@ from agent_runtime.domain_dispatcher import (
     WorldMirrorDomainToolDispatcher,
 )
 from agent_runtime.frontend_status import (
+    FrontendAssetActionPayloadExample,
     FrontendAssetLibraryItemSummary,
     FrontendAssemblyObjectSelectionSummary,
     FrontendAssemblySelectionSummary,
@@ -384,6 +385,7 @@ __all__ = [
     "EnvironmentSpec",
     "FileArtifactStore",
     "FileStateCheckpointStore",
+    "FrontendAssetActionPayloadExample",
     "FrontendAssetLibraryItemSummary",
     "FrontendAssemblyObjectSelectionSummary",
     "FrontendAssemblySelectionSummary",

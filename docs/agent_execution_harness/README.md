@@ -60,16 +60,24 @@ Every non-trivial slice must update at least one relevant documentation surface:
 - the specific module document when one exists;
 - `docs/README.md` when a new doc entrypoint is added.
 
-## First priority after this harness
+## Current Harness Module Docs
 
-The next product slice should define the chat-thread asset library and selection contract:
+- `round_02_backend_asset_library_selection.md`: backend asset review and selection state contract.
+- `round_03_core_pipeline_semantics.md`: core pipeline semantic contract from intake through handoff/frontend status.
+- `core_pipeline_test_matrix.md`: dry-run/delegated semantic test matrix.
+- `live_test_readiness_matrix.md`: Round04 live-call evidence checklist.
+
+## Next Priority
+
+Round04 should run an explicitly approved live smoke through the existing runtime boundaries:
 
 ```text
-all concept images, rejected images, subject models, scene assets, previews, and packages
-  -> visible asset library records
-  -> lineage between concept image and generated model
-  -> user selection of which concept/model/scene enters assembly
-  -> frontend_status.json fields for display
+live LLM / fixture-backed SceneSpec
+  -> real image generation with recorded image inputs
+  -> selected concept to Hunyuan3D
+  -> selected scene/target reference to HY-World or registered scene asset
+  -> Blender assembly/export/preview
+  -> frontend_status.json + delivery evidence
 ```
 
-Do not implement final free-composition behavior before the asset library and selection contract is documented.
+Do not treat delegated, dry-run, or fixture evidence as live generation evidence.

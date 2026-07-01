@@ -1092,7 +1092,11 @@
           "scene_prompts": [
             "Scene-only sunny sandy beach, shallow blue water, striped beach chair, small sand castle, shells, soft beach shadows, open placement area for two chibi characters. No characters or humanoids."
           ],
-          "negative_prompt": "photoreal human, crowded beach, complex tiny accessories, unreadable costume details, cropped characters"
+          "negative_prompt": "photoreal human, crowded beach, complex tiny accessories, unreadable costume details, cropped characters",
+          "identity_notes": [
+            "Fixture identity note: subject_phoebe_chibi maps to 鸣潮 角色 菲比 / Phoebe for dry-run prompt validation; live official-source research is deferred to Round04.",
+            "Fixture identity note: subject_florollo_chibi maps to 鸣潮 角色 弗洛洛 / Florollo and user wording 弗糯糯 for dry-run prompt validation; live official-source research is deferred to Round04."
+          ]
         }
       }
     },
@@ -1281,7 +1285,10 @@
           "scene_prompts": [
             "Scene-only large chessboard stage with alternating dark and light squares, many black and white pawns, rooks, bishops, knights, queen and king arranged around an empty central square, cool magical lighting, clean Blender-friendly layout. No characters, no Little Gwen, no humanoids."
           ],
-          "negative_prompt": "cropped face, hidden character, too many tiny unreadable pieces, photoreal human, messy board"
+          "negative_prompt": "cropped face, hidden character, too many tiny unreadable pieces, photoreal human, messy board",
+          "identity_notes": [
+            "Fixture identity note: subject_little_gwen maps to 英雄联盟 小小格温 / Little Gwen for dry-run prompt validation; live official-source research is deferred to Round04."
+          ]
         }
       }
     },

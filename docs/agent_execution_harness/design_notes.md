@@ -54,3 +54,33 @@ Open design for the next frontend/UI round:
 - multi-subject selection ergonomics;
 - visual indication of source/derived lineage;
 - placement-hint editing before Blender assembly.
+
+## Round 03 core pipeline semantics landed
+
+The dry-run/delegated backend now has a clearer business-chain contract:
+
+- `ConceptImageRequirement` separates `subject_concept`, `scene_concept`, and
+  `target_render`.
+- Subject references and scene references are scoped separately and validated as
+  `image_guided` requirements.
+- `target_render` is a `multi_image_composite` that depends on generated
+  subject/scene requirement ids.
+- Named identity subjects require explicit `identity_notes` evidence or
+  clarification/blocking before generation prompts are accepted.
+- Concept feedback creates `ReviewPatch` records and routes to regeneration
+  without restarting intake/SceneSpec work.
+- Rejected/old concept assets stay in `asset_library` and can still be selected
+  for subject model generation.
+- Subject-asset and scene-asset handoff JSON now has explicit selected inputs,
+  upload rules, runtime tool args, and apply-result schemas.
+- Blender assembly payloads continue to prefer `active_assembly_selection`.
+- `frontend_status.json` exposes action payload examples for backend review and
+  selection actions, but remains derived from state.
+
+Open design for Round04:
+
+- exact live smoke sample and reference-image files;
+- provider/model profile choices for live LLM and image generation;
+- Hunyuan3D profile and timeout policy for first live GLB;
+- HY-World/WorldMirror or proxy-scene decision for first live scene asset;
+- whether frontend UI controls land before or after the first live smoke.

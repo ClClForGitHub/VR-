@@ -134,14 +134,25 @@ def _create_handoff_record(
     handoff_id = f"handoff_{uuid4().hex[:12]}"
     input_files = _input_files(run_dir)
     expected_outputs = _expected_outputs(execution)
+    runtime_job = _runtime_job_snapshot(run_dir, execution.job_id)
     concept_generation = _concept_generation_handoff_payload(state, execution)
+    subject_asset_generation = _subject_asset_generation_handoff_payload(
+        state,
+        execution,
+        runtime_job=runtime_job,
+    )
+    scene_asset_generation = _scene_asset_generation_handoff_payload(
+        state,
+        execution,
+        runtime_job=runtime_job,
+    )
     selected_subject_concepts = _selected_subject_concept_prompt_snapshot(state)
     payload = {
         "handoff_id": handoff_id,
         "created_at": utc_now_iso(),
         "run_dir": str(run_dir),
         "execution": _model_to_dict(execution),
-        "runtime_job": _runtime_job_snapshot(run_dir, execution.job_id),
+        "runtime_job": runtime_job,
         "state_summary": _state_summary(state),
         "input_files": input_files,
         "expected_outputs": expected_outputs,
@@ -154,6 +165,10 @@ def _create_handoff_record(
     }
     if concept_generation is not None:
         payload["concept_generation"] = concept_generation
+    if subject_asset_generation is not None:
+        payload["subject_asset_generation"] = subject_asset_generation
+    if scene_asset_generation is not None:
+        payload["scene_asset_generation"] = scene_asset_generation
     if selected_subject_concepts:
         payload["selected_subject_concepts"] = selected_subject_concepts
     handoff_path = run_dir / "runtime_handoff" / f"{handoff_id}.json"
@@ -179,6 +194,16 @@ def _create_handoff_record(
             "has_runtime_job_snapshot": payload["runtime_job"] is not None,
             "concept_requirement_count": len(concept_generation.get("requirements", [])) if concept_generation else 0,
             "selected_subject_concept_count": len(selected_subject_concepts),
+            "subject_asset_source_count": (
+                len(subject_asset_generation.get("source_subject_concepts", []))
+                if subject_asset_generation
+                else 0
+            ),
+            "scene_asset_source_count": (
+                len(scene_asset_generation.get("source_scene_images", []))
+                if scene_asset_generation
+                else 0
+            ),
         },
     )
 
@@ -340,6 +365,49 @@ def _task_prompt(
             "Inputs JSON:\n"
             f"{json.dumps(prompt_inputs, ensure_ascii=False, indent=2, sort_keys=True)}"
         )
+    if execution.domain_tool_name == "build_scene_asset":
+        prompt_inputs = {
+            "scene_spec": _scene_spec_prompt_snapshot(state),
+            "concept_bundle": (
+                {
+                    "approved": state.concept_bundle.approved,
+                    "final_preview_image_id": state.concept_bundle.final_preview_image_id,
+                    "scene_concept_image_ids": state.concept_bundle.scene_concept_image_ids,
+                    "concept_version": state.concept_bundle.concept_version,
+                }
+                if state.concept_bundle is not None
+                else None
+            ),
+            "source_scene_images": _scene_asset_source_image_prompt_snapshot(state),
+            "active_assembly_selection": _active_assembly_selection_prompt_snapshot(state),
+            "runtime_execution": {
+                "job_id": execution.job_id,
+                "domain_tool_name": execution.domain_tool_name,
+                "result_summary": execution.result_summary,
+                "required_outputs": execution.required_outputs,
+            },
+        }
+        return (
+            "You are a bounded scene-asset worker for the image23D Blender scene agent.\n"
+            "\n"
+            "Task:\n"
+            "- Generate, submit, or register a scene/world asset for the SceneSpec environment below.\n"
+            "- Prefer source_scene_images in priority order; active assembly selections override older concept artifacts.\n"
+            "- Use scene_concept images for environment/layout and target_render images only as composition guidance.\n"
+            "- Do not use subject_concept images as scene-service inputs unless they are already part of an explicitly selected target_render.\n"
+            "- If live generation is submitted asynchronously, return service job ids and polling/status evidence.\n"
+            "\n"
+            "Hard boundaries:\n"
+            "- Do not edit state.json, summary.json, frontend_status.json, runtime_plan.json, or runtime logs directly.\n"
+            "- Do not create a parallel artifact store, queue, schema, or state file.\n"
+            "- Use the existing HY-World/WorldMirror or scene asset registration path; do not invent a second scene service client.\n"
+            "\n"
+            "Final assistant response:\n"
+            "Return compact JSON with keys: ok, submitted, job_id, scene_asset_results, notes, issues.\n"
+            "\n"
+            "Inputs JSON:\n"
+            f"{json.dumps(prompt_inputs, ensure_ascii=False, indent=2, sort_keys=True)}"
+        )
     return f"Execute delegated runtime job {execution.job_id} for domain tool {execution.domain_tool_name}."
 
 
@@ -364,6 +432,9 @@ def _concept_generation_handoff_payload(
     ]
     return {
         "ok": True,
+        "scene_spec": _scene_spec_prompt_snapshot(state),
+        "reference_images": _input_image_prompt_snapshot(state),
+        "reference_bindings": _reference_binding_prompt_snapshot(state),
         "requirements": requirements,
         "execution_order": [item["requirement_id"] for item in requirements],
         "mcp_upload_rules": [
@@ -495,6 +566,99 @@ def _concept_requirement_blockers(
     return blockers
 
 
+def _subject_asset_generation_handoff_payload(
+    state: AgentProjectState,
+    execution: RuntimeJobExecutionRecord,
+    *,
+    runtime_job: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if execution.domain_tool_name != "build_subject_asset":
+        return None
+    tool_arguments = _runtime_job_tool_arguments(runtime_job)
+    subject_ids = _subject_ids_for_subject_asset_generation(state, tool_arguments)
+    selected = _selected_subject_concept_prompt_snapshot(state)
+    return {
+        "ok": True,
+        "subject_ids": subject_ids,
+        "selected_subject_concepts": selected,
+        "source_subject_concepts": _subject_concept_inputs_prompt_snapshot(
+            state,
+            subject_ids=subject_ids,
+            selected=selected,
+        ),
+        "hunyuan3d_profile": _runtime_job_metadata(runtime_job).get("hunyuan3d_profile"),
+        "profile_id": (
+            runtime_job.get("profile_id")
+            if runtime_job is not None
+            else execution.result_summary.get("profile_id")
+        ),
+        "tool_arguments": tool_arguments,
+        "mcp_upload_rules": [
+            "Use the selected_subject_concepts entry for each subject when present.",
+            "Pass the selected concept artifact URI/path as the Hunyuan3D image input.",
+            "If a selected concept URI is missing or the file cannot be uploaded, block the subject instead of falling back silently.",
+        ],
+        "apply_result_schema": {
+            "asset_results": [
+                {
+                    "glb_path": "absolute path to generated GLB",
+                    "subject_id": "SceneSpec subject_id",
+                    "asset_id": "stable suggested subject asset id",
+                    "source_image_id": "selected concept artifact id used for Hunyuan3D",
+                    "service_job_id": "optional live service job id",
+                    "metadata": {
+                        "hunyuan3d_profile_id": "runtime profile id",
+                        "selected_concept_artifact_id": "artifact id used as input",
+                    },
+                }
+            ]
+        },
+    }
+
+
+def _scene_asset_generation_handoff_payload(
+    state: AgentProjectState,
+    execution: RuntimeJobExecutionRecord,
+    *,
+    runtime_job: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if execution.domain_tool_name != "build_scene_asset":
+        return None
+    tool_arguments = _runtime_job_tool_arguments(runtime_job)
+    return {
+        "ok": True,
+        "scene_id": state.scene_spec.scene_id if state.scene_spec is not None else None,
+        "environment": (
+            state.scene_spec.environment.model_dump(mode="json")
+            if state.scene_spec is not None and state.scene_spec.environment is not None
+            else None
+        ),
+        "source_scene_images": _scene_asset_source_image_prompt_snapshot(state),
+        "active_assembly_selection": _active_assembly_selection_prompt_snapshot(state),
+        "tool_arguments": tool_arguments,
+        "mcp_upload_rules": [
+            "Prefer active_assembly_selection.selected_scene_concept_image_id when present.",
+            "Prefer active_assembly_selection.selected_target_render_image_id as composition guidance when present.",
+            "Do not treat subject concept images as scene-generation inputs unless explicitly selected as target_render sources.",
+        ],
+        "apply_result_schema": {
+            "scene_asset_results": [
+                {
+                    "output_dir": "absolute path to HY-World/WorldMirror output directory",
+                    "scene_asset_id": "stable scene asset id",
+                    "source_scene_concept_image_ids": [],
+                    "source_prompt": "scene generation prompt or selected scene prompt",
+                    "service_job_id": "optional live service job id",
+                    "metadata": {
+                        "selected_scene_concept_image_id": "optional artifact id",
+                        "selected_target_render_image_id": "optional artifact id",
+                    },
+                }
+            ]
+        },
+    }
+
+
 def _state_summary(state: AgentProjectState) -> dict[str, Any]:
     return {
         "project_id": state.project_id,
@@ -593,6 +757,171 @@ def _selected_subject_concept_prompt_snapshot(state: AgentProjectState) -> list[
             }
         )
     return output
+
+
+def _subject_ids_for_subject_asset_generation(
+    state: AgentProjectState,
+    tool_arguments: dict[str, Any],
+) -> list[str]:
+    payload_ids = tool_arguments.get("subject_ids")
+    if isinstance(payload_ids, list):
+        return [str(item) for item in payload_ids if item]
+    if state.scene_spec is None:
+        return []
+    return [
+        subject.subject_id
+        for subject in state.scene_spec.subjects
+        if subject.needs_3d_asset and subject.asset_strategy in {"hunyuan3d_img2asset", "existing_asset"}
+    ]
+
+
+def _subject_concept_inputs_prompt_snapshot(
+    state: AgentProjectState,
+    *,
+    subject_ids: list[str],
+    selected: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    subject_id_set = set(subject_ids)
+    selected_by_subject = {
+        item.get("subject_id"): item
+        for item in selected
+        if item.get("subject_id")
+    }
+    output: list[dict[str, Any]] = []
+    for subject_id in subject_ids:
+        selected_item = selected_by_subject.get(subject_id)
+        if selected_item is not None:
+            output.append({**selected_item, "source_priority": "selected_for_model_generation"})
+            continue
+        for artifact in state.artifacts:
+            if artifact.artifact_type.value != "SUBJECT_CONCEPT_IMAGE":
+                continue
+            if artifact.linked_subject_id != subject_id:
+                continue
+            output.append(
+                {
+                    "subject_id": subject_id,
+                    "artifact_id": artifact.artifact_id,
+                    "uri": artifact.uri,
+                    "mime_type": artifact.mime_type,
+                    "semantic_role": artifact.semantic_role,
+                    "metadata": dict(artifact.metadata),
+                    "source_priority": "approved_or_available_concept_artifact",
+                }
+            )
+    if output or subject_id_set:
+        return output
+    return [
+        {
+            "subject_id": artifact.linked_subject_id,
+            "artifact_id": artifact.artifact_id,
+            "uri": artifact.uri,
+            "mime_type": artifact.mime_type,
+            "semantic_role": artifact.semantic_role,
+            "metadata": dict(artifact.metadata),
+            "source_priority": "available_concept_artifact",
+        }
+        for artifact in state.artifacts
+        if artifact.artifact_type.value == "SUBJECT_CONCEPT_IMAGE"
+    ]
+
+
+def _scene_asset_source_image_prompt_snapshot(state: AgentProjectState) -> list[dict[str, Any]]:
+    preferred_ids: list[tuple[str, str]] = []
+    selection = state.active_assembly_selection
+    if selection is not None:
+        if selection.selected_scene_concept_image_id:
+            preferred_ids.append((selection.selected_scene_concept_image_id, "active_assembly_selection.scene_concept"))
+        if selection.selected_target_render_image_id:
+            preferred_ids.append((selection.selected_target_render_image_id, "active_assembly_selection.target_render"))
+    for item in state.asset_library:
+        if item.asset_kind not in {"scene_concept", "target_render"}:
+            continue
+        if item.selection_status not in {"selected_for_scene_generation", "selected_for_assembly"}:
+            continue
+        preferred_ids.append((item.artifact_id, f"asset_library.{item.selection_status}"))
+
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for artifact_id, source_priority in preferred_ids:
+        if artifact_id in seen:
+            continue
+        seen.add(artifact_id)
+        output.append(_artifact_source_image_item(state, artifact_id, source_priority=source_priority))
+
+    if output:
+        return output
+
+    concept = state.concept_bundle
+    fallback_ids: list[tuple[str, str]] = []
+    if concept is not None:
+        fallback_ids.extend((artifact_id, "concept_bundle.scene_concept") for artifact_id in concept.scene_concept_image_ids)
+        if concept.final_preview_image_id:
+            fallback_ids.append((concept.final_preview_image_id, "concept_bundle.target_render"))
+    for artifact_id, source_priority in fallback_ids:
+        if artifact_id in seen:
+            continue
+        seen.add(artifact_id)
+        output.append(_artifact_source_image_item(state, artifact_id, source_priority=source_priority))
+    return output
+
+
+def _artifact_source_image_item(
+    state: AgentProjectState,
+    artifact_id: str,
+    *,
+    source_priority: str,
+) -> dict[str, Any]:
+    artifact = _artifact_by_id(state, artifact_id)
+    item = _asset_library_item_by_artifact_id(state, artifact_id)
+    return {
+        "artifact_id": artifact_id,
+        "uri": artifact.uri if artifact is not None else None,
+        "mime_type": artifact.mime_type if artifact is not None else None,
+        "artifact_type": artifact.artifact_type.value if artifact is not None else None,
+        "semantic_role": artifact.semantic_role if artifact is not None else None,
+        "asset_kind": item.asset_kind if item is not None else None,
+        "review_status": item.review_status if item is not None else None,
+        "selection_status": item.selection_status if item is not None else None,
+        "requirement_id": item.requirement_id if item is not None else None,
+        "source_priority": source_priority,
+        "metadata": dict(artifact.metadata) if artifact is not None else {},
+    }
+
+
+def _active_assembly_selection_prompt_snapshot(state: AgentProjectState) -> dict[str, Any] | None:
+    selection = state.active_assembly_selection
+    if selection is None:
+        return None
+    return selection.model_dump(mode="json") if hasattr(selection, "model_dump") else selection.dict()
+
+
+def _runtime_job_tool_arguments(runtime_job: dict[str, Any] | None) -> dict[str, Any]:
+    if runtime_job is None:
+        return {}
+    arguments = runtime_job.get("tool_arguments")
+    return dict(arguments) if isinstance(arguments, dict) else {}
+
+
+def _runtime_job_metadata(runtime_job: dict[str, Any] | None) -> dict[str, Any]:
+    if runtime_job is None:
+        return {}
+    metadata = runtime_job.get("metadata")
+    return dict(metadata) if isinstance(metadata, dict) else {}
+
+
+def _artifact_by_id(state: AgentProjectState, artifact_id: str) -> Any | None:
+    for artifact in state.artifacts:
+        if artifact.artifact_id == artifact_id:
+            return artifact
+    return None
+
+
+def _asset_library_item_by_artifact_id(state: AgentProjectState, artifact_id: str) -> Any | None:
+    for item in state.asset_library:
+        if item.artifact_id == artifact_id:
+            return item
+    return None
 
 
 def _select_delegated_execution(

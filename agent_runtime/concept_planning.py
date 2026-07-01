@@ -174,6 +174,28 @@ def _planner_output_issues(
         if requirement.generation_mode != "image_guided" or not requirement.must_use_image_inputs:
             issues.append(f"subject_reference_not_image_guided:{subject.subject_id}")
 
+    scene_reference_ids = list(scene_spec.environment.scene_reference_image_ids)
+    if scene_reference_ids:
+        for index, _prompt in enumerate(output.scene_prompts):
+            requirement = requirements_by_key.get(f"scene_prompts.{index}")
+            if requirement is None:
+                issues.append(f"missing_scene_reference_requirement:{scene_spec.scene_id}:{index + 1}")
+                continue
+            missing_refs = sorted(set(scene_reference_ids) - set(requirement.input_reference_image_ids))
+            if missing_refs:
+                issues.append(f"missing_scene_reference_inputs:{scene_spec.scene_id}:{','.join(missing_refs)}")
+            if requirement.generation_mode != "image_guided" or not requirement.must_use_image_inputs:
+                issues.append(f"scene_reference_not_image_guided:{scene_spec.scene_id}:{index + 1}")
+
+    for subject in scene_spec.subjects:
+        if not _subject_requires_identity_evidence(subject):
+            continue
+        if _has_identity_evidence(subject, output.identity_notes):
+            continue
+        if output.requires_clarification and output.open_questions:
+            continue
+        issues.append(f"missing_identity_research_evidence:{subject.subject_id}")
+
     target_requirements = [
         requirement
         for requirement in prompt_pack.image_requirements
@@ -197,3 +219,26 @@ def _planner_output_issues(
                 if requirement.generation_mode != "multi_image_composite" or not requirement.must_use_image_inputs:
                     issues.append(f"target_render_not_multi_image_composite:{requirement.requirement_id}")
     return issues
+
+
+def _subject_requires_identity_evidence(subject: Any) -> bool:
+    if subject.category != "character":
+        return False
+    return bool(
+        subject.canonical_identity
+        or subject.identity_aliases
+        or subject.identity_confidence is not None
+    )
+
+
+def _has_identity_evidence(subject: Any, identity_notes: list[str]) -> bool:
+    if not identity_notes:
+        return False
+    needles = [
+        subject.subject_id,
+        subject.display_name,
+        subject.canonical_identity,
+        *subject.identity_aliases,
+    ]
+    normalized_notes = "\n".join(identity_notes).casefold()
+    return any(str(needle).casefold() in normalized_notes for needle in needles if needle)
