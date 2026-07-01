@@ -492,8 +492,8 @@ def _write_contract_generation_records(run_dir: Path, *, manifest: Round04CaseMa
 
 def _write_live_blockers(run_dir: Path, *, manifest: Round04CaseManifest) -> list[str]:
     issues = [
-        "live_execution_not_started_by_runner: image generation backend with required image attach must be selected by operator",
-        "live_execution_not_started_by_runner: Hunyuan3D/HY-World/Blender calls require service preflight after commit-push",
+        "live_execution_blocked: no project-integrated image generation backend can execute multi-requirement image-guided concept and target-render calls",
+        "live_execution_blocked: downstream Hunyuan3D/HY-World/Blender stages are not started without live concept artifacts",
     ]
     _write_contract_generation_records(run_dir, manifest=manifest)
     rows = _read_jsonl(run_dir / "live_generation_calls.jsonl")
