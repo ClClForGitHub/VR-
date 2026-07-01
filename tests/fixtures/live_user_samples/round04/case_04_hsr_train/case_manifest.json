@@ -1,0 +1,145 @@
+{
+  "case_id": "case_04_hsr_train",
+  "category": "q_chibi_scifi_indoor_ip_multi_character",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 4,
+    "subject_glbs": 4,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "星穹列车车厢，窗外宇宙和星球，桌面咖啡杯、黑胶唱片、全息投影",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "Q版卡芙卡",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "subject_id": "subject_kafka_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版银狼",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_002"
+      ],
+      "subject_id": "subject_silver_wolf_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版刃",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_003"
+      ],
+      "subject_id": "subject_blade_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "帕姆",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_004"
+      ],
+      "subject_id": "subject_pom_pom_chibi"
+    }
+  ],
+  "initial_user_request": "帮我生成一张 **崩坏：星穹铁道** 的 **Q版卡芙卡**、**Q版银狼** 和 **Q版刃**，在 **星穹列车车厢** 内的图片。\n窗外可以看到宇宙和星球，桌面上有咖啡杯、黑胶唱片和一个小型全息投影装置。",
+  "parse_notes": [
+    "第二轮用户概念图反馈为空；用户在对话中确认应模拟为同意。"
+  ],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "subject_kafka_chibi",
+      "declared_target_type": "subject",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_silver_wolf_chibi",
+      "declared_target_type": "subject",
+      "image_id": "image_002",
+      "path": "reference_images/image_002.jpg",
+      "required_for_generation": true,
+      "slot": "@图片2",
+      "source_text_span": "@图片2",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_blade_chibi",
+      "declared_target_type": "subject",
+      "image_id": "image_003",
+      "path": "reference_images/image_003.png",
+      "required_for_generation": true,
+      "slot": "@图片3",
+      "source_text_span": "@图片3",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_pom_pom_chibi",
+      "declared_target_type": "subject",
+      "image_id": "image_004",
+      "path": "reference_images/image_004.jpg",
+      "required_for_generation": true,
+      "slot": "@图片4",
+      "source_text_span": "@图片4",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "scene_astral_express_carriage",
+      "declared_target_type": "scene",
+      "image_id": "image_005",
+      "path": "reference_images/image_005.jpg",
+      "required_for_generation": true,
+      "slot": "@图片5",
+      "source_text_span": "@图片5",
+      "upload_stage": "concept_feedback_1",
+      "usage": "scene_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "request_concept_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [
+        "image_001",
+        "image_002",
+        "image_003",
+        "image_004",
+        "image_005"
+      ],
+      "text": "拒绝。角色脸部和服装不够像，列车车厢氛围不对；上传 5 张参考图并新增帕姆。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户概念图反馈为空，按用户确认模拟为同意。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "同意。角色和场景都可以，进入最终模型组合。"
+    }
+  ],
+  "title": "星穹铁道 Q版列车车厢多人场景"
+}

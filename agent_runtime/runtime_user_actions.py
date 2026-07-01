@@ -19,13 +19,15 @@ from agent_runtime.artifacts import utc_now_iso
 from agent_runtime.frontend_status import build_frontend_status
 from agent_runtime.persistence import FileStateCheckpointStore, StateCheckpointRecord
 from agent_runtime.runtime_dispatch import build_and_save_runtime_dispatch_plan
-from agent_runtime.state import AgentProjectState, ConceptBundle, ReviewPatch, WorkflowPhase
+from agent_runtime.state import AgentProjectState, AssetLibraryItem, ConceptBundle, ReviewPatch, WorkflowPhase
 from agent_runtime.state_views import apply_state_updates
 
 
 RuntimeUserActionType = Literal[
     "approve_concept",
     "request_concept_changes",
+    "approve_model_assets",
+    "request_model_changes",
     "approve_blender_preview",
     "request_blender_changes",
 ]
@@ -103,6 +105,50 @@ def request_concept_changes(
         run_dir,
         action_type="request_concept_changes",
         handler=lambda path, state, action_id: _request_concept_changes(
+            path,
+            state=state,
+            action_id=action_id,
+            feedback_text=feedback_text,
+            source_turn_id=source_turn_id,
+            rebuild_plan=rebuild_plan,
+        ),
+    )
+
+
+def approve_model_assets(
+    run_dir: str | Path,
+    *,
+    note: str | None = None,
+    rebuild_plan: bool = True,
+) -> RuntimeUserActionResult:
+    """Approve generated subject model assets and advance to scene generation."""
+
+    return _apply_user_action(
+        run_dir,
+        action_type="approve_model_assets",
+        handler=lambda path, state, action_id: _approve_model_assets(
+            path,
+            state=state,
+            action_id=action_id,
+            note=note,
+            rebuild_plan=rebuild_plan,
+        ),
+    )
+
+
+def request_model_changes(
+    run_dir: str | Path,
+    *,
+    feedback_text: str,
+    source_turn_id: str | None = None,
+    rebuild_plan: bool = True,
+) -> RuntimeUserActionResult:
+    """Convert model-stage feedback into a pending ReviewPatch."""
+
+    return _apply_user_action(
+        run_dir,
+        action_type="request_model_changes",
+        handler=lambda path, state, action_id: _request_model_changes(
             path,
             state=state,
             action_id=action_id,
@@ -316,6 +362,102 @@ def _request_concept_changes(
     )
 
 
+def _approve_model_assets(
+    run_dir: Path,
+    *,
+    state: AgentProjectState,
+    action_id: str,
+    note: str | None,
+    rebuild_plan: bool,
+) -> RuntimeUserActionRecord:
+    _require_model_review_state(state)
+    library = _model_asset_library_with_review_status(state, review_status="liked", note=note)
+    updated = apply_state_updates(
+        state,
+        node_name="ModelAssetReviewGate",
+        updates={"asset_library": library, "phase": WorkflowPhase.SCENE_ASSET_GENERATION},
+    )
+    return _persist_success(
+        run_dir,
+        action_id=action_id,
+        action_type="approve_model_assets",
+        updated=updated,
+        checkpoint_reason="model_assets_approved_by_user",
+        checkpoint_node_name="ModelAssetReviewGate",
+        checkpoint_stage="model_asset_approval",
+        applied_fields=["asset_library", "phase"],
+        rebuild_plan=rebuild_plan,
+        result_summary={
+            "subject_asset_ids": _model_asset_ids(state),
+            "note": note,
+            "next_phase": WorkflowPhase.SCENE_ASSET_GENERATION.value,
+        },
+    )
+
+
+def _request_model_changes(
+    run_dir: Path,
+    *,
+    state: AgentProjectState,
+    action_id: str,
+    feedback_text: str,
+    source_turn_id: str | None,
+    rebuild_plan: bool,
+) -> RuntimeUserActionRecord:
+    _require_model_review_state(state)
+    if not feedback_text.strip():
+        raise ValueError("feedback_text is required for model changes")
+    patch_id = f"review_patch_{uuid4().hex[:12]}"
+    affected = _model_asset_ids(state)
+    resolved_turn_id = source_turn_id or (state.user_turns[-1].turn_id if state.user_turns else action_id)
+    patch = ReviewPatch(
+        patch_id=patch_id,
+        source_turn_id=resolved_turn_id,
+        phase_created=WorkflowPhase.SUBJECT_ASSET_QA,
+        target_type="global",
+        patch_type="redo_subject",
+        instruction=feedback_text.strip(),
+        structured_delta={
+            "kind": "model_feedback",
+            "user_action_id": action_id,
+            "feedback_text": feedback_text.strip(),
+            "subject_asset_ids": affected,
+            "return_to": "concept_regeneration",
+        },
+        affected_artifact_ids=affected,
+        status="pending",
+    )
+    concept_bundle = _unapprove_concept_bundle(state.concept_bundle)
+    library = _model_asset_library_with_review_status(state, review_status="rejected", note=feedback_text.strip())
+    updated = apply_state_updates(
+        state,
+        node_name="ModelAssetReviewGate",
+        updates={
+            "review_patches": [*state.review_patches, patch],
+            "concept_bundle": concept_bundle,
+            "asset_library": library,
+            "phase": WorkflowPhase.CONCEPT_REVIEW,
+        },
+    )
+    return _persist_success(
+        run_dir,
+        action_id=action_id,
+        action_type="request_model_changes",
+        updated=updated,
+        checkpoint_reason="model_feedback_patch_created",
+        checkpoint_node_name="ModelAssetReviewGate",
+        checkpoint_stage="model_asset_feedback",
+        applied_fields=["review_patches", "concept_bundle", "asset_library", "phase"],
+        rebuild_plan=rebuild_plan,
+        result_summary={
+            "patch_id": patch.patch_id,
+            "source_turn_id": patch.source_turn_id,
+            "affected_artifact_ids": affected,
+            "next_phase": WorkflowPhase.CONCEPT_REVIEW.value,
+        },
+    )
+
+
 def _approve_blender_preview(
     run_dir: Path,
     *,
@@ -467,6 +609,13 @@ def _require_blender_preview_state(state: AgentProjectState) -> None:
         raise ValueError("Blender preview user action requires state.viewer_scene")
 
 
+def _require_model_review_state(state: AgentProjectState) -> None:
+    if state.phase != WorkflowPhase.SUBJECT_ASSET_QA:
+        raise ValueError(f"model user action requires SUBJECT_ASSET_QA, got {state.phase.value}")
+    if not _model_asset_ids(state):
+        raise ValueError("model user action requires generated subject model assets")
+
+
 def _concept_has_outputs(concept: ConceptBundle) -> bool:
     return bool(concept.final_preview_image_id or concept.subject_concept_images or concept.scene_concept_image_ids)
 
@@ -479,6 +628,39 @@ def _concept_artifact_ids(concept: ConceptBundle) -> list[str]:
         artifact_ids.extend(values)
     artifact_ids.extend(concept.scene_concept_image_ids)
     return sorted(set(artifact_ids))
+
+
+def _model_asset_ids(state: AgentProjectState) -> list[str]:
+    ids = [asset.asset_id for asset in state.subject_assets if asset.asset_id]
+    ids.extend(item.artifact_id for item in state.asset_library if item.asset_kind == "subject_model")
+    return sorted(set(ids))
+
+
+def _model_asset_library_with_review_status(
+    state: AgentProjectState,
+    *,
+    review_status: str,
+    note: str | None,
+) -> list[AssetLibraryItem]:
+    timestamp = utc_now_iso()
+    output = []
+    for item in state.asset_library:
+        payload = _model_to_dict(item)
+        if item.asset_kind == "subject_model":
+            payload["review_status"] = review_status
+            payload["user_notes"] = note if note is not None else item.user_notes
+            payload["updated_at"] = timestamp
+        output.append(AssetLibraryItem(**payload))
+    return output
+
+
+def _unapprove_concept_bundle(concept: ConceptBundle | None) -> ConceptBundle | None:
+    if concept is None:
+        return None
+    payload = _model_to_dict(concept)
+    payload["approved"] = False
+    payload["approved_at"] = None
+    return ConceptBundle(**payload)
 
 
 def _blender_preview_artifact_ids(state: AgentProjectState) -> list[str]:

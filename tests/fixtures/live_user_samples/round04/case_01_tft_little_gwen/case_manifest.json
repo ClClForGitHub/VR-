@@ -1,0 +1,143 @@
+{
+  "case_id": "case_01_tft_little_gwen",
+  "category": "q_chibi_ip_multi_skin_scene",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 4,
+    "subject_glbs": 4,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "云顶棋盘灵魂莲华场景",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "小小格温",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "subject_id": "subject_little_gwen_base"
+    },
+    {
+      "category": "character",
+      "display_name": "斗魂觉醒皮肤小小格温",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_002"
+      ],
+      "subject_id": "subject_little_gwen_soul_fighter"
+    },
+    {
+      "category": "character",
+      "display_name": "水晶玫瑰皮肤小小格温",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_003"
+      ],
+      "subject_id": "subject_little_gwen_crystal_rose"
+    },
+    {
+      "category": "character",
+      "display_name": "咖啡甜心小小格温",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_004"
+      ],
+      "subject_id": "subject_little_gwen_cafe_cuties"
+    }
+  ],
+  "initial_user_request": "帮我生成一张英雄联盟/云顶之弈/TFT 的角色 **小小格温**，以及 **斗魂觉醒皮肤小小格温**、**水晶玫瑰皮肤小小格温**，在云顶棋盘 **灵魂莲华** 场景上的图片。\n\n![1745824315_d2b5ca33bd970f64a6301fa75ae2eb22](C:\\Users\\14029\\Desktop\\1745824315_d2b5ca33bd970f64a6301fa75ae2eb22-1782895849263-2.png)",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "subject_little_gwen_base",
+      "declared_target_type": "subject",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_little_gwen_soul_fighter",
+      "declared_target_type": "subject",
+      "image_id": "image_002",
+      "path": "reference_images/image_002.jpg",
+      "required_for_generation": true,
+      "slot": "@图片2",
+      "source_text_span": "@图片2",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_little_gwen_crystal_rose",
+      "declared_target_type": "subject",
+      "image_id": "image_003",
+      "path": "reference_images/image_003.jpg",
+      "required_for_generation": true,
+      "slot": "@图片3",
+      "source_text_span": "@图片3",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_little_gwen_cafe_cuties",
+      "declared_target_type": "subject",
+      "image_id": "image_004",
+      "path": "reference_images/image_004.jpg",
+      "required_for_generation": true,
+      "slot": "@图片4",
+      "source_text_span": "@图片4",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "scene_tft_spirit_blossom_board",
+      "declared_target_type": "scene",
+      "image_id": "image_005",
+      "path": "reference_images/image_005.png",
+      "required_for_generation": true,
+      "slot": "@图片5",
+      "source_text_span": "@图片5",
+      "upload_stage": "concept_feedback_1",
+      "usage": "scene_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "request_concept_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [
+        "image_001",
+        "image_002",
+        "image_003",
+        "image_004",
+        "image_005"
+      ],
+      "text": "拒绝。角色外观不符合要求，概念图不干净；新增咖啡甜心小小格温，并上传 5 张参考图重新生成。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户概念图反馈：同意。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "同意。选择组合所有主体格温 + 场景棋盘。"
+    }
+  ],
+  "title": "TFT 小小格温多皮肤灵魂莲华棋盘"
+}

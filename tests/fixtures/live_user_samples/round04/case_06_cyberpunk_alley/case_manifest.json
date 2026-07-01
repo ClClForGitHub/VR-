@@ -1,0 +1,87 @@
+{
+  "case_id": "case_06_cyberpunk_alley",
+  "category": "realistic_cyberpunk_scene_with_subjects",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 4,
+    "subject_glbs": 4,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "雨夜霓虹小巷，积水反射、机车、全息广告牌、金属管道",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "短发女黑客",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_short_haired_female_hacker"
+    },
+    {
+      "category": "prop",
+      "display_name": "悬浮无人机",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_hovering_drone"
+    },
+    {
+      "category": "animal",
+      "display_name": "机械猫",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_mechanical_cat"
+    },
+    {
+      "category": "prop",
+      "display_name": "自动贩卖机",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_vending_machine"
+    }
+  ],
+  "initial_user_request": "帮我生成一张赛博朋克写实风格的图片。\n主体包括一名短发女黑客、一个悬浮无人机和一只机械猫，场景是雨夜霓虹小巷。地面有积水反射，远处有全息广告牌、金属管道和停着的机车。整体画面要有高级感，灯光不要太脏，适合后续进行 3D 场景搭建。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "scene_cyberpunk_rainy_neon_alley",
+      "declared_target_type": "scene",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "concept_feedback_1",
+      "usage": "scene_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "request_concept_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "text": "拒绝。主体摆放不清楚；上传一张场景参考图，不上传角色参考图，并新增自动贩卖机。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户概念图反馈：同意。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "同意。选择组合所有主体和雨夜霓虹小巷场景。"
+    }
+  ],
+  "title": "赛博朋克雨夜霓虹小巷"
+}

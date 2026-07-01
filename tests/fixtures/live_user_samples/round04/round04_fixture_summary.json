@@ -1,0 +1,53 @@
+{
+  "case_count": 12,
+  "cases": [
+    {
+      "case_id": "case_01_tft_little_gwen",
+      "reference_count": 5
+    },
+    {
+      "case_id": "case_02_wuthering_beach",
+      "reference_count": 0
+    },
+    {
+      "case_id": "case_03_lunar_rover",
+      "reference_count": 1
+    },
+    {
+      "case_id": "case_04_hsr_train",
+      "reference_count": 5
+    },
+    {
+      "case_id": "case_05_xianxia_original",
+      "reference_count": 0
+    },
+    {
+      "case_id": "case_06_cyberpunk_alley",
+      "reference_count": 1
+    },
+    {
+      "case_id": "case_07_miniature_japanese_garden",
+      "reference_count": 3
+    },
+    {
+      "case_id": "case_08_industrial_quadruped",
+      "reference_count": 0
+    },
+    {
+      "case_id": "case_09_frieren_magic_bedroom",
+      "reference_count": 1
+    },
+    {
+      "case_id": "case_10_helltaker_cafe",
+      "reference_count": 2
+    },
+    {
+      "case_id": "case_11_stellar_blade_eve_tachy",
+      "reference_count": 3
+    },
+    {
+      "case_id": "case_12_stellar_blade_raven_adam_xion",
+      "reference_count": 3
+    }
+  ]
+}

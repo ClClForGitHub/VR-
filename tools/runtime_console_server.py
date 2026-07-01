@@ -43,9 +43,11 @@ from agent_runtime.runtime_state_apply import apply_next_runtime_candidate, read
 from agent_runtime.runtime_user_actions import (
     approve_blender_preview,
     approve_concept_review,
+    approve_model_assets,
     read_runtime_user_action_summary,
     request_blender_changes,
     request_concept_changes,
+    request_model_changes,
 )
 from agent_runtime.runtime_worker import execute_next_runtime_worker, read_runtime_worker_summary
 from agent_runtime.runtime_runs import (
@@ -279,6 +281,12 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
                     note=payload.get("note"),
                     rebuild_plan=bool(payload.get("rebuild_plan", True)),
                 )
+            elif action_type == "approve_model_assets":
+                result = approve_model_assets(
+                    effective_dir,
+                    note=payload.get("note"),
+                    rebuild_plan=bool(payload.get("rebuild_plan", True)),
+                )
             elif action_type == "approve_blender_preview":
                 result = approve_blender_preview(
                     effective_dir,
@@ -287,6 +295,13 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
                 )
             elif action_type == "request_concept_changes":
                 result = request_concept_changes(
+                    effective_dir,
+                    feedback_text=payload.get("feedback_text", ""),
+                    source_turn_id=payload.get("source_turn_id"),
+                    rebuild_plan=bool(payload.get("rebuild_plan", True)),
+                )
+            elif action_type == "request_model_changes":
+                result = request_model_changes(
                     effective_dir,
                     feedback_text=payload.get("feedback_text", ""),
                     source_turn_id=payload.get("source_turn_id"),

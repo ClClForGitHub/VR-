@@ -1,0 +1,101 @@
+{
+  "case_id": "case_11_stellar_blade_eve_tachy",
+  "category": "aaa_game_full_body_ip_battlefield",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 2,
+    "subject_glbs": 2,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "破碎海岸、坠落舱残骸、湿润沙地、远处毁坏建筑",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "Eve",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "subject_id": "subject_eve_full_body"
+    },
+    {
+      "category": "character",
+      "display_name": "Tachy",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_002"
+      ],
+      "subject_id": "subject_tachy_full_body"
+    }
+  ],
+  "initial_user_request": "帮我生成一张《剑星》IP 的 3A 游戏画面风格图片。\n主体包括 **Eve** 和 **Tachy**，要求是 **非Q版、全身角色、3D 游戏角色质感**，不要画成二次元插画。\n场景是类似游戏开场的末世地球登陆战场：破碎海岸、坠落舱残骸、湿润沙地、远处有被毁建筑和怪物战斗后的痕迹。\n画面要像 3A 动作游戏过场截图，角色站姿清楚，方便后续拆分做 3D 建模和 Blender 场景搭建。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "subject_eve_full_body",
+      "declared_target_type": "subject",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_tachy_full_body",
+      "declared_target_type": "subject",
+      "image_id": "image_002",
+      "path": "reference_images/image_002.png",
+      "required_for_generation": true,
+      "slot": "@图片2",
+      "source_text_span": "@图片2",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "scene_post_apocalyptic_landing_battlefield",
+      "declared_target_type": "scene",
+      "image_id": "image_003",
+      "path": "reference_images/image_003.png",
+      "required_for_generation": true,
+      "slot": "@图片3",
+      "source_text_span": "@图片3",
+      "upload_stage": "concept_feedback_1",
+      "usage": "scene_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "request_concept_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [
+        "image_001",
+        "image_002",
+        "image_003"
+      ],
+      "text": "不同意。不够像《剑星》3A 游戏截图；上传 Eve、Tachy 主体参考和末世登陆战场场景参考。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "用户概念图反馈：同意。这版角色质感、全身结构和《剑星》画面风格都对了。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "用户模型反馈：同意。选择组合 Eve + Tachy + 场景。"
+    }
+  ],
+  "title": "剑星 Eve 与 Tachy 末世登陆战场"
+}

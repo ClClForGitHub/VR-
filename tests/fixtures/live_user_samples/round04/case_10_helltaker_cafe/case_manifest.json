@@ -1,0 +1,96 @@
+{
+  "case_id": "case_10_helltaker_cafe",
+  "category": "anime_game_ip_demon_cafe_office",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 3,
+    "subject_glbs": 3,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "恶魔主题复古咖啡馆兼办公室，咖啡杯、甜甜圈、文件、黑胶唱片",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "Q版 Lucifer",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "subject_id": "subject_lucifer_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版 Justice",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_justice_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版 Cerberus",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_cerberus_chibi"
+    }
+  ],
+  "initial_user_request": "帮我生成一张《Helltaker》IP 的 Q版图片。\n主体包括 Q版 Lucifer 和 Q版 Justice，场景是带有恶魔主题的复古咖啡馆兼办公室。\n桌上有咖啡杯、甜甜圈、文件、黑胶唱片，整体偏暖色、可爱、画面干净，适合后续 3D 建模。",
+  "parse_notes": [
+    "用户确认 Q版路西法.png 也作为第一轮 Lucifer 主体参考图加入流程；原始样例文本只显式写了场景 @图片1。"
+  ],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "subject_lucifer_chibi",
+      "declared_target_type": "subject",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片L",
+      "source_text_span": "@图片L",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "scene_demon_cafe_office",
+      "declared_target_type": "scene",
+      "image_id": "image_002",
+      "path": "reference_images/image_002.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "concept_feedback_1",
+      "usage": "scene_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "request_concept_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [
+        "image_001",
+        "image_002"
+      ],
+      "text": "不同意。概念图不够干净；新增 Q版 Cerberus。用户确认第一轮同时上传 Q版路西法主体参考和恶魔咖啡馆场景参考。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "用户概念图反馈：同意。这版角色站位、场景氛围和道具布局可以。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "用户模型反馈：同意。选择组合所有主体。"
+    }
+  ],
+  "title": "Helltaker Q版恶魔咖啡办公室"
+}

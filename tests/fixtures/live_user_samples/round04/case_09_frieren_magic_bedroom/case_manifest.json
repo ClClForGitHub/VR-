@@ -1,0 +1,87 @@
+{
+  "case_id": "case_09_frieren_magic_bedroom",
+  "category": "anime_ip_magic_indoor_scene",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 3,
+    "subject_glbs": 3,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "温暖魔法书房，书架、魔法阵地毯、药水瓶、木桌、夜晚星空窗景",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "Q版芙莉莲",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_frieren_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版菲伦",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_fern_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版修塔尔克",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_stark_chibi"
+    }
+  ],
+  "initial_user_request": "帮我生成一张《葬送的芙莉莲》IP 的 Q版图片。\n主体包括 Q版芙莉莲 和 Q版菲伦，场景是温暖的魔法书房。\n书房里有书架、魔法阵地毯、药水瓶、木桌、夜晚星空窗景和暖色灯光。整体要可爱、干净、适合后续 3D 建模。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "scene_warm_magic_study",
+      "declared_target_type": "scene",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "model_feedback_1",
+      "usage": "scene_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "同意。"
+    },
+    {
+      "action": "request_model_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "text": "不同意。角色模型失真，新增 Q版修塔尔克；只上传一张魔法书房场景参考图。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "用户概念图反馈：同意。这版角色和场景关系清楚。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "用户模型反馈：同意。选择组合所有主体。"
+    }
+  ],
+  "title": "葬送的芙莉莲 Q版温馨魔法书房"
+}

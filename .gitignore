@@ -16,6 +16,8 @@ build/
 
 outputs/
 run_logs/
+local_inputs/
+tests/fixtures/live_user_samples/round04/*/reference_images/
 
 models/
 Hunyuan3D-2.1/

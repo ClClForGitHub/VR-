@@ -1,0 +1,101 @@
+{
+  "case_id": "case_08_industrial_quadruped",
+  "category": "realistic_mechanical_industrial_scene",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 7,
+    "subject_glbs": 7,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "室内工业厂房，工具箱、警示路障、管线、监控屏幕、金属平台、小型机械臂工作台",
+  "expected_subjects": [
+    {
+      "category": "vehicle",
+      "display_name": "四足巡检机器人",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_quadruped_inspection_robot"
+    },
+    {
+      "category": "prop",
+      "display_name": "小型机械臂工作台",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_small_robotic_arm_workbench"
+    },
+    {
+      "category": "prop",
+      "display_name": "工具箱",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_toolbox"
+    },
+    {
+      "category": "prop",
+      "display_name": "警示路障",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_warning_barricade"
+    },
+    {
+      "category": "environment_asset",
+      "display_name": "工业管线",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_industrial_pipelines"
+    },
+    {
+      "category": "prop",
+      "display_name": "监控屏幕",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_monitoring_screen"
+    },
+    {
+      "category": "environment_asset",
+      "display_name": "金属平台",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_metal_platform"
+    }
+  ],
+  "initial_user_request": "帮我生成一张写实机械风格的图片。\n主体是一台四足巡检机器人，正在室内工业厂房里巡检。场景中需要有工具箱、警示路障、工业管线、监控屏幕和金属平台。\n机器人要有清晰的机身、四条机械腿、关节结构和传感器头部，整体不要太科幻夸张，要像可以真实落地的工业巡检设备。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [],
+  "scripted_user_actions": [
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "同意。整体方向可以。"
+    },
+    {
+      "action": "request_model_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "不同意。机器人腿部关节和比例不合理，厂房关系不明确；不上传参考图，新增小型机械臂工作台。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户概念图反馈：同意。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户模型反馈：同意。选择组合所有主体。"
+    }
+  ],
+  "title": "写实工业四足巡检机器人"
+}

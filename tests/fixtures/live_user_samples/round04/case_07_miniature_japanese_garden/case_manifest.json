@@ -1,0 +1,145 @@
+{
+  "case_id": "case_07_miniature_japanese_garden",
+  "category": "miniature_environment_scene",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 7,
+    "subject_glbs": 7,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "木质茶室、红枫树、石灯笼、鲤鱼池、竹篱笆、碎石小路、木桥",
+  "expected_subjects": [
+    {
+      "category": "architecture_part",
+      "display_name": "木质茶室",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "subject_id": "subject_wooden_teahouse"
+    },
+    {
+      "category": "environment_asset",
+      "display_name": "红枫树",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_003"
+      ],
+      "subject_id": "subject_red_maple_tree"
+    },
+    {
+      "category": "prop",
+      "display_name": "石灯笼",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_stone_lantern"
+    },
+    {
+      "category": "environment_asset",
+      "display_name": "鲤鱼池",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_002"
+      ],
+      "subject_id": "subject_koi_pond"
+    },
+    {
+      "category": "environment_asset",
+      "display_name": "竹篱笆",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_bamboo_fence"
+    },
+    {
+      "category": "environment_asset",
+      "display_name": "碎石小路",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_gravel_path"
+    },
+    {
+      "category": "architecture_part",
+      "display_name": "木桥",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_wooden_bridge"
+    }
+  ],
+  "initial_user_request": "帮我生成一张 **微缩日式庭院场景** 的图片。\n场景中需要有 **木质茶室**、**红枫树**、**石灯笼**、**鲤鱼池**、**竹篱笆** 和 **碎石小路**，整体是安静、精致、适合做 Blender 场景搭建的风格。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "subject_wooden_teahouse",
+      "declared_target_type": "subject",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "model_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "scene_miniature_japanese_garden",
+      "declared_target_type": "layout",
+      "image_id": "image_002",
+      "path": "reference_images/image_002.png",
+      "required_for_generation": true,
+      "slot": "@图片2",
+      "source_text_span": "@图片2",
+      "upload_stage": "model_feedback_1",
+      "usage": "layout_reference"
+    },
+    {
+      "declared_target_id": "subject_red_maple_tree",
+      "declared_target_type": "subject",
+      "image_id": "image_003",
+      "path": "reference_images/image_003.png",
+      "required_for_generation": true,
+      "slot": "@图片3",
+      "source_text_span": "@图片3",
+      "upload_stage": "model_feedback_1",
+      "usage": "subject_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "同意。整体构图和元素布局我满意。"
+    },
+    {
+      "action": "request_model_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [
+        "image_001",
+        "image_002",
+        "image_003"
+      ],
+      "text": "不同意。茶室复杂、红枫太散、比例不协调；上传三张参考图并新增木桥。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户概念图反馈：同意。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户模型反馈：同意。"
+    }
+  ],
+  "title": "微缩日式庭院场景"
+}

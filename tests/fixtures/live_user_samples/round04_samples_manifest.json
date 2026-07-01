@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "round": "round04_live_user_samples",
+  "purpose": "Scripted live user samples for full image/text-to-Blender workflow execution.",
+  "storage_contract": {
+    "manifest_path": "tests/fixtures/live_user_samples/round04/<case_id>/case_manifest.json",
+    "local_reference_image_path": "local_inputs/round04_live_user_samples/<case_id>/reference_images/",
+    "output_run_path": "outputs/runs/round04_live_user_samples/<case_id>/"
+  },
+  "cases": [
+    {
+      "case_id": "case_01_tft_little_gwen",
+      "title": "小小格温多皮肤云顶棋盘灵魂莲华场景",
+      "style_type": "Q版 / IP角色 / 多皮肤 / 云顶棋盘场景",
+      "test_focus": ["IP角色一致性", "参考图重生成", "场景+多主体组合", "联网搜索", "概念图返修"],
+      "initial_user_request": "帮我生成一张英雄联盟/云顶之弈/TFT 的角色小小格温，以及斗魂觉醒皮肤小小格温、水晶玫瑰皮肤小小格温，在云顶棋盘灵魂莲华场景上的图片。",
+      "requires_identity_research": true,
+      "reference_slots_round2": [
+        {"slot": "@图片1", "image_id": "image_001", "target_type": "subject", "target_id": "subject_little_gwen_base", "usage": "subject_reference", "description": "小小格温参考"},
+        {"slot": "@图片2", "image_id": "image_002", "target_type": "subject", "target_id": "subject_little_gwen_soul_fighter", "usage": "subject_reference", "description": "斗魂觉醒皮肤小小格温参考"},
+        {"slot": "@图片3", "image_id": "image_003", "target_type": "subject", "target_id": "subject_little_gwen_crystal_rose", "usage": "subject_reference", "description": "水晶玫瑰皮肤小小格温参考"},
+        {"slot": "@图片4", "image_id": "image_004", "target_type": "subject", "target_id": "subject_little_gwen_cafe_cuties", "usage": "subject_reference", "description": "咖啡甜心小小格温参考"},
+        {"slot": "@图片5", "image_id": "image_005", "target_type": "scene", "target_id": "scene_tft_spirit_blossom_board", "usage": "scene_reference", "description": "云顶棋盘灵魂莲华场景参考"}
+      ],
+      "scripted_user_actions": [
+        {"gate": "concept_review_round1", "action": "request_concept_changes", "text": "拒绝。角色的外观不符合要求，概念图不干净，不贴合真实角色要求。并且我另外需要新增一个主体，你需要联网搜索看看相关角色的造型特征和图片。我给你上传几张参考图。帮我生成一张英雄联盟/云顶之弈/TFT 的角色 @图片1 小小格温，以及斗魂觉醒皮肤 @图片2 小小格温、水晶玫瑰皮肤 @图片3 小小格温、咖啡甜心 @图片4 小小格温，在云顶棋盘灵魂莲华 @图片5 场景上的图片。"},
+        {"gate": "concept_review_round2", "action": "approve_concept", "text": "同意。"},
+        {"gate": "model_review", "action": "approve_model_assets", "text": "同意。选择组合所有主体格温 + 场景棋盘。"},
+        {"gate": "assembly_selection", "action": "select_asset_for_assembly", "text": "选择组合所有主体格温 + 场景棋盘。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 2, "subject_concept_images": 7, "scene_concept_images": 2, "target_render_images": 2, "subject_glbs": 4, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1}
+    },
+    {
+      "case_id": "case_02_wuthering_beach",
+      "title": "鸣潮 Q版多人沙滩场景并追加终末地角色",
+      "style_type": "Q版 / 二次元 / 沙滩多人场景",
+      "test_focus": ["多角色Q版生成", "模型阶段返修", "二次新增角色", "概念图二轮确认"],
+      "initial_user_request": "帮我生成一张鸣潮 IP 游戏的角色 Q版菲比、Q版弗洛洛 和 Q版达妮娅 在沙滩场景的图片，旁边有沙滩椅、螃蟹、沙堆城堡等背景。",
+      "requires_identity_research": true,
+      "scripted_user_actions": [
+        {"gate": "concept_review_round1", "action": "approve_concept", "text": "同意。"},
+        {"gate": "model_review_round1", "action": "request_model_changes", "text": "不同意。角色的模型失真严重，我觉得很不好，概念图要重新生成。另外我想新增一个角色，来自终末地的女管理员二创角色咕咕嘎嘎加入这个场景。请重新生成概念图，保留原有沙滩场景和角色，并新增终末地女管理员二创角色咕咕嘎嘎。整体还是 Q 版、可爱、适合 3D 建模的风格。"},
+        {"gate": "concept_review_round2", "action": "approve_concept", "text": "同意。"},
+        {"gate": "model_review_round2", "action": "approve_model_assets", "text": "同意。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 2, "subject_concept_images": 7, "scene_concept_images": 2, "target_render_images": 2, "subject_glbs": 4, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1}
+    },
+    {
+      "case_id": "case_03_lunar_rover",
+      "title": "月球车月壤探测写实机械场景",
+      "style_type": "写实 / 单主体机械物件 / 科学场景",
+      "test_focus": ["单主体参考图建模", "写实机械", "简单稳定流程"],
+      "initial_user_request": "帮我生成一张月球车 @图片1，在月球表面进行月壤探测获取的图片。",
+      "requires_identity_research": false,
+      "reference_slots_round1": [
+        {"slot": "@图片1", "image_id": "image_001", "target_type": "subject", "target_id": "subject_lunar_rover", "usage": "subject_reference", "description": "月球车参考图"}
+      ],
+      "scripted_user_actions": [
+        {"gate": "concept_review", "action": "approve_concept", "text": "同意。"},
+        {"gate": "model_review", "action": "approve_model_assets", "text": "同意。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 1, "subject_concept_images": 1, "scene_concept_images": 1, "target_render_images": 1, "subject_glbs": 1, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1}
+    },
+    {
+      "case_id": "case_04_hsr_train",
+      "title": "星穹铁道 Q版多角色星穹列车车厢",
+      "style_type": "Q版 / 科幻室内 / 多角色 IP 场景",
+      "test_focus": ["多角色参考图", "室内复杂场景", "概念图返修", "联网搜索官方特征", "追加 mascot 主体"],
+      "initial_user_request": "帮我生成一张崩坏：星穹铁道的 Q版卡芙卡、Q版银狼 和 Q版刃，在星穹列车车厢内的图片。窗外可以看到宇宙和星球，桌面上有咖啡杯、黑胶唱片和一个小型全息投影装置。",
+      "requires_identity_research": true,
+      "reference_slots_round2": [
+        {"slot": "@图片1", "image_id": "image_001", "target_type": "subject", "target_id": "subject_kafka", "usage": "subject_reference"},
+        {"slot": "@图片2", "image_id": "image_002", "target_type": "subject", "target_id": "subject_silver_wolf", "usage": "subject_reference"},
+        {"slot": "@图片3", "image_id": "image_003", "target_type": "subject", "target_id": "subject_blade", "usage": "subject_reference"},
+        {"slot": "@图片4", "image_id": "image_004", "target_type": "subject", "target_id": "subject_pom_pom", "usage": "subject_reference"},
+        {"slot": "@图片5", "image_id": "image_005", "target_type": "scene", "target_id": "scene_astral_express_car", "usage": "scene_reference"}
+      ],
+      "scripted_user_actions": [
+        {"gate": "concept_review_round1", "action": "request_concept_changes", "text": "拒绝。角色的脸部特征和服装细节不够像原角色，星穹列车的车厢氛围也不对。请你联网搜索一下这些角色和列车车厢的造型特征。我会上传参考图，请根据参考图重新生成。并且新增一个主体：帕姆也要加入场景。请帮我生成一张 @图片1 卡芙卡、@图片2 银狼、@图片3 刃 和 @图片4 帕姆，在星穹列车车厢 @图片5 内的 Q 版多人场景图。整体要求干净、适合后续 3D 建模，保留桌面的咖啡杯、黑胶唱片和全息投影装置。"},
+        {"gate": "concept_review_round2", "action": "approve_concept", "text": "同意。"},
+        {"gate": "model_review", "action": "approve_model_assets", "text": "同意。角色和场景都可以，进入最终模型组合。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 2, "subject_concept_images": 7, "scene_concept_images": 2, "target_render_images": 2, "subject_glbs": 4, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1}
+    },
+    {
+      "case_id": "case_05_xianxia_original",
+      "title": "原创国风仙侠多主体悬崖道观",
+      "style_type": "原创国风 / 仙侠 / 半写实幻想场景",
+      "test_focus": ["原创角色理解", "非IP场景设计", "模型阶段返修", "为3D建模简化设计"],
+      "initial_user_request": "帮我生成一张原创国风仙侠风格的图片：主体包括一名年轻女性剑修、一只白狐灵宠、一只青鸾，场景是悬崖边的道观，远处有云海和日出，周围有松树、山石和飘动的符纸。",
+      "requires_identity_research": false,
+      "scripted_user_actions": [
+        {"gate": "concept_review_round1", "action": "approve_concept", "text": "同意。整体气质和构图我满意。"},
+        {"gate": "model_review_round1", "action": "request_model_changes", "text": "不同意。当前模型阶段里角色服装层次太复杂，不利于建模，发饰也太碎，青鸾的造型不够稳定。请重新生成概念图，保留整体国风仙侠氛围，但把角色服装适度简化，青鸾造型更统一一些。另外新增一个主体：石灯笼放在道观前方。"},
+        {"gate": "concept_review_round2", "action": "approve_concept", "text": "同意。现在更适合落地成 3D 模型了。"},
+        {"gate": "model_review_round2", "action": "approve_model_assets", "text": "同意。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 2, "subject_concept_images": 7, "scene_concept_images": 2, "target_render_images": 2, "subject_glbs": 4, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1}
+    },
+    {
+      "case_id": "case_06_cyberpunk_alley",
+      "title": "赛博朋克雨夜霓虹小巷多主体",
+      "style_type": "赛博朋克 / 写实人物 / 夜景街巷",
+      "test_focus": ["场景参考图驱动", "主体自然语言生成", "概念图返修", "新增道具主体", "复杂光影场景落地"],
+      "initial_user_request": "帮我生成一张赛博朋克写实风格的图片。主体包括一名短发女黑客、一个悬浮无人机和一只机械猫，场景是雨夜霓虹小巷。地面有积水反射，远处有全息广告牌、金属管道和停着的机车。整体画面要有高级感，灯光不要太脏，适合后续进行 3D 场景搭建。",
+      "requires_identity_research": false,
+      "reference_slots_round2": [
+        {"slot": "@图片1", "image_id": "image_001", "target_type": "scene", "target_id": "scene_cyberpunk_rain_alley", "usage": "scene_reference", "description": "赛博朋克雨夜霓虹小巷场景参考图"}
+      ],
+      "scripted_user_actions": [
+        {"gate": "concept_review_round1", "action": "request_concept_changes", "text": "拒绝。概念图太乱了，场景氛围还可以，但是主体摆放不清楚，女黑客、无人机和机械猫的空间关系不明确。机械猫不需要特别复杂，但是要一眼看出是机械结构。我这里可以上传一张场景参考图，不上传角色或机械猫参考图。请你根据场景参考图重新生成，主体仍然按照我的文字描述来设计。另外我还想新增一个主体：自动贩卖机，放在巷子右侧或者侧后方。请根据 @图片1 赛博朋克雨夜霓虹小巷场景参考图，重新生成一张写实风格概念图。主体包括短发女黑客、悬浮无人机、机械猫和自动贩卖机。要求保留雨夜、霓虹反射、远处机车、全息广告牌、金属管道等场景元素；人物和机械猫不要过度复杂，结构要清晰，方便后续拆分成 3D 主体和场景资产。"},
+        {"gate": "concept_review_round2", "action": "approve_concept", "text": "同意。这版场景、主体摆放和整体光影可以，进入 3D 模型生成与场景搭建。"},
+        {"gate": "model_review", "action": "approve_model_assets", "text": "同意。选择组合所有主体：女黑客 + 悬浮无人机 + 机械猫 + 自动贩卖机 + 雨夜霓虹小巷场景。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 2, "subject_concept_images": 7, "scene_concept_images": 2, "target_render_images": 2, "subject_glbs": 4, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1}
+    },
+    {
+      "case_id": "case_07_miniature_japanese_garden",
+      "title": "微缩日式庭院纯场景",
+      "style_type": "微缩场景 / 日式庭院 / 环境主导",
+      "test_focus": ["纯场景生成", "建筑与环境组织", "场景参考图", "非角色主导"],
+      "initial_user_request": "帮我生成一张微缩日式庭院场景的图片。场景中需要有木质茶室、红枫树、石灯笼、鲤鱼池、竹篱笆和碎石小路，整体是安静、精致、适合做 Blender 场景搭建的风格。",
+      "requires_identity_research": false,
+      "reference_slots_round2": [
+        {"slot": "@图片1", "image_id": "image_001", "target_type": "scene", "target_id": "scene_tea_house_structure", "usage": "scene_reference", "description": "茶室结构参考"},
+        {"slot": "@图片2", "image_id": "image_002", "target_type": "layout", "target_id": "scene_japanese_garden_layout", "usage": "layout_reference", "description": "日式庭院布局参考"},
+        {"slot": "@图片3", "image_id": "image_003", "target_type": "style", "target_id": "style_red_maple_atmosphere", "usage": "style_reference", "description": "红枫树氛围参考"}
+      ],
+      "scripted_user_actions": [
+        {"gate": "concept_review_round1", "action": "approve_concept", "text": "同意。整体构图和元素布局我满意。"},
+        {"gate": "model_review_round1", "action": "request_model_changes", "text": "不同意。茶室结构有点复杂，红枫树太散，鲤鱼池和石灯笼比例不太协调。请根据我上传的参考图重新生成，整体再规整一点，场景更适合 3D 落地。另外新增一个主体：木桥，跨在鲤鱼池上方。请根据 @图片1 茶室结构参考、@图片2 日式庭院布局参考、@图片3 红枫树氛围参考，重新生成微缩日式庭院场景图。保留木质茶室、红枫树、石灯笼、鲤鱼池、竹篱笆、碎石小路，并新增木桥。"},
+        {"gate": "concept_review_round2", "action": "approve_concept", "text": "同意。"},
+        {"gate": "model_review_round2", "action": "approve_model_assets", "text": "同意。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 2, "subject_concept_images": 0, "scene_concept_images": 2, "target_render_images": 2, "subject_glbs": 0, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1},
+      "notes": "Pure scene case. Do not force Hunyuan3D subject generation unless the implementation explicitly models selected props as separate assets."
+    },
+    {
+      "case_id": "case_08_industrial_quadruped",
+      "title": "写实工业厂房四足巡检机器人",
+      "style_type": "写实机械 / 工业厂房 / 硬表面建模",
+      "test_focus": ["无参考图机械主体生成", "工业环境组织", "模型阶段返修", "结构语义修正", "新增机械道具"],
+      "initial_user_request": "帮我生成一张写实机械风格的图片。主体是一台四足巡检机器人，正在室内工业厂房里巡检。场景中需要有工具箱、警示路障、工业管线、监控屏幕和金属平台。机器人要有清晰的机身、四条机械腿、关节结构和传感器头部，整体不要太科幻夸张，要像可以真实落地的工业巡检设备。",
+      "requires_identity_research": false,
+      "scripted_user_actions": [
+        {"gate": "concept_review_round1", "action": "approve_concept", "text": "同意。整体方向可以，机器人、厂房和道具元素都能看出来。"},
+        {"gate": "model_review_round1", "action": "request_model_changes", "text": "不同意。模型阶段里机器人的结构不够准确，腿部关节和机身比例不合理，看起来不像稳定的四足巡检机器人。工业厂房的空间也有点空，工具箱、警示路障、管线和监控屏幕之间的关系不够明确。不需要上传参考图，请你直接根据文字重新生成一版概念图。这次要求机器人结构更稳定：机身低一些，四条腿支撑点明确，关节层级清楚，传感器头部不要太大。另外新增一个主体：小型机械臂工作台，放在机器人旁边，作为厂房内正在被巡检的设备。请重新生成一张写实工业厂房场景图。主体包括四足巡检机器人、小型机械臂工作台、工具箱、警示路障、工业管线、监控屏幕和金属平台。机器人需要结构清晰、比例稳定、腿部关节合理；场景需要有真实工业厂房的空间感，灯光偏冷，地面可以有轻微金属反光，但不要过度赛博朋克化。"},
+        {"gate": "concept_review_round2", "action": "approve_concept", "text": "同意。这版机器人结构和厂房布局可以，进入 3D 模型生成与场景搭建。"},
+        {"gate": "model_review_round2", "action": "approve_model_assets", "text": "同意。选择组合所有主体：四足巡检机器人 + 小型机械臂工作台 + 工具箱 + 警示路障 + 工业管线 + 监控屏幕 + 金属平台 + 室内工业厂房场景。"}
+      ],
+      "expected_minimum_counts": {"concept_rounds": 2, "subject_concept_images": 3, "scene_concept_images": 2, "target_render_images": 2, "subject_glbs": 2, "scene_assets": 1, "preview_renders": 1, "viewer_glbs": 1},
+      "notes": "Classify large independent objects such as quadruped robot and mechanical-arm workstation as subject assets. Smaller factory props may belong to the scene asset unless selected for separate modeling."
+    }
+  ]
+}

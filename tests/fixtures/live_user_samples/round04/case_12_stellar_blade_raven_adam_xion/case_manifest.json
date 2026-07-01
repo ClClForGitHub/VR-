@@ -1,0 +1,101 @@
+{
+  "case_id": "case_12_stellar_blade_raven_adam_xion",
+  "category": "aaa_game_full_body_ip_city_center",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 2,
+    "subject_glbs": 2,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "Xion 被袭击后的城市中枢/记忆广场附近，破损金属、红色警报、停电广告屏",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "Raven",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_001"
+      ],
+      "subject_id": "subject_raven_full_body"
+    },
+    {
+      "category": "character",
+      "display_name": "Adam",
+      "needs_3d_asset": true,
+      "reference_image_ids": [
+        "image_002"
+      ],
+      "subject_id": "subject_adam_full_body"
+    }
+  ],
+  "initial_user_request": "帮我生成一张《剑星》IP 的 3A 游戏画面风格图片。\n主体包括 **渡鸦 Raven** 和 **Adam**，要求是 **非Q版、全身角色、3D 游戏角色质感**。\n场景不要普通未来工厂，改成更贴近《剑星》的 **Xion 被袭击后的城市中枢 / 记忆广场附近**。\n画面中可以有地下城市墙体、破损金属结构、警报红光、停电的广告屏、散落设备、燃烧痕迹和远处避难区通道。\n整体要有《剑星》那种末世科幻城市的压迫感，不要赛博朋克霓虹街，也不要普通机库。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [
+    {
+      "declared_target_id": "subject_raven_full_body",
+      "declared_target_type": "subject",
+      "image_id": "image_001",
+      "path": "reference_images/image_001.png",
+      "required_for_generation": true,
+      "slot": "@图片1",
+      "source_text_span": "@图片1",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "subject_adam_full_body",
+      "declared_target_type": "subject",
+      "image_id": "image_002",
+      "path": "reference_images/image_002.png",
+      "required_for_generation": true,
+      "slot": "@图片2",
+      "source_text_span": "@图片2",
+      "upload_stage": "concept_feedback_1",
+      "usage": "subject_reference"
+    },
+    {
+      "declared_target_id": "scene_xion_attacked_city_center",
+      "declared_target_type": "scene",
+      "image_id": "image_003",
+      "path": "reference_images/image_003.png",
+      "required_for_generation": true,
+      "slot": "@图片3",
+      "source_text_span": "@图片3",
+      "upload_stage": "concept_feedback_1",
+      "usage": "scene_reference"
+    }
+  ],
+  "scripted_user_actions": [
+    {
+      "action": "request_concept_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [
+        "image_001",
+        "image_002",
+        "image_003"
+      ],
+      "text": "不同意。角色不够像；上传 Raven、Adam 主体参考和 Xion 城市中枢场景参考。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "用户概念图反馈：同意。这版角色更贴近《剑星》，场景也更像 Xion。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "用户模型反馈：同意。选择组合 Raven + Adam + Xion 场景。"
+    }
+  ],
+  "title": "剑星 Raven 与 Adam 的 Xion 被袭击城市中枢"
+}

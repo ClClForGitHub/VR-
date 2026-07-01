@@ -84,6 +84,12 @@ class FrontendAssetActionPayloadExample(BaseModel):
     label: str | None = None
 
 
+class FrontendUserActionPayloadExample(BaseModel):
+    action_type: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    label: str | None = None
+
+
 class FrontendAssemblyObjectSelectionSummary(BaseModel):
     subject_id: str
     selected_subject_asset_id: str | None = None
@@ -124,6 +130,8 @@ class FrontendStatus(BaseModel):
     concept_requirements: list[FrontendConceptRequirementSummary] = Field(default_factory=list)
     asset_library: list[FrontendAssetLibraryItemSummary] = Field(default_factory=list)
     active_assembly_selection: FrontendAssemblySelectionSummary | None = None
+    available_user_actions: list[str] = Field(default_factory=list)
+    available_user_action_payloads: list[FrontendUserActionPayloadExample] = Field(default_factory=list)
     available_asset_actions: list[str] = Field(default_factory=list)
     available_asset_action_payloads: list[FrontendAssetActionPayloadExample] = Field(default_factory=list)
     scene_spec_summary: FrontendSceneSpecSummary | None = None
@@ -184,6 +192,8 @@ def build_frontend_status(*, state: AgentProjectState, summary: dict[str, Any]) 
         concept_requirements=_concept_requirements(state),
         asset_library=_asset_library(state),
         active_assembly_selection=_active_assembly_selection(state),
+        available_user_actions=_available_user_actions(state),
+        available_user_action_payloads=_available_user_action_payloads(state),
         available_asset_actions=_available_asset_actions(state),
         available_asset_action_payloads=_available_asset_action_payloads(state),
         scene_spec_summary=_scene_spec_summary(state),
@@ -299,6 +309,48 @@ def _available_asset_actions(state: AgentProjectState) -> list[str]:
     if any(item.asset_kind == "subject_model" for item in state.asset_library):
         actions.append("select_asset_for_assembly")
     return actions
+
+
+def _available_user_actions(state: AgentProjectState) -> list[str]:
+    phase_gate = _phase_gate_summary(state)
+    if phase_gate is None:
+        return []
+    action_type = phase_gate["action_type"]
+    if action_type == "approve_concept":
+        return ["approve_concept", "request_concept_changes"]
+    if action_type == "approve_model_assets":
+        return ["approve_model_assets", "request_model_changes"]
+    if action_type == "approve_blender_preview":
+        return ["approve_blender_preview", "request_blender_changes"]
+    return [action_type]
+
+
+def _available_user_action_payloads(state: AgentProjectState) -> list[FrontendUserActionPayloadExample]:
+    actions = _available_user_actions(state)
+    examples: list[FrontendUserActionPayloadExample] = []
+    for action_type in actions:
+        payload: dict[str, Any] = {"action_type": action_type, "rebuild_plan": True}
+        label = action_type
+        if action_type == "approve_concept":
+            payload["note"] = "user accepted concept images"
+            label = "Approve concept"
+        elif action_type == "request_concept_changes":
+            payload["feedback_text"] = "describe concept changes"
+            label = "Request concept changes"
+        elif action_type == "approve_model_assets":
+            payload["note"] = "user accepted generated model assets"
+            label = "Approve model assets"
+        elif action_type == "request_model_changes":
+            payload["feedback_text"] = "describe model-stage problems and requested regeneration"
+            label = "Request model changes"
+        elif action_type == "approve_blender_preview":
+            payload["note"] = "user accepted Blender preview"
+            label = "Approve Blender preview"
+        elif action_type == "request_blender_changes":
+            payload["feedback_text"] = "describe Blender preview changes"
+            label = "Request Blender changes"
+        examples.append(FrontendUserActionPayloadExample(action_type=action_type, payload=payload, label=label))
+    return examples
 
 
 def _available_asset_action_payloads(state: AgentProjectState) -> list[FrontendAssetActionPayloadExample]:
@@ -516,7 +568,17 @@ def _phase_gate_summary(state: AgentProjectState) -> dict[str, str] | None:
             "node": "BlenderPreviewReviewGate",
             "action_type": "approve_blender_preview",
         }
+    if state.phase == WorkflowPhase.SUBJECT_ASSET_QA and _has_subject_model_outputs(state):
+        return {
+            "stage": "model_asset_approval",
+            "node": "ModelAssetReviewGate",
+            "action_type": "approve_model_assets",
+        }
     return None
+
+
+def _has_subject_model_outputs(state: AgentProjectState) -> bool:
+    return bool(state.subject_assets or any(item.asset_kind == "subject_model" for item in state.asset_library))
 
 
 def _progress_label(

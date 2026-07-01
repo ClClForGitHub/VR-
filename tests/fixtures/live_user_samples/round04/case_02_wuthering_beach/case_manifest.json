@@ -1,0 +1,80 @@
+{
+  "case_id": "case_02_wuthering_beach",
+  "category": "q_chibi_anime_beach_multi_character",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 4,
+    "subject_glbs": 4,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "沙滩场景，含沙滩椅、螃蟹、沙堆城堡",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "Q版菲比",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_phoebe_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版弗洛洛",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_florollo_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "Q版达妮娅",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_daniya_chibi"
+    },
+    {
+      "category": "character",
+      "display_name": "终末地女管理员二创角色咕咕嘎嘎",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_gugugaga_endfield_admin"
+    }
+  ],
+  "initial_user_request": "帮我生成一张 **鸣潮 IP 游戏** 的角色 **Q版菲比**、**Q版弗洛洛** 和 **Q版达妮娅** 在 **沙滩场景** 的图片，旁边有沙滩椅、螃蟹、沙堆城堡等背景。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [],
+  "scripted_user_actions": [
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "同意。"
+    },
+    {
+      "action": "request_model_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "不同意。角色模型失真严重，概念图要重新生成；新增终末地女管理员二创角色咕咕嘎嘎。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户概念图反馈：同意。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户模型反馈：同意。"
+    }
+  ],
+  "title": "鸣潮 Q版多人沙滩新增终末地角色"
+}

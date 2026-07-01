@@ -1,0 +1,80 @@
+{
+  "case_id": "case_05_xianxia_original",
+  "category": "original_xianxia_fantasy_scene",
+  "expected_minimum_counts": {
+    "concept_rounds": 2,
+    "preview_renders": 1,
+    "scene_assets": 1,
+    "scene_concept_images": 1,
+    "subject_concept_images": 4,
+    "subject_glbs": 4,
+    "target_render_images": 1,
+    "viewer_glbs": 1
+  },
+  "expected_scene": "悬崖边道观，云海日出，松树山石符纸",
+  "expected_subjects": [
+    {
+      "category": "character",
+      "display_name": "年轻女性剑修",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_female_sword_cultivator"
+    },
+    {
+      "category": "animal",
+      "display_name": "白狐灵宠",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_white_fox_spirit_pet"
+    },
+    {
+      "category": "animal",
+      "display_name": "青鸾",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_blue_luan_bird"
+    },
+    {
+      "category": "prop",
+      "display_name": "石灯笼",
+      "needs_3d_asset": true,
+      "reference_image_ids": [],
+      "subject_id": "subject_stone_lantern"
+    }
+  ],
+  "initial_user_request": "帮我生成一张 **原创国风仙侠风格** 的图片：\n主体包括 **一名年轻女性剑修**、**一只白狐灵宠**、**一只青鸾**，场景是 **悬崖边的道观**，远处有云海和日出，周围有松树、山石和飘动的符纸。",
+  "parse_notes": [],
+  "raw_sample_source": "/home/team/zouzhiyuan/image23D_Agent/docs/test/测试样例/测试样例.md",
+  "reference_images": [],
+  "scripted_user_actions": [
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "同意。整体气质和构图我满意。"
+    },
+    {
+      "action": "request_model_changes",
+      "expected_next_phase": "CONCEPT_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "不同意。服装层次太复杂、发饰太碎、青鸾不稳定；简化设计并新增石灯笼。"
+    },
+    {
+      "action": "approve_concept",
+      "expected_next_phase": "SUBJECT_ASSET_GENERATION",
+      "gate": "concept_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户概念图反馈：同意。现在更适合落地成 3D 模型了。"
+    },
+    {
+      "action": "approve_model_assets",
+      "expected_next_phase": "SCENE_ASSET_GENERATION",
+      "gate": "model_review",
+      "reference_image_ids": [],
+      "text": "第二轮用户模型反馈：同意。"
+    }
+  ],
+  "title": "原创国风仙侠悬崖道观"
+}
