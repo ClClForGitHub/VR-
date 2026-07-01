@@ -62,6 +62,42 @@ class FrontendSceneSpecSummary(BaseModel):
     reference_bound_subject_ids: list[str] = Field(default_factory=list)
 
 
+class FrontendAssetLibraryItemSummary(BaseModel):
+    library_item_id: str
+    artifact_id: str
+    asset_kind: str
+    subject_id: str | None = None
+    scene_id: str | None = None
+    requirement_id: str | None = None
+    review_status: str
+    selection_status: str
+    source_artifact_ids: list[str] = Field(default_factory=list)
+    derived_artifact_ids: list[str] = Field(default_factory=list)
+    user_notes: str | None = None
+    generation_round: int = 1
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FrontendAssemblyObjectSelectionSummary(BaseModel):
+    subject_id: str
+    selected_subject_asset_id: str | None = None
+    source_concept_image_id: str | None = None
+    placement_hint: dict[str, Any] = Field(default_factory=dict)
+
+
+class FrontendAssemblySelectionSummary(BaseModel):
+    selection_id: str
+    version: int
+    selected_subject_assets: dict[str, str] = Field(default_factory=dict)
+    selected_scene_asset_id: str | None = None
+    selected_scene_concept_image_id: str | None = None
+    selected_target_render_image_id: str | None = None
+    object_placements: list[FrontendAssemblyObjectSelectionSummary] = Field(default_factory=list)
+    source_turn_id: str | None = None
+    updated_at: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class FrontendStatus(BaseModel):
     project_id: str
     thread_id: str
@@ -80,6 +116,9 @@ class FrontendStatus(BaseModel):
     artifact_ids: list[str] = Field(default_factory=list)
     subject_asset_ids: list[str] = Field(default_factory=list)
     concept_requirements: list[FrontendConceptRequirementSummary] = Field(default_factory=list)
+    asset_library: list[FrontendAssetLibraryItemSummary] = Field(default_factory=list)
+    active_assembly_selection: FrontendAssemblySelectionSummary | None = None
+    available_asset_actions: list[str] = Field(default_factory=list)
     scene_spec_summary: FrontendSceneSpecSummary | None = None
     review_patch_ids: list[str] = Field(default_factory=list)
     scene_asset_id: str | None = None
@@ -136,6 +175,9 @@ def build_frontend_status(*, state: AgentProjectState, summary: dict[str, Any]) 
         artifact_ids=sorted(state.artifact_ids()),
         subject_asset_ids=_subject_asset_ids(state),
         concept_requirements=_concept_requirements(state),
+        asset_library=_asset_library(state),
+        active_assembly_selection=_active_assembly_selection(state),
+        available_asset_actions=_available_asset_actions(state),
         scene_spec_summary=_scene_spec_summary(state),
         review_patch_ids=[patch.patch_id for patch in state.review_patches],
         scene_asset_id=_scene_asset_id(state),
@@ -191,6 +233,64 @@ def _concept_requirements(state: AgentProjectState) -> list[FrontendConceptRequi
             )
         )
     return output
+
+
+def _asset_library(state: AgentProjectState) -> list[FrontendAssetLibraryItemSummary]:
+    return [
+        FrontendAssetLibraryItemSummary(
+            library_item_id=item.library_item_id,
+            artifact_id=item.artifact_id,
+            asset_kind=item.asset_kind,
+            subject_id=item.subject_id,
+            scene_id=item.scene_id,
+            requirement_id=item.requirement_id,
+            review_status=item.review_status,
+            selection_status=item.selection_status,
+            source_artifact_ids=list(item.source_artifact_ids),
+            derived_artifact_ids=list(item.derived_artifact_ids),
+            user_notes=item.user_notes,
+            generation_round=item.generation_round,
+            metadata=dict(item.metadata),
+        )
+        for item in state.asset_library
+    ]
+
+
+def _active_assembly_selection(state: AgentProjectState) -> FrontendAssemblySelectionSummary | None:
+    selection = state.active_assembly_selection
+    if selection is None:
+        return None
+    return FrontendAssemblySelectionSummary(
+        selection_id=selection.selection_id,
+        version=selection.version,
+        selected_subject_assets=dict(selection.selected_subject_assets),
+        selected_scene_asset_id=selection.selected_scene_asset_id,
+        selected_scene_concept_image_id=selection.selected_scene_concept_image_id,
+        selected_target_render_image_id=selection.selected_target_render_image_id,
+        object_placements=[
+            FrontendAssemblyObjectSelectionSummary(
+                subject_id=item.subject_id,
+                selected_subject_asset_id=item.selected_subject_asset_id,
+                source_concept_image_id=item.source_concept_image_id,
+                placement_hint=dict(item.placement_hint),
+            )
+            for item in selection.object_placements
+        ],
+        source_turn_id=selection.source_turn_id,
+        updated_at=selection.updated_at,
+        metadata=dict(selection.metadata),
+    )
+
+
+def _available_asset_actions(state: AgentProjectState) -> list[str]:
+    actions = []
+    if state.asset_library:
+        actions.append("set_asset_review_status")
+    if any(item.asset_kind == "subject_concept" for item in state.asset_library):
+        actions.append("select_concept_for_subject_generation")
+    if any(item.asset_kind == "subject_model" for item in state.asset_library):
+        actions.append("select_asset_for_assembly")
+    return actions
 
 
 def _concept_ready_artifacts(state: AgentProjectState) -> dict[tuple[str, str | None], list[str]]:

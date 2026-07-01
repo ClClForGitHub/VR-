@@ -12,6 +12,11 @@ from pydantic import BaseModel, Field
 from agent_runtime.artifacts import FileArtifactStore, utc_now_iso
 from agent_runtime.frontend_status import build_frontend_status
 from agent_runtime.persistence import FileStateCheckpointStore
+from agent_runtime.runtime_asset_actions import (
+    add_derived_artifact_link,
+    selected_subject_concept_artifact_id,
+    upsert_asset_library_item,
+)
 from agent_runtime.runtime_delegation import RuntimeDelegatedHandoffRecord, read_runtime_handoff_records
 from agent_runtime.runtime_dispatch import build_and_save_runtime_dispatch_plan
 from agent_runtime.scene_assets import register_worldmirror_output
@@ -169,9 +174,10 @@ def apply_concept_handoff_result(
             checkpoint_id=checkpoint.checkpoint_id,
             runtime_plan_json=plan_path,
             artifact_ids=[artifact.artifact_id for artifact in artifacts],
-            applied_fields=["artifacts", "concept_bundle", "phase"],
+            applied_fields=["artifacts", "concept_bundle", "asset_library", "phase"],
             result_summary={
                 "artifact_count": len(artifacts),
+                "asset_library_count": len(updated.asset_library),
                 "next_phase": updated.phase.value,
                 "concept_version": updated.concept_bundle.concept_version if updated.concept_bundle is not None else None,
             },
@@ -265,9 +271,10 @@ def apply_subject_asset_handoff_result(
             checkpoint_id=checkpoint.checkpoint_id,
             runtime_plan_json=plan_path,
             artifact_ids=[artifact.artifact_id for artifact in artifacts],
-            applied_fields=["artifacts", "subject_assets", "phase"],
+            applied_fields=["artifacts", "subject_assets", "asset_library", "phase"],
             result_summary={
                 "artifact_count": len(artifacts),
+                "asset_library_count": len(updated.asset_library),
                 "next_phase": updated.phase.value,
                 "subject_asset_count": len(updated.subject_assets),
             },
@@ -361,9 +368,10 @@ def apply_scene_asset_handoff_result(
             checkpoint_id=checkpoint.checkpoint_id,
             runtime_plan_json=plan_path,
             artifact_ids=[artifact.artifact_id for artifact in artifacts],
-            applied_fields=["artifacts", "scene_asset", "phase"],
+            applied_fields=["artifacts", "scene_asset", "asset_library", "phase"],
             result_summary={
                 "artifact_count": len(artifacts),
+                "asset_library_count": len(updated.asset_library),
                 "next_phase": updated.phase.value,
                 "scene_asset_id": updated.scene_asset.scene_asset_id if updated.scene_asset is not None else None,
                 "scene_asset_status": updated.scene_asset.status if updated.scene_asset is not None else None,
@@ -454,9 +462,10 @@ def apply_blender_assembly_result(
             checkpoint_id=checkpoint.checkpoint_id,
             runtime_plan_json=plan_path,
             artifact_ids=[artifact.artifact_id for artifact in artifacts],
-            applied_fields=["artifacts", "blender_scene", "viewer_scene", "phase"],
+            applied_fields=["artifacts", "blender_scene", "viewer_scene", "asset_library", "phase"],
             result_summary={
                 "artifact_count": len(artifacts),
+                "asset_library_count": len(updated.asset_library),
                 "next_phase": updated.phase.value,
                 "blender_scene_id": updated.blender_scene.blender_scene_id if updated.blender_scene is not None else None,
                 "viewer_scene_id": updated.viewer_scene.viewer_scene_id if updated.viewer_scene is not None else None,
@@ -524,6 +533,9 @@ def _apply_concept_images(
         raise ValueError("state.concept_bundle is required before applying concept image results")
     store = FileArtifactStore(run_dir / "artifacts")
     artifacts = []
+    asset_library = list(state.asset_library)
+    requirement_by_id = _concept_requirement_by_id(state)
+    requirement_artifact_by_id: dict[str, str] = {}
     subject_images = {key: list(value) for key, value in state.concept_bundle.subject_concept_images.items()}
     scene_images = list(state.concept_bundle.scene_concept_image_ids)
     final_preview = state.concept_bundle.final_preview_image_id
@@ -550,7 +562,64 @@ def _apply_concept_images(
                 **result.metadata,
             },
         )
+        if output_type == "subject_concept":
+            artifact.linked_subject_id = subject_id
+        elif output_type in {"scene_concept", "target_render"}:
+            artifact.linked_scene_id = result.target_id or (state.scene_spec.scene_id if state.scene_spec is not None else None)
         artifacts.append(artifact)
+        requirement = requirement_by_id.get(result.requirement_id or "")
+        source_requirement_ids = _string_list(
+            result.metadata.get("source_requirement_ids")
+            if "source_requirement_ids" in result.metadata
+            else requirement.source_requirement_ids if requirement is not None else []
+        )
+        input_reference_image_ids = _string_list(
+            result.metadata.get("input_reference_image_ids")
+            if "input_reference_image_ids" in result.metadata
+            else requirement.input_reference_image_ids if requirement is not None else []
+        )
+        source_artifact_ids = _unique(
+            [
+                *_string_list(result.metadata.get("source_artifact_ids")),
+                *_input_image_artifact_ids(state, input_reference_image_ids),
+                *[
+                    requirement_artifact_by_id[source_id]
+                    for source_id in source_requirement_ids
+                    if source_id in requirement_artifact_by_id
+                ],
+            ]
+        )
+        generation_mode = (
+            result.metadata.get("generation_mode")
+            or requirement.generation_mode if requirement is not None else None
+        )
+        asset_library = upsert_asset_library_item(
+            asset_library,
+            artifact_id=artifact.artifact_id,
+            asset_kind=output_type,
+            subject_id=subject_id if output_type == "subject_concept" else None,
+            scene_id=result.target_id or (state.scene_spec.scene_id if state.scene_spec is not None else None),
+            requirement_id=result.requirement_id,
+            source_artifact_ids=source_artifact_ids,
+            generation_round=state.concept_bundle.concept_version,
+            metadata={
+                "handoff_id": handoff.handoff_id,
+                "execution_id": handoff.execution_id,
+                "output_type": output_type,
+                "generation_mode": generation_mode,
+                "input_reference_image_ids": input_reference_image_ids,
+                "source_requirement_ids": source_requirement_ids,
+                "quality_bar": requirement.quality_bar if requirement is not None else None,
+            },
+        )
+        for source_artifact_id in source_artifact_ids:
+            asset_library = add_derived_artifact_link(
+                asset_library,
+                source_artifact_id=source_artifact_id,
+                derived_artifact_id=artifact.artifact_id,
+            )
+        if result.requirement_id:
+            requirement_artifact_by_id[result.requirement_id] = artifact.artifact_id
         if output_type == "subject_concept":
             subject_images.setdefault(subject_id, []).append(artifact.artifact_id)
             if result.final_preview or final_preview is None:
@@ -575,6 +644,7 @@ def _apply_concept_images(
         updates={
             "artifacts": [*state.artifacts, *artifacts],
             "concept_bundle": concept_bundle,
+            "asset_library": asset_library,
             "phase": WorkflowPhase.CONCEPT_REVIEW,
         },
     )
@@ -597,6 +667,105 @@ def _semantic_role_for_concept_output(output_type: str) -> str:
     return "subject_concept_image"
 
 
+def _concept_requirement_by_id(state: AgentProjectState) -> dict[str, Any]:
+    if state.concept_bundle is None or state.concept_bundle.prompt_pack is None:
+        return {}
+    return {
+        requirement.requirement_id: requirement
+        for requirement in state.concept_bundle.prompt_pack.image_requirements
+    }
+
+
+def _input_image_artifact_ids(state: AgentProjectState, image_ids: list[str]) -> list[str]:
+    by_id = {image.image_id: image.artifact_id for image in state.input_images}
+    return [by_id[image_id] for image_id in image_ids if image_id in by_id]
+
+
+def _asset_library_with_blender_outputs(
+    state: AgentProjectState,
+    *,
+    result_artifacts: list[ArtifactRecord],
+    preview_artifact_id: str | None,
+):
+    source_artifact_ids = _assembly_selection_source_artifact_ids(state)
+    asset_library = list(state.asset_library)
+    for artifact in result_artifacts:
+        if artifact.artifact_type == ArtifactType.BLENDER_FILE:
+            asset_library = upsert_asset_library_item(
+                asset_library,
+                artifact_id=artifact.artifact_id,
+                asset_kind="blender_scene",
+                scene_id=state.scene_spec.scene_id if state.scene_spec is not None else None,
+                source_artifact_ids=source_artifact_ids,
+                metadata={"stage": "runtime_handoff_apply", "selection_source": "active_assembly_selection"},
+            )
+        elif artifact.artifact_type in {ArtifactType.VIEWER_SCENE_GLB, ArtifactType.VIEWER_SCENE_GLTF}:
+            asset_library = upsert_asset_library_item(
+                asset_library,
+                artifact_id=artifact.artifact_id,
+                asset_kind="viewer_scene",
+                scene_id=state.scene_spec.scene_id if state.scene_spec is not None else None,
+                source_artifact_ids=source_artifact_ids,
+                metadata={"stage": "runtime_handoff_apply", "selection_source": "active_assembly_selection"},
+            )
+        elif artifact.artifact_id == preview_artifact_id:
+            asset_library = upsert_asset_library_item(
+                asset_library,
+                artifact_id=artifact.artifact_id,
+                asset_kind="target_render",
+                scene_id=state.scene_spec.scene_id if state.scene_spec is not None else None,
+                source_artifact_ids=source_artifact_ids,
+                metadata={"stage": "runtime_handoff_apply", "preview_source": "blender_render"},
+            )
+        else:
+            continue
+        for source_artifact_id in source_artifact_ids:
+            asset_library = add_derived_artifact_link(
+                asset_library,
+                source_artifact_id=source_artifact_id,
+                derived_artifact_id=artifact.artifact_id,
+            )
+    return asset_library
+
+
+def _assembly_selection_source_artifact_ids(state: AgentProjectState) -> list[str]:
+    selection = state.active_assembly_selection
+    if selection is None:
+        source_ids = []
+        source_ids.extend(asset.asset_id for asset in state.subject_assets if asset.asset_id)
+        if state.scene_asset is not None:
+            source_ids.extend(state.scene_asset.adapted_artifact_ids)
+        return _unique(source_ids)
+    source_ids = list(selection.selected_subject_assets.values())
+    if selection.selected_scene_asset_id:
+        source_ids.append(selection.selected_scene_asset_id)
+    if selection.selected_scene_concept_image_id:
+        source_ids.append(selection.selected_scene_concept_image_id)
+    if selection.selected_target_render_image_id:
+        source_ids.append(selection.selected_target_render_image_id)
+    for item in selection.object_placements:
+        if item.source_concept_image_id:
+            source_ids.append(item.source_concept_image_id)
+    return _unique(source_ids)
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item]
+
+
+def _unique(values: list[str]) -> list[str]:
+    output = []
+    seen = set()
+    for value in values:
+        if not value or value in seen:
+            continue
+        output.append(value)
+        seen.add(value)
+    return output
+
+
 def _apply_subject_assets(
     run_dir: Path,
     *,
@@ -609,9 +778,10 @@ def _apply_subject_assets(
     store = FileArtifactStore(run_dir / "artifacts")
     artifacts = []
     assets_by_id = {asset.asset_id: asset for asset in state.subject_assets}
+    asset_library = list(state.asset_library)
     subject_prompt_images = state.concept_bundle.subject_concept_images if state.concept_bundle is not None else {}
     for result in asset_results:
-        source_image_id = result.source_image_id
+        source_image_id = result.source_image_id or selected_subject_concept_artifact_id(state, result.subject_id)
         if source_image_id is None:
             source_image_id = (subject_prompt_images.get(result.subject_id) or ["manual_source"])[-1]
         asset_id = result.asset_id or f"asset_{result.subject_id}_{uuid4().hex[:8]}"
@@ -629,7 +799,27 @@ def _apply_subject_assets(
                 **result.metadata,
             },
         )
+        artifact.linked_subject_id = result.subject_id
         artifacts.append(artifact)
+        asset_library = upsert_asset_library_item(
+            asset_library,
+            artifact_id=artifact.artifact_id,
+            asset_kind="subject_model",
+            subject_id=result.subject_id,
+            source_artifact_ids=[source_image_id] if source_image_id else [],
+            metadata={
+                "handoff_id": handoff.handoff_id,
+                "execution_id": handoff.execution_id,
+                "service": result.service,
+                "job_id": result.job_id or handoff.job_id,
+            },
+        )
+        if source_image_id:
+            asset_library = add_derived_artifact_link(
+                asset_library,
+                source_artifact_id=source_image_id,
+                derived_artifact_id=artifact.artifact_id,
+            )
         assets_by_id[asset_id] = Asset3DRecord(
             asset_id=asset_id,
             subject_id=result.subject_id,
@@ -650,6 +840,7 @@ def _apply_subject_assets(
         updates={
             "artifacts": [*state.artifacts, *artifacts],
             "subject_assets": list(assets_by_id.values()),
+            "asset_library": asset_library,
             "phase": WorkflowPhase.SUBJECT_ASSET_QA,
         },
     )
@@ -695,7 +886,36 @@ def _apply_scene_assets(
                     **result.metadata,
                 }
             )
+            artifact.linked_scene_id = updated.scene_spec.scene_id if updated.scene_spec is not None else None
         new_artifacts.extend(after_artifacts)
+        asset_library = list(updated.asset_library)
+        for artifact in after_artifacts:
+            if updated.scene_asset is not None and artifact.artifact_id not in updated.scene_asset.adapted_artifact_ids:
+                continue
+            asset_library = upsert_asset_library_item(
+                asset_library,
+                artifact_id=artifact.artifact_id,
+                asset_kind="scene_asset",
+                scene_id=updated.scene_spec.scene_id if updated.scene_spec is not None else scene_asset_id,
+                source_artifact_ids=result.source_scene_concept_image_ids,
+                metadata={
+                    "handoff_id": handoff.handoff_id,
+                    "execution_id": handoff.execution_id,
+                    "scene_asset_id": scene_asset_id,
+                    "source_prompt": source_prompt,
+                },
+            )
+            for source_artifact_id in result.source_scene_concept_image_ids:
+                asset_library = add_derived_artifact_link(
+                    asset_library,
+                    source_artifact_id=source_artifact_id,
+                    derived_artifact_id=artifact.artifact_id,
+                )
+        updated = apply_state_updates(
+            updated,
+            node_name="SceneAssetAdapter",
+            updates={"asset_library": asset_library},
+        )
     updated = apply_state_updates(
         updated,
         node_name="SceneAssetGenerationExecutor",
@@ -801,6 +1021,17 @@ def _apply_blender_outputs(
             updates={
                 "viewer_scene": viewer_scene,
                 "phase": WorkflowPhase.BLENDER_PREVIEW,
+            },
+        )
+        updated = apply_state_updates(
+            updated,
+            node_name="BlenderAssemblyResultIngestor",
+            updates={
+                "asset_library": _asset_library_with_blender_outputs(
+                    updated,
+                    result_artifacts=result_artifacts,
+                    preview_artifact_id=preview_artifact.artifact_id if preview_artifact is not None else None,
+                )
             },
         )
         artifacts.extend(result_artifacts)

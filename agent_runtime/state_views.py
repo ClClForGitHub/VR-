@@ -76,6 +76,20 @@ CONTROLLED_STATE_FIELD_OWNERS: dict[str, frozenset[str]] = {
             "FrontendInteractionAdapter",
         }
     ),
+    "asset_library": frozenset(
+        {
+            "ImageGenerationExecutor",
+            "SubjectAssetGenerationExecutor",
+            "SceneAssetAdapter",
+            "BlenderAssemblyResultIngestor",
+            "RuntimeAssetAction",
+        }
+    ),
+    "active_assembly_selection": frozenset(
+        {
+            "RuntimeAssetAction",
+        }
+    ),
 }
 
 

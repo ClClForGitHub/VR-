@@ -18,6 +18,7 @@ from agent_runtime.runtime_delegation import read_runtime_handoff_summary
 from agent_runtime.runtime_execution import read_runtime_execution_summary
 from agent_runtime.runtime_handoff_apply import read_runtime_handoff_apply_summary
 from agent_runtime.runtime_loop import read_runtime_loop_summary
+from agent_runtime.runtime_asset_actions import read_runtime_asset_action_summary
 from agent_runtime.runtime_state_apply import read_runtime_apply_summary
 from agent_runtime.runtime_user_actions import read_runtime_user_action_summary
 from agent_runtime.runtime_worker import read_runtime_worker_summary
@@ -93,6 +94,7 @@ class RuntimeRunBundle(BaseModel):
     runtime_handoff_apply_summary: dict[str, Any] | None = None
     runtime_worker_summary: dict[str, Any] | None = None
     runtime_user_action_summary: dict[str, Any] | None = None
+    runtime_asset_action_summary: dict[str, Any] | None = None
     web_surface: RuntimeWebSurface | None = None
     file_manifest: RuntimeRunFileManifest | None = None
     missing_files: list[str] = Field(default_factory=list)
@@ -144,6 +146,7 @@ def build_runtime_run_bundle(
     runtime_handoff_apply_summary = read_runtime_handoff_apply_summary(control_path)
     runtime_worker_summary = read_runtime_worker_summary(control_path)
     runtime_user_action_summary = read_runtime_user_action_summary(control_path)
+    runtime_asset_action_summary = read_runtime_asset_action_summary(control_path)
     manifest = _build_file_manifest(
         run_dir=path,
         control_run_dir=control_path,
@@ -185,6 +188,7 @@ def build_runtime_run_bundle(
         runtime_handoff_apply_summary=_rewrite_urls(runtime_handoff_apply_summary, url_config),
         runtime_worker_summary=_rewrite_urls(runtime_worker_summary, url_config),
         runtime_user_action_summary=_rewrite_urls(runtime_user_action_summary, url_config),
+        runtime_asset_action_summary=_rewrite_urls(runtime_asset_action_summary, url_config),
         web_surface=web_surface,
         file_manifest=manifest,
         missing_files=missing,
@@ -429,6 +433,8 @@ def _build_file_manifest(
         ("runtime_worker_summary", "json", control_run_dir / "runtime_worker_summary.json"),
         ("runtime_user_action", "jsonl", control_run_dir / "runtime_user_action.jsonl"),
         ("runtime_user_action_summary", "json", control_run_dir / "runtime_user_action_summary.json"),
+        ("runtime_asset_action", "jsonl", control_run_dir / "runtime_asset_action.jsonl"),
+        ("runtime_asset_action_summary", "json", control_run_dir / "runtime_asset_action_summary.json"),
         ("runtime_handoff_apply", "jsonl", control_run_dir / "runtime_handoff_apply.jsonl"),
         ("runtime_handoff_apply_summary", "json", control_run_dir / "runtime_handoff_apply_summary.json"),
         ("chat", "jsonl", control_run_dir / "runtime_console" / "chat.jsonl"),

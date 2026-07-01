@@ -592,6 +592,68 @@ class BlenderAssemblyPlan(BaseModel):
     notes: str | None = None
 
 
+class AssetLibraryItem(BaseModel):
+    library_item_id: str
+    artifact_id: str
+    asset_kind: Literal[
+        "input_image",
+        "subject_concept",
+        "scene_concept",
+        "target_render",
+        "subject_model",
+        "scene_asset",
+        "blender_scene",
+        "viewer_scene",
+        "delivery_package",
+    ]
+    subject_id: str | None = None
+    scene_id: str | None = None
+    requirement_id: str | None = None
+    source_artifact_ids: list[str] = Field(default_factory=list)
+    derived_artifact_ids: list[str] = Field(default_factory=list)
+    generation_round: int = 1
+    review_status: Literal["new", "liked", "rejected", "archived", "superseded"] = "new"
+    selection_status: Literal[
+        "available",
+        "selected_for_model_generation",
+        "selected_for_scene_generation",
+        "selected_for_assembly",
+        "used_in_delivery",
+    ] = "available"
+    user_notes: str | None = None
+    created_at: str
+    updated_at: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("generation_round")
+    def generation_round_is_positive(cls, value: int) -> int:
+        return _validate_positive_version(value)
+
+
+class AssemblyObjectSelection(BaseModel):
+    subject_id: str
+    selected_subject_asset_id: str | None = None
+    source_concept_image_id: str | None = None
+    placement_hint: dict[str, Any] = Field(default_factory=dict)
+
+
+class AssemblySelection(BaseModel):
+    selection_id: str
+    version: int = 1
+    selected_subject_assets: dict[str, str] = Field(default_factory=dict)
+    selected_scene_asset_id: str | None = None
+    selected_scene_concept_image_id: str | None = None
+    selected_target_render_image_id: str | None = None
+    object_placements: list[AssemblyObjectSelection] = Field(default_factory=list)
+    source_turn_id: str | None = None
+    updated_at: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("version")
+    def version_is_positive(cls, value: int) -> int:
+        return _validate_positive_version(value)
+
+
 class SceneInterpreterContext(BaseModel):
     user_text: str
     input_images: list[InputImage]
@@ -686,6 +748,8 @@ class AgentProjectState(BaseModel):
     blender_scene: BlenderSceneState | None = None
     viewer_scene: ViewerSceneState | None = None
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
+    asset_library: list[AssetLibraryItem] = Field(default_factory=list)
+    active_assembly_selection: AssemblySelection | None = None
     pending_action: PendingAction | None = None
     last_error: WorkflowError | None = None
     tool_call_log: list[ToolCallRecord] = Field(default_factory=list)

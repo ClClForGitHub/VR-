@@ -135,6 +135,7 @@ def _create_handoff_record(
     input_files = _input_files(run_dir)
     expected_outputs = _expected_outputs(execution)
     concept_generation = _concept_generation_handoff_payload(state, execution)
+    selected_subject_concepts = _selected_subject_concept_prompt_snapshot(state)
     payload = {
         "handoff_id": handoff_id,
         "created_at": utc_now_iso(),
@@ -153,6 +154,8 @@ def _create_handoff_record(
     }
     if concept_generation is not None:
         payload["concept_generation"] = concept_generation
+    if selected_subject_concepts:
+        payload["selected_subject_concepts"] = selected_subject_concepts
     handoff_path = run_dir / "runtime_handoff" / f"{handoff_id}.json"
     _write_json(handoff_path, payload)
     return RuntimeDelegatedHandoffRecord(
@@ -175,6 +178,7 @@ def _create_handoff_record(
             "has_prompt_pack": state.concept_bundle is not None and state.concept_bundle.prompt_pack is not None,
             "has_runtime_job_snapshot": payload["runtime_job"] is not None,
             "concept_requirement_count": len(concept_generation.get("requirements", [])) if concept_generation else 0,
+            "selected_subject_concept_count": len(selected_subject_concepts),
         },
     )
 
@@ -196,6 +200,8 @@ def _input_files(run_dir: Path) -> list[str]:
         run_dir / "runtime_plan.json",
         run_dir / "runtime_execution.jsonl",
         run_dir / "runtime_apply.jsonl",
+        run_dir / "runtime_asset_action.jsonl",
+        run_dir / "runtime_asset_action_summary.json",
         run_dir / "frontend_status.json",
     ]
     return [str(path) for path in candidates if path.exists()]
@@ -304,6 +310,7 @@ def _task_prompt(
                 else None
             ),
             "concept_artifacts": _artifact_prompt_snapshot(state, semantic_role="subject_concept_image"),
+            "selected_subject_concepts": _selected_subject_concept_prompt_snapshot(state),
             "runtime_execution": {
                 "job_id": execution.job_id,
                 "domain_tool_name": execution.domain_tool_name,
@@ -316,7 +323,7 @@ def _task_prompt(
             "\n"
             "Task:\n"
             "- Generate or submit 3D subject GLB assets for the SceneSpec subjects below.\n"
-            "- Use the approved concept image artifact URI(s) as the source image input for Hunyuan3D.\n"
+            "- Use selected_subject_concepts as the source image input for Hunyuan3D when present; otherwise use the approved concept image artifact URI(s).\n"
             "- Prefer the runtime job's Hunyuan3D profile/command hint; keep profile overrides explicit in your result.\n"
             "- If live generation is submitted asynchronously, return the service job id and status evidence.\n"
             "- If a completed GLB is available, return the GLB path, asset id, subject id, and QA evidence for handoff-apply.\n"
@@ -560,6 +567,32 @@ def _artifact_prompt_snapshot(state: AgentProjectState, *, semantic_role: str | 
         }
         for artifact in artifacts
     ]
+
+
+def _selected_subject_concept_prompt_snapshot(state: AgentProjectState) -> list[dict[str, Any]]:
+    artifacts_by_id = {artifact.artifact_id: artifact for artifact in state.artifacts}
+    output = []
+    for item in state.asset_library:
+        if item.asset_kind != "subject_concept":
+            continue
+        if item.selection_status != "selected_for_model_generation":
+            continue
+        artifact = artifacts_by_id.get(item.artifact_id)
+        output.append(
+            {
+                "subject_id": item.subject_id,
+                "artifact_id": item.artifact_id,
+                "uri": artifact.uri if artifact is not None else None,
+                "mime_type": artifact.mime_type if artifact is not None else None,
+                "review_status": item.review_status,
+                "selection_status": item.selection_status,
+                "requirement_id": item.requirement_id,
+                "source_artifact_ids": list(item.source_artifact_ids),
+                "user_notes": item.user_notes,
+                "metadata": dict(item.metadata),
+            }
+        )
+    return output
 
 
 def _select_delegated_execution(

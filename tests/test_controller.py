@@ -1,6 +1,7 @@
 from agent_runtime.controller import build_controller_plan
 from agent_runtime.state import (
     AgentProjectState,
+    AssemblySelection,
     ArtifactRecord,
     ArtifactType,
     Asset3DRecord,
@@ -262,6 +263,70 @@ def test_controller_executes_existing_blender_assembly_plan_with_import_scene_as
         "subject_id": "subject_robot",
         "subject_asset_id": "asset_robot",
     }
+
+
+def test_controller_blender_payload_prefers_active_assembly_selection() -> None:
+    state = AgentProjectState(
+        project_id="project_001",
+        thread_id="thread_001",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=_scene_spec(),
+        blender_assembly_plan=BlenderAssemblyPlan(
+            plan_id="assembly_plan_001",
+            placement_plans=[{"subject_id": "subject_robot", "target_region": "center"}],
+        ),
+        subject_assets=[
+            Asset3DRecord(
+                asset_id="asset_robot_v1",
+                subject_id="subject_robot",
+                source_image_id="concept_a",
+                glb_uri="/tmp/robot_v1.glb",
+                status="succeeded",
+            ),
+            Asset3DRecord(
+                asset_id="asset_robot_v2",
+                subject_id="subject_robot",
+                source_image_id="concept_b",
+                glb_uri="/tmp/robot_v2.glb",
+                status="succeeded",
+            ),
+        ],
+        scene_asset=Scene3DRecord(
+            scene_asset_id="scene_record_001",
+            service="hy_world",
+            raw_output_type="mesh",
+            adapted_artifact_ids=["scene_asset_v1"],
+            blender_import_mode="mesh_import",
+            status="adapted",
+        ),
+        active_assembly_selection=AssemblySelection(
+            selection_id="assembly_selection_001",
+            selected_subject_assets={"subject_robot": "asset_robot_v2"},
+            selected_scene_asset_id="scene_asset_v1",
+            selected_target_render_image_id="target_render_001",
+            object_placements=[
+                {
+                    "subject_id": "subject_robot",
+                    "selected_subject_asset_id": "asset_robot_v2",
+                    "source_concept_image_id": "concept_b",
+                    "placement_hint": {"target_region": "front_right"},
+                }
+            ],
+            updated_at="2026-07-01T00:00:00Z",
+        ),
+    )
+
+    plan = build_controller_plan(state)
+    payload = plan.actions[0].payload
+
+    assert plan.actions[0].domain_tool_name == "import_scene_asset"
+    assert payload["active_assembly_selection_id"] == "assembly_selection_001"
+    assert payload["selected_subject_assets"] == {"subject_robot": "asset_robot_v2"}
+    assert payload["scene_asset_id"] == "scene_asset_v1"
+    assert payload["subject_id"] == "subject_robot"
+    assert payload["subject_asset_id"] == "asset_robot_v2"
+    assert payload["selected_target_render_image_id"] == "target_render_001"
+    assert payload["object_placements"][0]["placement_hint"] == {"target_region": "front_right"}
 
 
 def test_controller_schedules_planned_blender_edit_before_preview_refresh() -> None:

@@ -241,7 +241,12 @@ def _subject_asset_plan(
     payload: dict[str, object] | None = None,
 ) -> ControllerPlan:
     effective_payload = dict(payload or {})
-    effective_payload.setdefault("subject_ids", _missing_subject_asset_ids(state) or _needed_subject_ids(state))
+    subject_ids = _missing_subject_asset_ids(state) or _needed_subject_ids(state)
+    effective_payload.setdefault("subject_ids", subject_ids)
+    selected_concepts = _selected_subject_concept_artifacts_by_subject(state, subject_ids=subject_ids)
+    if selected_concepts:
+        effective_payload.setdefault("selected_concept_artifact_ids_by_subject", selected_concepts)
+        effective_payload.setdefault("selected_source_image_ids", list(selected_concepts.values()))
     return ControllerPlan(
         phase=phase,
         next_phase=WorkflowPhase.SUBJECT_ASSET_GENERATION,
@@ -317,7 +322,22 @@ def _blender_assembly_tool_payload(state: AgentProjectState) -> dict[str, object
     payload: dict[str, object] = {}
     if state.blender_assembly_plan is not None:
         payload["assembly_plan_id"] = state.blender_assembly_plan.plan_id
-    if state.scene_asset is not None:
+    selection = state.active_assembly_selection
+    if selection is not None:
+        payload["active_assembly_selection_id"] = selection.selection_id
+        payload["selected_subject_assets"] = dict(selection.selected_subject_assets)
+        if selection.selected_scene_concept_image_id:
+            payload["selected_scene_concept_image_id"] = selection.selected_scene_concept_image_id
+        if selection.selected_target_render_image_id:
+            payload["selected_target_render_image_id"] = selection.selected_target_render_image_id
+        if selection.object_placements:
+            payload["object_placements"] = [
+                placement.model_dump(mode="json") if hasattr(placement, "model_dump") else placement.dict()
+                for placement in selection.object_placements
+            ]
+    if selection is not None and selection.selected_scene_asset_id:
+        payload["scene_asset_id"] = selection.selected_scene_asset_id
+    elif state.scene_asset is not None:
         payload["scene_asset_id"] = state.scene_asset.scene_asset_id
     subject_id = _primary_assembly_subject_id(state)
     if subject_id is not None:
@@ -329,6 +349,13 @@ def _blender_assembly_tool_payload(state: AgentProjectState) -> dict[str, object
 
 
 def _primary_assembly_subject_id(state: AgentProjectState) -> str | None:
+    selection = state.active_assembly_selection
+    if selection is not None:
+        for placement in selection.object_placements:
+            if placement.subject_id:
+                return placement.subject_id
+        for subject_id in selection.selected_subject_assets:
+            return subject_id
     if state.blender_assembly_plan is not None:
         for placement in state.blender_assembly_plan.placement_plans:
             if placement.subject_id:
@@ -341,6 +368,15 @@ def _primary_assembly_subject_id(state: AgentProjectState) -> str | None:
 
 
 def _subject_asset_id_for_subject(state: AgentProjectState, subject_id: str | None) -> str | None:
+    selection = state.active_assembly_selection
+    if selection is not None:
+        if subject_id is not None and subject_id in selection.selected_subject_assets:
+            return selection.selected_subject_assets[subject_id]
+        for placement in selection.object_placements:
+            if placement.selected_subject_asset_id and (subject_id is None or placement.subject_id == subject_id):
+                return placement.selected_subject_asset_id
+        for asset_id in selection.selected_subject_assets.values():
+            return asset_id
     if subject_id is not None:
         for asset in state.subject_assets:
             if asset.subject_id == subject_id and (asset.glb_uri or asset.mesh_uri or asset.obj_uri):
@@ -500,6 +536,26 @@ def _accepted_subject_asset_ids_by_subject(state: AgentProjectState) -> set[str]
 def _missing_subject_asset_ids(state: AgentProjectState) -> list[str]:
     accepted_subject_ids = _accepted_subject_asset_ids_by_subject(state)
     return [subject_id for subject_id in _needed_subject_ids(state) if subject_id not in accepted_subject_ids]
+
+
+def _selected_subject_concept_artifacts_by_subject(
+    state: AgentProjectState,
+    *,
+    subject_ids: list[str],
+) -> dict[str, str]:
+    subject_id_set = set(subject_ids)
+    selected: dict[str, str] = {}
+    for item in state.asset_library:
+        if item.asset_kind != "subject_concept":
+            continue
+        if item.selection_status != "selected_for_model_generation":
+            continue
+        if item.subject_id is None:
+            continue
+        if subject_id_set and item.subject_id not in subject_id_set:
+            continue
+        selected[item.subject_id] = item.artifact_id
+    return selected
 
 
 def _problem_subject_assets(assets: list[Asset3DRecord]) -> list[Asset3DRecord]:

@@ -1,8 +1,10 @@
 from agent_runtime.frontend_status import build_frontend_status
 from agent_runtime.state import (
     AgentProjectState,
+    AssemblySelection,
     ArtifactRecord,
     ArtifactType,
+    AssetLibraryItem,
     BlenderSceneState,
     ConceptBundle,
     ConceptImageRequirement,
@@ -284,3 +286,53 @@ def test_frontend_status_falls_back_to_asset_artifacts_for_legacy_full_asset_run
 
     assert status.subject_asset_ids == ["workflow_subject_glb"]
     assert status.scene_asset_id == "workflow_scene_glb"
+
+
+def test_frontend_status_exposes_asset_library_and_active_selection() -> None:
+    state = AgentProjectState(
+        project_id="project_001",
+        thread_id="thread_001",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        asset_library=[
+            AssetLibraryItem(
+                library_item_id="library_concept_a",
+                artifact_id="concept_a",
+                asset_kind="subject_concept",
+                subject_id="subject_robot",
+                review_status="rejected",
+                selection_status="selected_for_model_generation",
+                created_at="2026-07-01T00:00:00Z",
+                updated_at="2026-07-01T00:00:00Z",
+            ),
+            AssetLibraryItem(
+                library_item_id="library_subject_model_v2",
+                artifact_id="subject_model_v2",
+                asset_kind="subject_model",
+                subject_id="subject_robot",
+                selection_status="selected_for_assembly",
+                source_artifact_ids=["concept_a"],
+                created_at="2026-07-01T00:00:00Z",
+                updated_at="2026-07-01T00:00:00Z",
+            ),
+        ],
+        active_assembly_selection=AssemblySelection(
+            selection_id="assembly_selection_001",
+            selected_subject_assets={"subject_robot": "subject_model_v2"},
+            selected_target_render_image_id="target_render_001",
+            updated_at="2026-07-01T00:00:00Z",
+        ),
+    )
+
+    status = build_frontend_status(state=state, summary={"ok": True, "dry_run": False})
+
+    assert [item.artifact_id for item in status.asset_library] == ["concept_a", "subject_model_v2"]
+    assert status.asset_library[0].review_status == "rejected"
+    assert status.asset_library[1].source_artifact_ids == ["concept_a"]
+    assert status.active_assembly_selection is not None
+    assert status.active_assembly_selection.selected_subject_assets == {"subject_robot": "subject_model_v2"}
+    assert status.active_assembly_selection.selected_target_render_image_id == "target_render_001"
+    assert status.available_asset_actions == [
+        "set_asset_review_status",
+        "select_concept_for_subject_generation",
+        "select_asset_for_assembly",
+    ]

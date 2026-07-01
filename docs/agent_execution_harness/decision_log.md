@@ -43,3 +43,30 @@ Consequences:
   boundary stated explicitly.
 - New service or state abstractions need a documented reuse decision before they
   are added.
+
+## DEC-20260701-runtime-asset-library-state: Store asset library in AgentProjectState
+
+Decision:
+- Use `AgentProjectState.asset_library` and
+  `AgentProjectState.active_assembly_selection` as the backend fact source for
+  thread asset review and selection.
+- Keep `ArtifactRecord` as the artifact/storage record and use asset-library
+  rows as review, lineage, and selection metadata over those artifacts.
+
+Reason:
+- The existing state/checkpoint/runtime-plan path already drives controller,
+  frontend status, handoff apply, and audit behavior.
+- A separate asset database or frontend-only cache would violate reuse-first and
+  make selection invisible to workers and Blender assembly.
+
+Alternatives considered:
+- Store a standalone asset-library JSON file outside `state.json`.
+- Store selection only in runtime-console frontend state.
+- Infer selected assets every time from artifact order.
+
+Consequences:
+- Controlled writer allowlists must include the new fields.
+- Runtime asset actions must write JSONL, summaries, checkpoints,
+  `frontend_status.json`, and rebuilt plans.
+- Rejected assets remain in the library and can be selected unless explicitly
+  archived or superseded by future policy.

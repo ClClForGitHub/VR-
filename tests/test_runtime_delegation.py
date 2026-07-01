@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from agent_runtime.artifacts import utc_now_iso
 from agent_runtime.runtime_console import append_console_message, create_runtime_console_run
 from agent_runtime.runtime_audit import audit_runtime_run
 from agent_runtime.runtime_delegation import plan_next_delegated_handoff, read_runtime_handoff_summary
@@ -19,6 +20,7 @@ from agent_runtime.state import (
     ArtifactRecord,
     ArtifactType,
     Asset3DRecord,
+    AssetLibraryItem,
     CameraSpec,
     ConceptBundle,
     EnvironmentSpec,
@@ -317,12 +319,77 @@ def test_runtime_delegation_subject_asset_prompt_includes_concept_artifact_and_p
 
     assert step.record is not None
     assert step.record.domain_tool_name == "build_subject_asset"
-    assert "Use the approved concept image artifact URI" in prompt
+    assert "Use selected_subject_concepts as the source image input" in prompt
     assert "subject_robot_concept_001" in prompt
     assert str(concept_path) in prompt
     assert "fast_shape_50k_768" in prompt
     assert "Do not edit state.json" in prompt
     assert "workflow_runner/Hunyuan3D service path" in prompt
+
+
+def test_runtime_delegation_subject_asset_prompt_prefers_selected_concept(tmp_path: Path) -> None:
+    run_dir = tmp_path / "outputs" / "runs" / "run_selected_concept"
+    run_dir.mkdir(parents=True)
+    selected_path = tmp_path / "concept_selected.png"
+    unselected_path = tmp_path / "concept_unselected.png"
+    selected_path.write_bytes(b"selected")
+    unselected_path.write_bytes(b"unselected")
+    now = utc_now_iso()
+    state = AgentProjectState(
+        project_id="p",
+        thread_id="t",
+        phase=WorkflowPhase.CONCEPT_APPROVED,
+        scene_spec=_scene_spec(),
+        concept_bundle=ConceptBundle(
+            concept_version=1,
+            final_preview_image_id="concept_unselected",
+            subject_concept_images={"subject_robot": ["concept_unselected", "concept_selected"]},
+            approved=True,
+        ),
+        artifacts=[
+            ArtifactRecord(
+                artifact_id="concept_unselected",
+                artifact_type=ArtifactType.SUBJECT_CONCEPT_IMAGE,
+                uri=str(unselected_path),
+                mime_type="image/png",
+                semantic_role="subject_concept_image",
+                linked_subject_id="subject_robot",
+            ),
+            ArtifactRecord(
+                artifact_id="concept_selected",
+                artifact_type=ArtifactType.SUBJECT_CONCEPT_IMAGE,
+                uri=str(selected_path),
+                mime_type="image/png",
+                semantic_role="subject_concept_image",
+                linked_subject_id="subject_robot",
+            ),
+        ],
+        asset_library=[
+            AssetLibraryItem(
+                library_item_id="library_concept_selected",
+                artifact_id="concept_selected",
+                asset_kind="subject_concept",
+                subject_id="subject_robot",
+                review_status="rejected",
+                selection_status="selected_for_model_generation",
+                created_at=now,
+                updated_at=now,
+            )
+        ],
+    )
+    (run_dir / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
+    (run_dir / "summary.json").write_text(json.dumps({"ok": True, "workflow": "runtime-console"}), encoding="utf-8")
+    build_and_save_runtime_dispatch_plan(run_dir)
+    execute_next_runtime_job(run_dir)
+
+    handoff = plan_next_delegated_handoff(run_dir)
+    payload = json.loads(Path(handoff.record.handoff_json).read_text(encoding="utf-8"))
+
+    assert handoff.record.result_summary["selected_subject_concept_count"] == 1
+    assert payload["selected_subject_concepts"][0]["artifact_id"] == "concept_selected"
+    assert payload["selected_subject_concepts"][0]["review_status"] == "rejected"
+    assert payload["selected_subject_concepts"][0]["uri"] == str(selected_path)
+    assert payload["selected_subject_concepts"][0]["artifact_id"] in payload["task_prompt"]
 
 
 def test_runtime_handoff_apply_registers_scene_asset_and_rebuilds_plan(tmp_path: Path) -> None:
@@ -440,7 +507,7 @@ def test_runtime_handoff_apply_registers_blender_outputs_and_waits_for_preview_a
     assert result.ok is True
     assert result.record is not None
     assert result.record.status == "applied"
-    assert set(result.record.applied_fields) == {"artifacts", "blender_scene", "viewer_scene", "phase"}
+    assert set(result.record.applied_fields) == {"artifacts", "blender_scene", "viewer_scene", "asset_library", "phase"}
     assert state_payload["phase"] == "BLENDER_PREVIEW"
     assert state_payload["blender_scene"]["blender_scene_id"] == "blender_scene_001"
     assert state_payload["viewer_scene"]["viewer_scene_id"] == "viewer_scene_001"

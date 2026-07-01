@@ -1,0 +1,77 @@
+[
+  {
+    "case_id": "user_reselects_rejected_subject_concept",
+    "initial_assets": [
+      {
+        "artifact_id": "concept_a",
+        "asset_kind": "subject_concept",
+        "subject_id": "subject_hero",
+        "review_status": "rejected"
+      },
+      {
+        "artifact_id": "concept_b",
+        "asset_kind": "subject_concept",
+        "subject_id": "subject_hero",
+        "review_status": "liked"
+      }
+    ],
+    "user_action": {
+      "action_type": "select_concept_for_subject_generation",
+      "subject_id": "subject_hero",
+      "concept_artifact_id": "concept_a",
+      "note": "用户决定还是用最早那张生成模型"
+    },
+    "expected": {
+      "concept_a_selection_status": "selected_for_model_generation",
+      "concept_a_review_status_still": "rejected",
+      "asset_not_deleted": true
+    }
+  },
+  {
+    "case_id": "user_selects_model_scene_for_assembly",
+    "initial_assets": [
+      {
+        "artifact_id": "subject_model_v1",
+        "asset_kind": "subject_model",
+        "subject_id": "subject_hero"
+      },
+      {
+        "artifact_id": "subject_model_v2",
+        "asset_kind": "subject_model",
+        "subject_id": "subject_hero"
+      },
+      {
+        "artifact_id": "scene_asset_v1",
+        "asset_kind": "scene_asset",
+        "scene_id": "scene_main"
+      }
+    ],
+    "user_action": {
+      "action_type": "select_asset_for_assembly",
+      "subject_asset_ids_by_subject": {
+        "subject_hero": "subject_model_v2"
+      },
+      "scene_asset_id": "scene_asset_v1",
+      "placement_hints": [
+        {
+          "subject_id": "subject_hero",
+          "target_region": "front_right",
+          "note": "站在右前方"
+        }
+      ]
+    },
+    "expected": {
+      "active_assembly_selection_selected_subject": "subject_model_v2",
+      "active_assembly_selection_selected_scene": "scene_asset_v1",
+      "controller_payload_uses_selected_model": true
+    }
+  },
+  {
+    "case_id": "frontend_status_contains_asset_library",
+    "expected_frontend_status_fields": [
+      "asset_library",
+      "active_assembly_selection",
+      "available_asset_actions"
+    ]
+  }
+]

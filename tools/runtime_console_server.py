@@ -30,6 +30,7 @@ from agent_runtime.runtime_console import (
 from agent_runtime.runtime_delegation import plan_next_delegated_handoff, read_runtime_handoff_summary
 from agent_runtime.runtime_dispatch import build_and_save_runtime_dispatch_plan, read_runtime_dispatch_plan
 from agent_runtime.runtime_execution import execute_next_runtime_job, read_runtime_execution_summary
+from agent_runtime.runtime_asset_actions import apply_runtime_asset_action, read_runtime_asset_action_summary
 from agent_runtime.runtime_handoff_apply import (
     apply_blender_assembly_result,
     apply_concept_handoff_result,
@@ -79,6 +80,8 @@ RUN_EVENT_WATCH_FILES = [
     "runtime_handoff.jsonl",
     "runtime_worker.jsonl",
     "runtime_user_action.jsonl",
+    "runtime_asset_action.jsonl",
+    "runtime_asset_action_summary.json",
     "runtime_handoff_apply.jsonl",
     "delivery_handoff.json",
     "chat.jsonl",
@@ -183,6 +186,9 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
             return self._send_json(summary or {})
         if leaf == "runtime-user-action":
             summary = read_runtime_user_action_summary(effective_dir)
+            return self._send_json(summary or {})
+        if leaf == "runtime-asset-action":
+            summary = read_runtime_asset_action_summary(effective_dir)
             return self._send_json(summary or {})
         if leaf == "runtime-handoff-apply":
             summary = read_runtime_handoff_apply_summary(effective_dir)
@@ -295,6 +301,14 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
                 )
             else:
                 return self._send_error(HTTPStatus.BAD_REQUEST, f"unknown user action: {action_type}")
+            return self._send_json(_model_to_dict(result), status=HTTPStatus.CREATED)
+        if action == "asset-action":
+            payload = self._read_json_body(default={})
+            result = apply_runtime_asset_action(
+                effective_dir,
+                payload=payload,
+                rebuild_plan=bool(payload.get("rebuild_plan", True)),
+            )
             return self._send_json(_model_to_dict(result), status=HTTPStatus.CREATED)
         if action == "handoff-apply":
             payload = self._read_json_body(default={})
