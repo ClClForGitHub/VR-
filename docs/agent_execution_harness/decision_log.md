@@ -102,3 +102,35 @@ Consequences:
   and apply-result schemas.
 - `frontend_status.json` may show backend action payload examples, but it
   remains a derived view and not a writable state source.
+
+## DEC-20260701-round04b-live-image-executor: Add a bounded concept-image executor before accepting live concept runs
+
+Decision:
+- Add `agent_runtime.concept_image_execution` as the structured executor between
+  existing runtime handoff JSON and existing concept handoff-apply.
+- Add `runtime_worker` backend `live_image` for this executor.
+- Require backend capability proof for local reference-image attachment and
+  multi-image composition before running a mixed structured concept handoff.
+
+Reason:
+- Round04 proved the control plane can produce `ConceptImageRequirement[]`, but
+  no reusable worker executed image-guided and target-render requirements.
+- Running a prompt-only scene image inside a mixed image-guided handoff would
+  create misleading partial live evidence.
+- The state, artifact, checkpoint, and handoff-apply paths already exist and
+  should remain the only mutation boundary.
+
+Alternatives considered:
+- Extend the old `codex_self_mcp` worker directly and rely on prompt text to
+  mention reference images.
+- Generate partial text-only images when image-guided requirements are blocked.
+- Add another artifact/result store dedicated to image generation.
+
+Consequences:
+- `live_generation_calls.jsonl` is now the per-requirement concept generation
+  call record for Round04B live attempts.
+- Default `codex_self_mcp` remains usable only for capabilities it actually
+  exposes; currently it is blocked for Round04B image-guided/multi-image live
+  acceptance.
+- A future provider backend can be accepted by implementing the same
+  `ConceptImageBackend` contract and proving real file attachments.

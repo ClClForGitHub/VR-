@@ -16,6 +16,11 @@ from pydantic import BaseModel, Field
 
 from agent_runtime.artifacts import utc_now_iso
 from agent_runtime.codex_self_mcp import CodexSelfMCPAdapter, extract_last_image_from_codex_mcp_log
+from agent_runtime.concept_image_execution import (
+    CodexSelfMCPConceptImageBackend,
+    ConceptImageBackend,
+    execute_concept_image_handoff,
+)
 from agent_runtime.runtime_delegation import RuntimeDelegatedHandoffRecord, read_runtime_handoff_records
 from agent_runtime.runtime_handoff_apply import (
     RuntimeHandoffApplyResult,
@@ -26,7 +31,7 @@ from agent_runtime.runtime_handoff_apply import (
 )
 
 
-RuntimeWorkerBackend = Literal["fixture", "codex_self_mcp", "codex_self_log"]
+RuntimeWorkerBackend = Literal["fixture", "codex_self_mcp", "codex_self_log", "live_image"]
 RuntimeWorkerStatus = Literal["dry_run", "applied", "completed", "skipped", "failed"]
 
 
@@ -85,6 +90,7 @@ def execute_next_runtime_worker(
     handoff_id: str | None = None,
     rebuild_plan: bool = True,
     codex_adapter: CodexSelfMCPAdapter | None = None,
+    concept_image_backend: ConceptImageBackend | None = None,
     confirm_execute: bool = False,
     timeout_seconds: float = 300,
 ) -> RuntimeWorkerExecutionResult:
@@ -136,6 +142,16 @@ def execute_next_runtime_worker(
             adapter=codex_adapter or CodexSelfMCPAdapter(),
             confirm_execute=confirm_execute,
             timeout_seconds=timeout_seconds,
+            rebuild_plan=rebuild_plan,
+        )
+    elif backend == "live_image":
+        record = _execute_live_image_worker(
+            path,
+            handoff=selected,
+            dry_run=dry_run,
+            concept_backend=concept_image_backend
+            or CodexSelfMCPConceptImageBackend(timeout_seconds=timeout_seconds),
+            confirm_execute=confirm_execute,
             rebuild_plan=rebuild_plan,
         )
     elif backend == "codex_self_log":
@@ -241,6 +257,128 @@ def _execute_fixture_worker(
         worker_json=worker_json,
         apply_result=apply_result,
     )
+
+
+def _execute_live_image_worker(
+    run_dir: Path,
+    *,
+    handoff: RuntimeDelegatedHandoffRecord,
+    dry_run: bool,
+    concept_backend: ConceptImageBackend,
+    confirm_execute: bool,
+    rebuild_plan: bool,
+) -> RuntimeWorkerExecutionRecord:
+    worker_id = f"worker_{uuid4().hex[:12]}"
+    handoff_payload = _read_handoff_json(handoff)
+    worker_payload = _worker_payload(
+        run_dir,
+        worker_id=worker_id,
+        backend="live_image",
+        handoff=handoff,
+        request_payload={
+            "backend": getattr(concept_backend, "backend_name", "concept_image_backend"),
+            "confirm_execute": confirm_execute,
+        },
+    )
+
+    if handoff.domain_tool_name not in CONCEPT_TOOLS:
+        issue = f"live_image_worker_unsupported_domain_tool:{handoff.domain_tool_name}"
+        worker_payload["issues"] = [issue]
+        worker_json = _write_worker_json(run_dir, worker_id, worker_payload)
+        return _record_common(
+            worker_id=worker_id,
+            handoff=handoff,
+            backend="live_image",
+            dry_run=dry_run,
+            status="failed",
+            ok=False,
+            worker_json=worker_json,
+            issues=[issue],
+        )
+
+    if dry_run or not confirm_execute:
+        execution_result = execute_concept_image_handoff(
+            run_dir=run_dir,
+            handoff_payload=handoff_payload,
+            backend=concept_backend,
+            handoff_id=handoff.handoff_id,
+            dry_run=True,
+        )
+        issues = ["live_image_worker_dry_run_no_state_mutation"] if dry_run else ["live_image_worker_requires_confirm_execute"]
+        worker_payload["dry_run"] = True
+        worker_payload["issues"] = issues
+        worker_payload["execution_result"] = _model_to_dict(execution_result)
+        worker_json = _write_worker_json(run_dir, worker_id, worker_payload)
+        return _record_common(
+            worker_id=worker_id,
+            handoff=handoff,
+            backend="live_image",
+            dry_run=True,
+            status="dry_run",
+            ok=True,
+            worker_json=worker_json,
+            issues=issues,
+            result_summary={
+                "live_generation_calls_jsonl": execution_result.live_generation_calls_jsonl,
+                "call_count": len(execution_result.call_records),
+                "successful_call_count": sum(1 for record in execution_result.call_records if record.ok),
+                "backend": execution_result.backend,
+            },
+        )
+
+    execution_result = execute_concept_image_handoff(
+        run_dir=run_dir,
+        handoff_payload=handoff_payload,
+        backend=concept_backend,
+        handoff_id=handoff.handoff_id,
+        dry_run=False,
+    )
+    worker_payload["execution_result"] = _model_to_dict(execution_result)
+    if not execution_result.ok or not execution_result.image_results:
+        issues = list(execution_result.issues) or ["live_image_worker_no_generated_images"]
+        worker_payload["issues"] = issues
+        worker_json = _write_worker_json(run_dir, worker_id, worker_payload)
+        return _record_common(
+            worker_id=worker_id,
+            handoff=handoff,
+            backend="live_image",
+            dry_run=False,
+            status="failed",
+            ok=False,
+            worker_json=worker_json,
+            issues=issues,
+            result_summary={
+                "live_generation_calls_jsonl": execution_result.live_generation_calls_jsonl,
+                "call_count": len(execution_result.call_records),
+                "successful_call_count": sum(1 for record in execution_result.call_records if record.ok),
+                "backend": execution_result.backend,
+                "status": execution_result.status,
+                "capability": execution_result.capability,
+            },
+        )
+
+    apply_payload = {"image_results": execution_result.image_results}
+    apply_result = _apply_worker_payload(run_dir, handoff=handoff, payload=apply_payload, rebuild_plan=rebuild_plan)
+    worker_payload["apply_payload"] = apply_payload
+    worker_payload["apply_result"] = _model_to_dict(apply_result)
+    worker_json = _write_worker_json(run_dir, worker_id, worker_payload)
+    record = _record_from_apply(
+        worker_id=worker_id,
+        handoff=handoff,
+        backend="live_image",
+        worker_json=worker_json,
+        apply_result=apply_result,
+    )
+    record.result_summary.update(
+        {
+            "live_generation_calls_jsonl": execution_result.live_generation_calls_jsonl,
+            "call_count": len(execution_result.call_records),
+            "successful_call_count": sum(1 for item in execution_result.call_records if item.ok),
+            "backend": execution_result.backend,
+            "status": execution_result.status,
+        }
+    )
+    return record
 
 
 def _execute_codex_self_worker(

@@ -16,6 +16,7 @@ from typing import Any
 
 from agent_runtime.agent_prompts import ConceptPromptPlannerOutput
 from agent_runtime.artifacts import utc_now_iso
+from agent_runtime.concept_image_execution import ConceptImageBackend
 from agent_runtime.concept_planning import apply_concept_prompt_planner_output
 from agent_runtime.frontend_status import build_frontend_status
 from agent_runtime.persistence import FileStateCheckpointStore
@@ -29,8 +30,11 @@ from agent_runtime.round04_live_samples import (
     write_round04_case_reports,
 )
 from agent_runtime.runtime_console import append_console_message, save_console_upload
+from agent_runtime.runtime_delegation import plan_next_delegated_handoff
 from agent_runtime.runtime_dispatch import build_and_save_runtime_dispatch_plan
+from agent_runtime.runtime_execution import execute_next_runtime_job
 from agent_runtime.runtime_runs import build_runtime_run_bundle
+from agent_runtime.runtime_worker import execute_next_runtime_worker
 from agent_runtime.state import (
     AgentProjectState,
     CameraSpec,
@@ -62,6 +66,8 @@ def main() -> int:
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--max-concept-regens", type=int, default=2)
+    parser.add_argument("--seeded-scene-spec", action="store_true")
+    parser.add_argument("--live-llm-intake", action="store_true")
     args = parser.parse_args()
 
     fixtures_root = Path(args.fixtures_root).expanduser().resolve()
@@ -91,9 +97,11 @@ def main() -> int:
             live=args.live,
             overwrite=args.overwrite,
             max_concept_regens=args.max_concept_regens,
+            seeded_scene_spec=args.seeded_scene_spec or not args.live_llm_intake,
+            live_llm_intake=args.live_llm_intake,
         )
         results.append(result)
-    ok = all(item["status"] == "completed" for item in results) if args.live else all(item["status"] in {"blocked", "partial"} for item in results)
+    ok = all(item["status"] in {"completed", "partial"} for item in results) if args.live else all(item["status"] in {"blocked", "partial"} for item in results)
     print(json.dumps({"ok": ok, "live": args.live, "case_count": len(results), "results": results}, ensure_ascii=False, indent=2))
     return 0 if ok or not args.live else 1
 
@@ -106,6 +114,9 @@ def run_case(
     live: bool,
     overwrite: bool,
     max_concept_regens: int,
+    seeded_scene_spec: bool = True,
+    live_llm_intake: bool = False,
+    concept_image_backend: ConceptImageBackend | None = None,
 ) -> dict[str, Any]:
     run_dir = round04_case_run_dir(output_root=output_root, case_id=manifest.case_id)
     if run_dir.exists():
@@ -137,6 +148,8 @@ def run_case(
         "executed_stages": ["sample_ingestion"],
         "skipped_stages": {},
         "max_concept_regens": max_concept_regens,
+        "intake_mode": "live_llm_intake" if live_llm_intake else "seeded_scene_spec",
+        "seeded_scene_spec": seeded_scene_spec,
     }
     _write_json(run_dir / "summary.json", summary)
     _write_frontend_status(run_dir)
@@ -151,8 +164,22 @@ def run_case(
     _append_stage(run_dir, "concept_prompt_pack")
 
     if live:
-        issues.extend(_write_live_blockers(run_dir, manifest=manifest))
-        status = "blocked"
+        if live_llm_intake:
+            issues.append("live_llm_intake_not_executed_provider_unavailable_or_not_wired")
+        live_result = _run_live_concept_worker(
+            run_dir,
+            concept_image_backend=concept_image_backend,
+        )
+        issues.extend(live_result["issues"])
+        summary = _read_json(run_dir / "summary.json") or {}
+        summary["live_concept_worker"] = live_result
+        _write_json(run_dir / "summary.json", summary)
+        if live_result["concept_generation_applied"]:
+            _append_stage(run_dir, "live_generation")
+            issues.append("live_execution_blocked: downstream Hunyuan3D/HY-World/Blender stages are not started by the Round04B concept canary")
+            status = "partial"
+        else:
+            status = "blocked"
     else:
         issues.append("contract_only_run_live_services_not_requested")
         _write_contract_generation_records(run_dir, manifest=manifest)
@@ -171,6 +198,53 @@ def run_case(
         "status": report.status,
         "run_dir": str(run_dir),
         "issues": report.issues,
+    }
+
+
+def _run_live_concept_worker(
+    run_dir: Path,
+    *,
+    concept_image_backend: ConceptImageBackend | None,
+) -> dict[str, Any]:
+    issues = []
+    execution = execute_next_runtime_job(run_dir, dry_run=False)
+    if not execution.ok or execution.record is None:
+        issues.extend(execution.issues or ["runtime_execution_did_not_select_concept_job"])
+    elif execution.record.status != "delegated":
+        issues.append(f"runtime_execution_not_delegated:{execution.record.status}")
+
+    handoff = plan_next_delegated_handoff(run_dir)
+    if not handoff.ok or handoff.record is None:
+        issues.extend(handoff.issues or ["runtime_handoff_not_created"])
+        return {
+            "ok": False,
+            "concept_generation_applied": False,
+            "execution": _model_to_dict(execution),
+            "handoff": _model_to_dict(handoff),
+            "worker": None,
+            "live_generation_calls_jsonl": str(run_dir / "live_generation_calls.jsonl"),
+            "issues": issues,
+        }
+
+    worker = execute_next_runtime_worker(
+        run_dir,
+        backend="live_image",
+        dry_run=False,
+        confirm_execute=True,
+        concept_image_backend=concept_image_backend,
+        timeout_seconds=900,
+    )
+    applied = bool(worker.record is not None and worker.record.status == "applied" and worker.ok)
+    if not applied:
+        issues.extend(worker.issues or ["live_image_worker_did_not_apply_concept_results"])
+    return {
+        "ok": applied,
+        "concept_generation_applied": applied,
+        "execution": _model_to_dict(execution),
+        "handoff": _model_to_dict(handoff),
+        "worker": _model_to_dict(worker),
+        "live_generation_calls_jsonl": str(run_dir / "live_generation_calls.jsonl"),
+        "issues": issues,
     }
 
 

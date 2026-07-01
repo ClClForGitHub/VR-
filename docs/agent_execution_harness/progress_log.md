@@ -161,3 +161,129 @@ Known issues:
 Next:
 - Round 05 should harden responsive layout/screenshots if needed, then connect
   read-only runtime bundle data through `src/api/runtimeAdapter.js`.
+
+## 2026-07-01 - Round 05 creator app responsive polish
+
+Scope:
+- Continue the v0.5 frontend path with Task 2: stabilize the migrated
+  `web/creator_app/` mock UI before backend integration.
+- Keep the slice mock-only; do not connect real APIs, model-viewer, or replace
+  `web/runtime_console/`.
+
+Changed:
+- Added `web/creator_app/vite.config.js` so Vite dev/build uses the React
+  plugin and the migrated JSX app hydrates correctly.
+- Added `web/creator_app/scripts/screenshot-smoke.mjs` plus
+  `npm run smoke:screenshots` for repeatable desktop/mobile mock screenshot
+  checks.
+- Tightened `tokens.css` and `app.css` for responsive columns, stable text
+  sizing, no negative letter spacing, no viewport-width font scaling, internal
+  scroll panels, and mobile horizontal-overflow fixes.
+- Simplified `GlbViewerShell` control labels while keeping model-viewer
+  integration deferred.
+
+Verification:
+- `cd web/creator_app && npm run build` -> passed; Vite transformed 52 modules.
+- `cd web/creator_app && npm run smoke:screenshots` -> passed; 8 screenshots
+  checked at desktop 1440x1000 and mobile 390x844.
+- Screenshot evidence directory:
+  `run_logs/frontend_checks/creator_app_round05_20260701T100506Z`.
+- Playwright hydration/title check on
+  `http://127.0.0.1:5173/#concept-review` -> true.
+
+Known issues:
+- UI still uses mock data and `GlbViewerShell`; it does not read runtime bundles
+  or render real GLB/model-viewer content yet.
+- Screenshot artifacts live under ignored `run_logs/` and are not tracked.
+
+Next:
+- Round 06 should implement read-only runtime bundle integration through
+  `web/creator_app/src/api/runtimeAdapter.js` with mock fallback preserved.
+
+## 2026-07-01 - Round 06 creator app read-only backend API
+
+Scope:
+- Continue v0.5 through real backend API connection, stopping before write
+  actions, model-viewer, and public UI replacement.
+- Connect `web/creator_app/` to runtime-console read-only APIs with mock
+  fallback preserved.
+
+Changed:
+- Implemented read-only `RuntimeAdapter` for `GET /api/runs`,
+  `GET /api/runs/<run_key>/bundle`, and file URLs.
+- Added `normalizeRuntimeBundle(rawBundle)` to convert runtime state,
+  `frontend_status.json`, `scene_state.json`, artifacts, and file manifests
+  into a product-facing CreatorRunViewModel.
+- Wired `App`, `AppShell`, and screens to consume ViewModel data instead of
+  hard-coded mock content, while preserving mock fallback.
+- Added `npm run smoke:backend-readonly` for read-only backend/API/DOM smoke.
+- Updated Creator App README and backend integration plan with the landed
+  read-only API boundary.
+
+Verification:
+- `cd web/creator_app && npm run build` -> passed; Vite transformed 53 modules.
+- `cd web/creator_app && npm run smoke:screenshots` -> passed; 8 mock
+  screenshots checked. Evidence:
+  `run_logs/frontend_checks/creator_app_round05_20260701T104232Z`.
+- `cd web/creator_app && npm run smoke:backend-readonly` -> passed against
+  `http://127.0.0.1:18093`, selected run
+  `20260630_live_user_examples_114143Z`, fileCount 26, fileCards 6. Evidence:
+  `run_logs/frontend_checks/creator_app_backend_readonly_20260701T103920Z`.
+- Existing runtime console `http://127.0.0.1:8093/api/runs` -> 50 runs.
+- Playwright check on
+  `http://127.0.0.1:5173/?api_base=http%3A%2F%2F127.0.0.1%3A8093#delivery`
+  -> `source=backend`, `runOptions=50`, `fileCards=6`,
+  `hasRuntimeFileLink=true`.
+
+Known issues:
+- This round did not implement POST `/chat`, `/upload`, `/user-action`, or
+  `/loop`.
+- `GlbViewerShell` is still a poster/viewer shell; model-viewer is the next
+  separate slice.
+- Existing unrelated working-tree changes and untracked doc/test packages were
+  not modified.
+
+Next:
+- Round 07 should implement controlled write actions for chat/upload and
+  user-action, or move to model-viewer if the API write path is intentionally
+  deferred.
+
+## 2026-07-01 - Round 04B live concept executor unblock
+
+Scope:
+- Implement the Round04B package boundary for structured live concept-image
+  execution.
+- Reuse existing runtime handoff and handoff-apply paths; do not add another
+  state store or artifact registry.
+
+Changed:
+- Added `agent_runtime/concept_image_execution.py` with request/result/call
+  contracts, backend capability reporting, and ordered requirement execution.
+- Added runtime worker backend `live_image` and kept the existing
+  `codex_self_mcp` structured-handoff guard intact.
+- Added `scripts/probe_live_image_backend.py`.
+- Updated `scripts/run_round04_live_user_samples.py --live` to run
+  execution -> handoff -> `live_image` worker instead of writing static
+  blockers.
+- Added Round04B tests for the executor contract, runtime worker integration,
+  and `case_03_lunar_rover` canary flow with a fake capable backend.
+
+Verification:
+- `python -m py_compile ...` -> passed for changed runtime/script/test files.
+- `pytest -q tests/test_concept_image_execution_contract.py tests/test_runtime_worker_live_image_backend.py tests/test_round04_live_canary_execution.py` -> 5 passed.
+- `pytest -q tests/test_concept_image_execution_contract.py tests/test_runtime_worker_live_image_backend.py tests/test_round04_live_canary_execution.py tests/test_runtime_worker.py tests/test_round04_live_runner_contract.py` -> 15 passed.
+- `pytest -q` -> 405 passed.
+- `python scripts/probe_live_image_backend.py --write-report outputs/runs/round04b_probe/live_image_backend_probe.json` -> wrote capability report; default backend is not live-acceptance ready for image-guided or multi-image composition.
+- `python scripts/run_round04_live_user_samples.py --case case_03_lunar_rover --live --overwrite --max-concept-regens 1` -> exit 1, expected blocked; 3 call records written with no fake output image paths.
+
+Known issues:
+- `codex_self_mcp` currently reports `text_to_image=true` and
+  `output_extraction=true`, but no proven local-file attachment or multi-image
+  composition support.
+- Full Round04 live completion still needs a backend implementing real
+  image-guided and multi-image file attachment.
+
+Next:
+- Wire or prove a provider backend that satisfies `ConceptImageBackend` with
+  real local file attachments, then rerun the Round04B canary before broad
+  12-sample execution.

@@ -33,6 +33,7 @@ coding-agent work:
 - `agent_execution_harness/core_pipeline_test_matrix.md`: Round 03 dry-run/delegated semantic test matrix.
 - `agent_execution_harness/live_test_readiness_matrix.md`: Round 04 live-call readiness checklist.
 - `agent_execution_harness/round_04_live_full_flow_user_samples.md`: Round 04 real user-sample full-flow execution contract.
+- `agent_execution_harness/round_04b_live_concept_executor_unblock.md`: Round04B structured concept-image executor and live backend probe record.
 - `agent_execution_harness/live_user_sample_manifest_contract.md`: manifest schema for scripted live user samples.
 - `agent_execution_harness/frontend_live_review_checklist.md`: frontend/runtime observability checklist for live sample runs.
 - `agent_execution_harness/round04_live_execution_report_template.md`: per-case live execution report schema.
