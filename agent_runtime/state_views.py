@@ -29,6 +29,7 @@ CONTROLLED_STATE_FIELD_OWNERS: dict[str, frozenset[str]] = {
     "scene_spec": frozenset(
         {
             "SceneSpecCompiler",
+            "Round04SceneSpecCompiler",
             "FeedbackPatchParser",
             "RegenerationRouter",
             "OperatorRepairTool",
@@ -40,6 +41,7 @@ CONTROLLED_STATE_FIELD_OWNERS: dict[str, frozenset[str]] = {
             "ImageGenerationExecutor",
             "ConceptVisualQA",
             "ConceptReviewGate",
+            "ModelAssetReviewGate",
         }
     ),
     "subject_assets": frozenset(
@@ -83,6 +85,7 @@ CONTROLLED_STATE_FIELD_OWNERS: dict[str, frozenset[str]] = {
             "SceneAssetAdapter",
             "BlenderAssemblyResultIngestor",
             "RuntimeAssetAction",
+            "ModelAssetReviewGate",
         }
     ),
     "active_assembly_selection": frozenset(

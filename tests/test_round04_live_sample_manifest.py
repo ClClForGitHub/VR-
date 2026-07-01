@@ -41,7 +41,9 @@ def test_round04_user_confirmed_ambiguous_cases_are_encoded() -> None:
     assert lucifer_ref.declared_target_type == "subject"
     assert lucifer_ref.declared_target_id == "subject_lucifer_chibi"
     assert lucifer_ref.upload_stage == "concept_feedback_1"
-    assert "路西法" in lucifer_ref.reference_path(case10_dir, lucifer_ref).name
+    assert lucifer_ref.path == "reference_images/image_001.png"
+    assert case10.reference_path(case10_dir, lucifer_ref).is_file()
+    assert any("路西法" in note for note in case10.parse_notes)
     assert scene_ref.declared_target_type == "scene"
     assert scene_ref.slot == "@图片1"
     assert any("用户确认" in note for note in case10.parse_notes)

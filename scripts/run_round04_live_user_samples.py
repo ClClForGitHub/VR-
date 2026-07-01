@@ -245,13 +245,30 @@ def _upload_stage_images(
             run_dir,
             filename=path.name,
             content=path.read_bytes(),
-            mime_type=mimetypes.guess_type(path.name)[0],
+            mime_type=_guess_image_mime(path),
         )
         if result.image_id is None:
             raise ValueError(f"upload did not create image_id: {path}")
         runtime_image_ids[image.image_id] = result.image_id
         attachment_ids.append(result.image_id)
     return attachment_ids
+
+
+def _guess_image_mime(path: Path) -> str | None:
+    suffix = path.suffix.lower()
+    explicit = {
+        ".avif": "image/avif",
+        ".bmp": "image/bmp",
+        ".gif": "image/gif",
+        ".jpeg": "image/jpeg",
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+    if suffix in explicit:
+        return explicit[suffix]
+    guessed = mimetypes.guess_type(path.name)[0]
+    return guessed if guessed and guessed.startswith("image/") else guessed
 
 
 def _apply_reference_bindings(
@@ -358,7 +375,7 @@ def _apply_prompt_pack(run_dir: Path, *, manifest: Round04CaseManifest) -> None:
     state = _read_state(run_dir)
     if state.scene_spec is None:
         raise ValueError("scene_spec required before prompt pack")
-    scene_requirement_id = f"scene_concept:{state.scene_spec.scene_id}"
+    scene_requirement_id = "scene_concept:1"
     subject_prompts = {
         subject.subject_id: (
             f"Clean subject-only concept image for {subject.display_name}. "
@@ -404,7 +421,7 @@ def _apply_prompt_pack(run_dir: Path, *, manifest: Round04CaseManifest) -> None:
     source_ids = [requirement.requirement_id for requirement in requirements]
     requirements.append(
         ConceptImageRequirement(
-            requirement_id=f"target_render:{state.scene_spec.scene_id}",
+            requirement_id="target_render:final_preview",
             output_type="target_render",
             target_id=state.scene_spec.scene_id,
             prompt_key="final_preview_prompt",

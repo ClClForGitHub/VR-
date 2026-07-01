@@ -547,6 +547,8 @@ def _pending_action_summary(state: AgentProjectState) -> FrontendPendingActionSu
 
 
 def _phase_gate_summary(state: AgentProjectState) -> dict[str, str] | None:
+    if state.pending_action is not None:
+        return None
     if (
         state.phase == WorkflowPhase.CONCEPT_REVIEW
         and state.concept_bundle is not None
