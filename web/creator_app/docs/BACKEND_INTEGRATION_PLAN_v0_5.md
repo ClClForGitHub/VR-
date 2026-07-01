@@ -39,7 +39,7 @@ model-viewer
 当前只读接线可通过以下方式手动查看：
 
 ```text
-http://127.0.0.1:5173/?api_base=http%3A%2F%2F127.0.0.1%3A8093#delivery
+http://10.134.142.143:5173/?api_base=%2Fruntime-api#delivery
 ```
 
 ---
@@ -136,14 +136,14 @@ type CreatorRunViewModel = {
 | 后端 phase | 前端页面 |
 |---|---|
 | `INTAKE` | `#intake` |
-| `SCENE_SPEC_DRAFT` / `SCENE_SPEC_READY` | `#intake` 或后续 loading panel |
-| `CONCEPT_GENERATION` | `#reveal` 的生成中 / 揭幕前状态 |
-| `CONCEPT_REVIEW` | `#reveal` 或 `#concept-review` |
-| `CONCEPT_APPROVED` | `#model-review` 的生成中状态 |
-| `SUBJECT_ASSET_GENERATION` / `SCENE_ASSET_GENERATION` | `#model-review` loading |
+| `SCENE_SPEC_DRAFT` / `SCENE_SPEC_READY` | `#intake` + `GenerationStatusDock` |
+| `CONCEPT_GENERATION` | `#intake` 或 `#concept-review` + `GenerationStatusDock`；完成后弹出 `CinematicRevealOverlay` |
+| `CONCEPT_REVIEW` | `#concept-review` |
+| `CONCEPT_APPROVED` | `#model-review` + `GenerationStatusDock` |
+| `SUBJECT_ASSET_GENERATION` / `SCENE_ASSET_GENERATION` | `#model-review` + `GenerationStatusDock` |
 | `SUBJECT_ASSET_QA` / `SCENE_ASSET_ADAPTATION` | `#model-review` |
 | `BLENDER_ASSEMBLY_PLANNING` | `#composition` |
-| `BLENDER_ASSEMBLY_EXECUTION` | `#composition` generating |
+| `BLENDER_ASSEMBLY_EXECUTION` | `#composition` + `GenerationStatusDock` |
 | `BLENDER_PREVIEW` | `#final-review` |
 | `BLENDER_EDIT` | `#final-review` with edit pending |
 | `DELIVERY` | `#delivery` |

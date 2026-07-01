@@ -1,10 +1,7 @@
-import { screens } from '../data/mockProject.js';
-import { Stepper } from './Stepper.jsx';
 import { ScreenTabs } from './ScreenTabs.jsx';
 import { Button } from './Button.jsx';
 
 export function AppShell({ screenId, onChangeScreen, viewModel, runtimeState, onSelectRun, onRefreshRuntime, children }) {
-  const activeStage = screens.find((screen) => screen.id === screenId)?.stage ?? 1;
   const project = viewModel.project;
   const runs = runtimeState.runs || [];
   const sourceLabel = viewModel.source === 'backend'
@@ -23,7 +20,6 @@ export function AppShell({ screenId, onChangeScreen, viewModel, runtimeState, on
           <div className="project-title">{project.title}⌄</div>
           {viewModel.error && <div className="project-warning">{viewModel.error}</div>}
         </div>
-        <Stepper activeStage={activeStage} />
         <div className="topbar-actions">
           <Button onClick={() => onChangeScreen('asset-memory')}>资产记忆</Button>
           {runs.length > 0 ? (
@@ -47,8 +43,10 @@ export function AppShell({ screenId, onChangeScreen, viewModel, runtimeState, on
           <Button onClick={onRefreshRuntime}>{runtimeState.loading ? '同步中' : project.user}⌄</Button>
         </div>
       </header>
-      <ScreenTabs current={screenId} onChange={onChangeScreen} />
-      <main className="main-stage">{children}</main>
+      <div className="workspace-body">
+        <ScreenTabs current={screenId} onChange={onChangeScreen} />
+        <main className="main-stage">{children}</main>
+      </div>
     </div>
   );
 }

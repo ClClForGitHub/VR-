@@ -2,7 +2,7 @@ import { screens } from '../data/mockProject.js';
 
 export function ScreenTabs({ current, onChange }) {
   return (
-    <aside className="screen-tabs" aria-label="原型页面">
+    <nav className="screen-tabs" aria-label="Creator App 工作区">
       {screens.map((screen) => (
         <button
           key={screen.id}
@@ -10,9 +10,10 @@ export function ScreenTabs({ current, onChange }) {
           className={current === screen.id ? 'is-active' : ''}
           onClick={() => onChange(screen.id)}
         >
+          <span>0{screen.stage}</span>
           {screen.label}
         </button>
       ))}
-    </aside>
+    </nav>
   );
 }

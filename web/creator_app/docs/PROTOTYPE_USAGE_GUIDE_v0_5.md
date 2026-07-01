@@ -24,22 +24,24 @@ npm run dev
 访问：
 
 ```text
-http://127.0.0.1:5173/
+http://10.134.142.143:5173/
 ```
 
 ## 3. 页面 hash
 
 ```text
 #intake
-#reveal
 #concept-review
-#feedback-compare
 #model-review
 #asset-memory
 #composition
 #final-review
 #delivery
 ```
+
+`#reveal` 和 `#feedback-compare` 已降级为兼容旧链接，不再是主流程页面。
+揭幕由 `CinematicRevealOverlay` 弹层承担；反馈由 `FeedbackDrawer` 和
+可选的 `VersionCompareModal` 承担。
 
 ## 4. 修改 UI 的位置
 
@@ -67,11 +69,11 @@ src/styles/app.css
 控制：
 
 - 顶部流程条；
-- 左侧状态导航；
+- 工作区导航；
 - 面板；
 - 卡片；
 - 资产库；
-- GLB viewer 壳；
+- model-viewer GLB stage；
 - 交付页；
 - 响应式。
 
@@ -131,4 +133,3 @@ web/creator_app/
 然后让旧 `tools/runtime_console_server.py` 或新的前端 dev server 提供静态资源。
 
 短期也可先作为独立 Vite 项目运行，再逐步接后端。
-

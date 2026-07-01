@@ -1,57 +1,73 @@
 import { useState } from 'react';
-import { AssetCard } from '../components/AssetCard.jsx';
 import { AssetMemoryPanel } from '../components/AssetMemoryPanel.jsx';
-import { Composer } from '../components/Composer.jsx';
-import { HeroStage } from '../components/HeroStage.jsx';
+import { ConceptSelectionBoard } from '../components/ConceptSelectionBoard.jsx';
+import { FeedbackDrawer } from '../components/FeedbackDrawer.jsx';
 import { Panel } from '../components/Panel.jsx';
-import { ReviewDock } from '../components/ReviewDock.jsx';
 import { ScreenHeading } from '../components/ScreenHeading.jsx';
 import { Button } from '../components/Button.jsx';
+import { VersionCompareModal } from '../components/VersionCompareModal.jsx';
 
-export function ConceptReviewScreen({ onNavigate, viewModel }) {
-  const { concepts, references } = viewModel;
-  const [selected, setSelected] = useState(concepts[0].id);
-  const current = concepts.find((concept) => concept.id === selected) ?? concepts[0];
+export function ConceptReviewScreen({ onNavigate, viewModel, onStartGeneration }) {
+  const { concepts, references, entities, assetVersions, approvedConceptSelection, referenceSlots } = viewModel;
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [activeSelection, setActiveSelection] = useState(null);
+
+  function openFeedback(selection) {
+    setActiveSelection(selection);
+    setFeedbackOpen(true);
+  }
+
+  function openCompare(selection) {
+    setActiveSelection(selection);
+    setCompareOpen(true);
+  }
+
   return (
     <>
-      <ScreenHeading title="概念图审稿画廊" subtitle="概念图已生成，请确认整体效果并提出修改意见，确认后进入模型生成阶段" />
-      <div className="layout-3">
-        <Panel title="概念方案" eyebrow="整体 / 主体 / 场景" className="scroll-panel">
-          {concepts.map((concept) => (
-            <AssetCard key={concept.id} asset={concept} active={concept.id === selected} onClick={() => setSelected(concept.id)} muted={concept.status === '已拒绝'} />
-          ))}
-          {references.map((reference) => (
-            <AssetCard key={reference.id} asset={reference} />
-          ))}
-        </Panel>
-        <section className="stack">
-          <HeroStage image={current.image} title={current.title} caption={current.note}>
-            <div className="viewer-toolbar">
-              <button>1:1</button>
-              <button>适应窗口</button>
-              <button>下载</button>
-              <button>全屏</button>
-            </div>
-          </HeroStage>
-          <div className="review-lower">
-            <Composer placeholder="输入你的修改意见，例如：增强天空光照、增加体积光效..." compact />
-            <Panel title="快捷建议">
-              <div className="tag-row">
-                {['增强主光源', '增加体积光', '优化构图', '强化氛围'].map((tag) => <Button key={tag} variant="chip">{tag}</Button>)}
-              </div>
-            </Panel>
-          </div>
-        </section>
-        <aside className="stack">
+      <ScreenHeading title="概念选择审稿" subtitle="整体图、主体图、场景图可以混选；同意后进入模型生成，不同意时打开反馈抽屉" />
+      <div className="concept-review-shell">
+        <ConceptSelectionBoard
+          entities={entities}
+          assetVersions={assetVersions}
+          approvedSelection={approvedConceptSelection}
+          onApprove={(selection) => {
+            setActiveSelection(selection);
+            onStartGeneration?.('model');
+          }}
+          onFeedback={openFeedback}
+          onConfirmSelection={openCompare}
+        />
+        <aside className="stack concept-memory-column">
           <AssetMemoryPanel viewModel={viewModel} onOpen={() => onNavigate('asset-memory')} />
-          <ReviewDock
-            negativeLabel="提出修改意见"
-            positiveLabel="接受并进入模型生成"
-            onNegative={() => onNavigate('feedback-compare')}
-            onPositive={() => onNavigate('model-review')}
-          />
+          <Panel title="快捷审稿标签">
+            <div className="tag-row">
+              {['保留整体', '重做主体', '替换场景', '强化光影', '优化构图'].map((tag) => <Button key={tag} variant="chip">{tag}</Button>)}
+            </div>
+          </Panel>
         </aside>
       </div>
+      <FeedbackDrawer
+        open={feedbackOpen}
+        selection={activeSelection}
+        entities={entities}
+        referenceSlots={referenceSlots}
+        references={references}
+        onClose={() => setFeedbackOpen(false)}
+        onOpenCompare={() => setCompareOpen(true)}
+        onRegenerate={() => {
+          setFeedbackOpen(false);
+          onStartGeneration?.('concept-feedback');
+        }}
+      />
+      <VersionCompareModal
+        open={compareOpen}
+        concepts={concepts}
+        entities={entities}
+        assetVersions={assetVersions}
+        selection={activeSelection}
+        onClose={() => setCompareOpen(false)}
+      />
     </>
   );
 }

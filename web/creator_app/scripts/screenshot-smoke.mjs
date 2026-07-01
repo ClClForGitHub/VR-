@@ -15,8 +15,8 @@ const outputDir = process.env.CREATOR_APP_SCREENSHOT_DIR
 
 const pages = ['intake', 'concept-review', 'final-review', 'delivery'];
 const expectedText = {
-  intake: '聊天输入与参考图绑定',
-  'concept-review': '概念图审稿画廊',
+  intake: '输入创作需求',
+  'concept-review': '概念选择审稿',
   'final-review': '最终 Blender 场景验收',
   delivery: '交付完成',
 };
@@ -85,6 +85,9 @@ async function auditLayout(page) {
       '.object-row',
       '.asset-card__meta',
       '.reference-card div',
+      '.reference-tray-card',
+      '.concept-option',
+      '.model-viewer-status span',
     ];
     const overflowingElements = [];
 

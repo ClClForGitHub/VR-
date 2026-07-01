@@ -1,6 +1,10 @@
 import {
   project as mockProject,
+  referenceSlots as mockReferenceSlots,
   references as mockReferences,
+  entities as mockEntities,
+  assetVersions as mockAssetVersions,
+  approvedConceptSelection as mockApprovedConceptSelection,
   concepts as mockConcepts,
   subjects as mockSubjects,
   sceneAssets as mockSceneAssets,
@@ -14,7 +18,7 @@ const PHASE_TO_SCREEN = {
   INTAKE: 'intake',
   SCENE_SPEC_DRAFT: 'intake',
   SCENE_SPEC_READY: 'intake',
-  CONCEPT_GENERATION: 'reveal',
+  CONCEPT_GENERATION: 'intake',
   CONCEPT_REVIEW: 'concept-review',
   CONCEPT_APPROVED: 'model-review',
   SUBJECT_ASSET_GENERATION: 'model-review',
@@ -118,7 +122,11 @@ export function createMockViewModel({ source = 'mock', error = null } = {}) {
     currentScreen: 'concept-review',
     nextAction: { type: 'mock', label: '接受并进入下一步', enabled: true },
     project: mockProject,
+    referenceSlots: mockReferenceSlots,
     references: mockReferences,
+    entities: mockEntities,
+    assetVersions: mockAssetVersions,
+    approvedConceptSelection: mockApprovedConceptSelection,
     concepts: mockConcepts,
     subjects: mockSubjects,
     sceneAssets: mockSceneAssets,
@@ -127,8 +135,9 @@ export function createMockViewModel({ source = 'mock', error = null } = {}) {
     deliveryFiles: mockDeliveryFiles,
     sceneObjects: mockSceneObjects,
     cameraPresets: mockCameraPresets,
+    activeObjectId: mockSceneObjects[0]?.id ?? null,
     fileManifest: [],
-    runtime: { runs: [], bundle: null },
+    runtime: { runs: [], bundle: null, generationStatus: null },
   };
 }
 
@@ -161,17 +170,22 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
   const subjectArtifacts = artifacts.filter((artifact) => SUBJECT_MODEL_TYPES.has(artifact.artifact_type));
   const sceneArtifacts = artifacts.filter((artifact) => SCENE_MODEL_TYPES.has(artifact.artifact_type));
   const previewImage = findPreviewImage(rawBundle, adapter, artifacts, files);
+  const referenceSlots = buildReferenceSlots(state);
+  const references = referencesFromSlots(referenceSlots);
   const concepts = imageArtifacts.length > 0
     ? imageArtifacts.map((artifact, index) => conceptFromArtifact(artifact, rawBundle, adapter, assetLibrary, index))
     : mockConcepts;
-  const references = buildReferences(state);
   const subjects = subjectArtifacts.length > 0
     ? subjectArtifacts.map((artifact, index) => modelAssetFromArtifact(artifact, rawBundle, adapter, index, '主体模型'))
     : mockSubjects;
   const sceneAssets = buildSceneAssets(sceneArtifacts, rawBundle, adapter, previewImage);
+  const entities = buildEntities(sceneSpec, referenceSlots, concepts, subjects, sceneAssets);
+  const assetVersions = buildAssetVersions(concepts, subjects, sceneAssets);
+  const approvedConceptSelection = buildApprovedConceptSelection(assetVersions);
   const finalScene = buildFinalScene(rawBundle, adapter, previewImage, sceneAssets);
   const sceneObjects = buildSceneObjects(rawBundle.scene_state);
   const cameraPresets = buildCameraPresets(rawBundle.scene_state);
+  const activeObjectId = rawBundle.scene_state?.active_object_id ?? sceneObjects.find((object) => object.visible)?.id ?? null;
   const deliveryFiles = buildDeliveryFiles(files);
   const allAssets = [...concepts, ...subjects, ...sceneAssets];
 
@@ -191,7 +205,11 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
         : mockProject.styleName,
       updatedAt: frontendStatus.generated_at || rawBundle.summary?.generated_at || mockProject.updatedAt,
     },
+    referenceSlots,
     references,
+    entities,
+    assetVersions,
+    approvedConceptSelection,
     concepts,
     subjects,
     sceneAssets,
@@ -200,6 +218,7 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
     deliveryFiles,
     sceneObjects,
     cameraPresets,
+    activeObjectId,
     fileManifest: files,
     runtime: {
       runs,
@@ -207,6 +226,7 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
       status: frontendStatus.status ?? null,
       progressLabel: frontendStatus.progress_label ?? null,
       missingFiles: rawBundle.missing_files ?? [],
+      generationStatus: buildGenerationStatus(frontendStatus, phase),
     },
   };
 }
@@ -236,9 +256,14 @@ function conceptFromArtifact(artifact, bundle, adapter, assetLibrary, index) {
       : index === 0 ? '当前查看' : '历史版本';
   return {
     id: artifact.artifact_id,
+    asset_id: artifact.artifact_id,
+    entity_id: artifact.metadata?.entity_id || conceptEntityId({ kind: artifact.artifact_type?.toLowerCase(), group: conceptGroupForArtifact(artifact) }),
+    version_label: `v${artifact.version ?? index + 1}`,
     title: readableArtifactTitle(artifact, `概念图 ${index + 1}`),
     status,
     kind: artifact.artifact_type?.toLowerCase() ?? 'concept_image',
+    group: conceptGroupForArtifact(artifact),
+    roleLabel: conceptRoleLabel(conceptGroupForArtifact(artifact)),
     image: artifactUrl(bundle, adapter, artifact) || mockConcepts[index % mockConcepts.length]?.image,
     createdAt: artifact.created_at,
     note: artifact.semantic_role || artifact.artifact_type || 'Runtime concept artifact',
@@ -248,6 +273,9 @@ function conceptFromArtifact(artifact, bundle, adapter, assetLibrary, index) {
 function modelAssetFromArtifact(artifact, bundle, adapter, index, modelType) {
   return {
     id: artifact.artifact_id,
+    asset_id: artifact.artifact_id,
+    entity_id: artifact.metadata?.entity_id || (modelType === '场景模型' || modelType === 'Blender 场景' ? 'scene_1' : `subject_${index + 1}`),
+    version_id: artifact.metadata?.version_id || `${artifact.metadata?.entity_id || (modelType === '场景模型' ? 'scene_1' : `subject_${index + 1}`)}_model_v${artifact.version ?? 1}`,
     title: readableArtifactTitle(artifact, `${modelType} ${index + 1}`),
     version: `v${artifact.version ?? 1}`,
     status: index === 0 ? '当前查看' : '备选方案',
@@ -261,17 +289,145 @@ function modelAssetFromArtifact(artifact, bundle, adapter, index, modelType) {
   };
 }
 
-function buildReferences(state) {
+function buildReferenceSlots(state) {
   const referenceImages = state.reference_images || state.references || [];
-  if (!Array.isArray(referenceImages) || referenceImages.length === 0) return mockReferences;
-  return referenceImages.map((reference, index) => ({
-    id: reference.image_id || reference.artifact_id || `reference_${index + 1}`,
-    alias: reference.alias || `@图片${index + 1}`,
-    title: reference.title || reference.filename || `参考图 ${index + 1}`,
-    role: reference.binding_role || reference.role || '参考图',
-    image: reference.url || reference.uri || mockReferences[index % mockReferences.length]?.image,
-    bindingRole: reference.binding_role || 'other',
+  const slots = mockReferenceSlots.map((slot) => ({ ...slot }));
+  if (!Array.isArray(referenceImages) || referenceImages.length === 0) return slots;
+
+  const nextSubjectIndex = { value: 0 };
+  const nextSceneIndex = { value: 0 };
+  referenceImages.slice(0, 6).forEach((reference, index) => {
+    const kind = normalizeReferenceKind(reference.binding_role || reference.role || reference.target_type);
+    const slotIndex = kind === 'scene' ? nextSceneIndex.value++ : nextSubjectIndex.value++;
+    const slotId = kind === 'scene' ? 'scene_slot_1' : `subject_slot_${slotIndex + 1}`;
+    const slot = slots.find((item) => item.slot_id === slotId) || slots[index];
+    if (!slot) return;
+    slot.slot_kind = kind;
+    slot.artifact_id = reference.image_id || reference.artifact_id || reference.id || slot.artifact_id;
+    slot.image_url = reference.url || reference.uri || reference.image_url || slot.image_url;
+    slot.status = slot.image_url ? 'uploaded' : 'empty';
+    slot.resolved_name = reference.title || reference.resolved_name || reference.display_name || slot.resolved_name;
+  });
+  return slots;
+}
+
+function referencesFromSlots(referenceSlots) {
+  return referenceSlots.filter((slot) => slot.status === 'uploaded').map((slot) => ({
+    id: slot.artifact_id || slot.slot_id,
+    alias: slot.mention,
+    title: slot.resolved_name || slot.display_label,
+    role: slot.slot_kind === 'scene' ? '场景参考' : '主体参考',
+    image: slot.image_url,
+    bindingRole: slot.slot_kind,
+    slotId: slot.slot_id,
+    entityId: slot.entity_id,
   }));
+}
+
+function normalizeReferenceKind(value) {
+  return String(value || '').toLowerCase().includes('scene') ? 'scene' : 'subject';
+}
+
+function buildEntities(sceneSpec, referenceSlots, concepts, subjects, sceneAssets) {
+  const entityMap = new Map(mockEntities.map((entity) => [entity.entity_id, { ...entity }]));
+  referenceSlots.forEach((slot) => {
+    if (slot.status !== 'uploaded') return;
+    entityMap.set(slot.entity_id, {
+      entity_id: slot.entity_id,
+      entity_type: slot.slot_kind,
+      display_label: slot.display_label,
+      resolved_name: slot.resolved_name,
+      source_slot_ids: [slot.slot_id],
+    });
+  });
+  [...concepts, ...subjects, ...sceneAssets].forEach((asset) => {
+    if (!asset.entity_id || entityMap.has(asset.entity_id)) return;
+    entityMap.set(asset.entity_id, {
+      entity_id: asset.entity_id,
+      entity_type: asset.entity_id === 'overall' ? 'overall' : asset.entity_id.startsWith('scene') ? 'scene' : 'subject',
+      display_label: publicEntityLabel(asset.entity_id),
+      resolved_name: asset.title,
+      source_slot_ids: [],
+    });
+  });
+  if (!entityMap.has('overall')) {
+    entityMap.set('overall', {
+      entity_id: 'overall',
+      entity_type: 'overall',
+      display_label: '整体图',
+      resolved_name: sceneSpec.title || '整体概念',
+      source_slot_ids: [],
+    });
+  }
+  return [...entityMap.values()].filter((entity) => (
+    entity.entity_type === 'overall'
+    || referenceSlots.some((slot) => slot.entity_id === entity.entity_id && slot.status === 'uploaded')
+    || concepts.some((asset) => asset.entity_id === entity.entity_id)
+    || subjects.some((asset) => asset.entity_id === entity.entity_id)
+    || sceneAssets.some((asset) => asset.entity_id === entity.entity_id)
+  ));
+}
+
+function buildAssetVersions(concepts, subjects, sceneAssets) {
+  return [
+    ...concepts.map((asset, index) => ({
+      asset_id: asset.asset_id || asset.id,
+      entity_id: asset.entity_id || conceptEntityId(asset),
+      asset_kind: 'concept_image',
+      version_label: asset.version_label || versionFromIndex(index),
+      image_url: asset.image,
+      status: statusToContract(asset.status),
+      source_asset_ids: [],
+      created_at: asset.createdAt,
+      title: asset.title,
+      note: asset.note,
+    })),
+    ...subjects.map((asset, index) => ({
+      asset_id: asset.asset_id || asset.id,
+      entity_id: asset.entity_id || `subject_${index + 1}`,
+      asset_kind: 'subject_model',
+      version_label: asset.version || versionFromIndex(index),
+      version_id: asset.version_id || `${asset.entity_id || `subject_${index + 1}`}_model_${asset.version || versionFromIndex(index)}`,
+      image_url: asset.image,
+      glb_url: asset.url,
+      status: statusToContract(asset.status),
+      source_asset_ids: [asset.sourceConceptId].filter(Boolean),
+      title: asset.title,
+      size: asset.size,
+    })),
+    ...sceneAssets.map((asset, index) => ({
+      asset_id: asset.asset_id || asset.id,
+      entity_id: asset.entity_id || (asset.status === '最终场景' ? 'final_scene' : 'scene_1'),
+      asset_kind: asset.status === '最终场景' ? 'final_scene' : 'scene_model',
+      version_label: asset.version || versionFromIndex(index),
+      version_id: asset.version_id || `${asset.entity_id || (asset.status === '最终场景' ? 'final_scene' : 'scene_1')}_${asset.version || versionFromIndex(index)}`,
+      image_url: asset.image,
+      glb_url: asset.url || asset.viewerSceneUrl,
+      status: statusToContract(asset.status),
+      source_asset_ids: [],
+      title: asset.title,
+    })),
+  ];
+}
+
+function buildApprovedConceptSelection(assetVersions) {
+  const selectedConcepts = assetVersions.filter((asset) => asset.asset_kind === 'concept_image' && ['selected', 'accepted'].includes(asset.status));
+  const fallbackConcepts = assetVersions.filter((asset) => asset.asset_kind === 'concept_image');
+  const byEntity = new Map();
+  [...selectedConcepts, ...fallbackConcepts].forEach((asset) => {
+    if (!byEntity.has(asset.entity_id)) byEntity.set(asset.entity_id, asset.asset_id);
+  });
+  const subject_concept_asset_ids = {};
+  const scene_concept_asset_ids = {};
+  for (const [entityId, assetId] of byEntity.entries()) {
+    if (entityId?.startsWith('subject_')) subject_concept_asset_ids[entityId] = assetId;
+    if (entityId?.startsWith('scene_')) scene_concept_asset_ids[entityId] = assetId;
+  }
+  return {
+    overall_concept_asset_id: byEntity.get('overall') || fallbackConcepts[0]?.asset_id || null,
+    subject_concept_asset_ids,
+    scene_concept_asset_ids,
+  };
 }
 
 function buildSceneAssets(sceneArtifacts, bundle, adapter, previewImage) {
@@ -283,6 +439,9 @@ function buildSceneAssets(sceneArtifacts, bundle, adapter, previewImage) {
   if (previewImage) {
     runtimeAssets.push({
       id: 'runtime_final_preview',
+      asset_id: 'runtime_final_preview',
+      entity_id: 'final_scene',
+      version_id: 'final_scene_runtime',
       title: bundle.frontend_status?.blender_scene_id || '最终场景预览',
       version: 'runtime',
       status: '最终场景',
@@ -309,22 +468,113 @@ function buildFinalScene(bundle, adapter, previewImage, sceneAssets) {
 
 function buildSceneObjects(sceneState) {
   const objects = sceneState?.objects;
-  if (!Array.isArray(objects) || objects.length === 0) return mockSceneObjects;
+  if (!Array.isArray(objects) || objects.length === 0) return [];
   return objects.slice(0, 24).map((object, index) => ({
-    id: object.object_id || object.id || `object_${index + 1}`,
-    label: object.label || object.name || `场景对象 ${index + 1}`,
-    type: object.type || object.semantic_role || 'object',
+    id: object.viewer_object_id || object.object_id || object.id || object.blender_object_id || `object_${index + 1}`,
+    label: object.display_name || object.label || object.name || object.viewer_object_id || `场景对象 ${index + 1}`,
+    type: object.object_type || object.type || object.semantic_role || 'object',
     visible: object.visible !== false,
+    selectable: object.selectable !== false,
+    highlighted: Boolean(object.highlighted),
+    bounds: normalizeBounds(object.bounds),
+    transform: object.transform ?? null,
+    subjectId: object.subject_id ?? null,
+    assetId: object.asset_id ?? null,
+    blenderObjectId: object.blender_object_id ?? null,
   }));
 }
 
 function buildCameraPresets(sceneState) {
   const presets = sceneState?.camera_presets;
-  if (!Array.isArray(presets) || presets.length === 0) return mockCameraPresets;
+  if (!Array.isArray(presets) || presets.length === 0) {
+    const camera = sceneState?.camera;
+    if (camera?.transform?.location) {
+      return [
+        {
+          id: 'scene_camera',
+          label: camera.name || 'Scene Camera',
+          orbit: null,
+          target: null,
+          source: 'scene_state.camera',
+        },
+        ...mockCameraPresets.slice(0, 5),
+      ];
+    }
+    return mockCameraPresets;
+  }
   return presets.slice(0, 12).map((preset, index) => ({
     id: preset.id || `camera_${index + 1}`,
     label: preset.label || preset.name || `镜头 ${index + 1}`,
+    orbit: preset.orbit || preset.camera_orbit || preset.cameraOrbit || null,
+    target: preset.target || preset.camera_target || preset.cameraTarget || null,
+    exposure: preset.exposure ?? null,
   }));
+}
+
+function conceptGroupForArtifact(artifact) {
+  const haystack = `${artifact.artifact_type || ''} ${artifact.semantic_role || ''} ${artifact.artifact_id || ''}`.toLowerCase();
+  if (haystack.includes('subject')) return 'subject';
+  if (haystack.includes('scene')) return 'scene';
+  return 'overall';
+}
+
+function conceptRoleLabel(group) {
+  const labels = { overall: '整体图', subject: '主体图', scene: '场景图' };
+  return labels[group] || '概念图';
+}
+
+function conceptEntityId(asset) {
+  if (asset.entity_id) return asset.entity_id;
+  if (asset.group === 'overall' || asset.kind?.includes('overall')) return 'overall';
+  if (asset.group === 'scene' || asset.kind?.includes('scene')) return 'scene_1';
+  return 'subject_1';
+}
+
+function publicEntityLabel(entityId = '') {
+  if (entityId === 'overall') return '整体图';
+  const subject = entityId.match(/^subject_(\d+)/);
+  if (subject) return `主体 ${subject[1]}`;
+  const scene = entityId.match(/^scene_(\d+)/);
+  if (scene) return `场景 ${scene[1]}`;
+  return entityId || '实体';
+}
+
+function versionFromIndex(index) {
+  return `v${Math.max(1, index + 1)}`;
+}
+
+function statusToContract(status) {
+  if (['selected', 'accepted', 'rejected', 'archived', 'generating', 'failed'].includes(status)) return status;
+  if (status === '已拒绝') return 'rejected';
+  if (status === '已选用' || status === '当前查看' || status === '最终场景') return 'selected';
+  if (status === '已验收') return 'accepted';
+  return 'candidate';
+}
+
+function normalizeBounds(bounds) {
+  const min = bounds?.min;
+  const max = bounds?.max;
+  if (!Array.isArray(min) || !Array.isArray(max) || min.length !== 3 || max.length !== 3) return null;
+  const nextMin = min.map(Number);
+  const nextMax = max.map(Number);
+  if ([...nextMin, ...nextMax].some((value) => !Number.isFinite(value))) return null;
+  return { min: nextMin, max: nextMax };
+}
+
+function buildGenerationStatus(frontendStatus, phase) {
+  const generatingPhases = new Set([
+    'CONCEPT_GENERATION',
+    'SUBJECT_ASSET_GENERATION',
+    'SCENE_ASSET_GENERATION',
+    'BLENDER_ASSEMBLY_EXECUTION',
+  ]);
+  if (!generatingPhases.has(phase)) return null;
+  return {
+    phase,
+    label: PHASE_LABELS[phase] ?? '生成中',
+    progressLabel: frontendStatus?.progress_label ?? null,
+    status: frontendStatus?.status ?? null,
+  };
 }
 
 function buildDeliveryFiles(files) {
