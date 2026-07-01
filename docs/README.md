@@ -1,27 +1,48 @@
 # Project Docs Index
 
-Use these docs as the current source of truth for V1 landing work.
+This directory contains the current active project documentation for
+`image23D_Agent`.
 
-- `v1_delivery_roadmap.md`: short execution roadmap from current scaffold to real end-to-end demo.
-- `v1_real_demo_20260628_report.md`: first real local artifact-chain demo report.
-- `agent_prompt_contract.md`: LLM node prompt, JSON output, and tool-boundary contract.
-- `agent_prompt_catalog.md`: generated, user-reviewable prompt catalog with every current node prompt, sample context, and output schema.
-- `reference_image_schema.md`: natural-language plus reference-image intake and binding schema.
-- `controller_design.md`: state-driven controller gates and next-action rules.
-- `agent_runtime_contract.md`: runtime job/profile/web-surface contract for
-  dispatching work to main runtime, background workers, sub-agents, or user
-  gates, plus the runtime console MVP boundary.
-- `repo_layout.md`: directory ownership, git tracking rules, and output placement rules.
-- `v1_overall_status.md`: current overall status and remaining gaps.
-- `v1_plan_gap_matrix.md`: DOC-003 minimum-plan completion matrix and conservative remaining-work estimate.
-- `v1_landing_progress.md`: detailed implementation/progress log and smoke evidence.
-- `runtime_environment_plan.md`: local runtime/service environment plan.
-- `blender_asset_pipeline_contract.md`: Blender/asset pipeline contract.
-- `agent_llm_provider_notes.md`: agent LLM provider notes with key suffixes only.
-- `../tests/fixtures/natural_language_scene_cases.json`: executable natural-language fixture matrix used by runtime tests.
+## Current Source Priority
 
-Current truth boundary:
+Use current active docs under `docs/` as the project documentation source.
+`docs/olddocs/` is a historical/reference archive and is not the governing plan
+unless the user explicitly asks for history, comparison, or recovery from old
+notes.
 
-- Passing tests and dry-runs mean infrastructure is healthy.
-- They do not mean the full image-to-3D-scene agent is complete.
-- A feature counts as landed only when its real output artifact, state file, summary, and verification command are recorded.
+When docs and runtime evidence disagree, inspect current code, tests, run
+artifacts, and logs first. Update the stale active doc after verification
+instead of creating a second conflicting source of truth.
+
+## Execution Harness
+
+The Round 01 execution harness is the required entrypoint for non-trivial
+coding-agent work:
+
+- `agent_execution_harness/README.md`: execution rules and entrypoint.
+- `agent_execution_harness/task_packet_template.md`: required task packet format.
+- `agent_execution_harness/runtime_flow_rules.md`: runtime state and gate rules.
+- `agent_execution_harness/live_test_policy.md`: live-service command boundary.
+- `agent_execution_harness/documentation_maintenance.md`: doc update rules.
+- `agent_execution_harness/module_checklist.md`: product workflow checklist.
+- `agent_execution_harness/progress_log.md`: append-only harness progress.
+- `agent_execution_harness/decision_log.md`: durable harness decisions.
+- `agent_execution_harness/design_notes.md`: current design notes.
+
+## Current Operating Rules
+
+- Build a real image/text-to-Blender-scene agent, not only scaffolding.
+- Reuse existing Hunyuan3D, HY-World/WorldMirror, Blender compose/export, GLB
+  viewer, artifact store, state/checkpoint, and review-patch paths.
+- `state.json` is the authoritative run state.
+- `frontend_status.json` is a derived UI handoff, not a second state source.
+- Dry-run, fixture, and delegated evidence must stay labelled as such.
+- Live model or Blender calls need an explicit command boundary and user
+  approval when required by the active task packet.
+- Generated binaries and run outputs stay under `outputs/runs/<run_id>/` and
+  must not be committed.
+
+## Historical Docs
+
+Archived prior docs are under `olddocs/`. Use them only as reference material
+when an active task packet permits or asks for historical comparison.

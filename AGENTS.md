@@ -30,10 +30,12 @@ The governing plan for this repository is the combined plan from:
 1. the user's current direction in the active conversation;
 2. the V1 Chinese design docs under
    `blender_scene_agent_docs_v1_zh_v0_3/blender_scene_agent_docs_v1_zh_v0_3/`;
-3. `docs/v1_delivery_roadmap.md`;
-4. `docs/v1_overall_status.md`;
-5. `docs/v1_real_demo_20260628_report.md`;
-6. current code, tests, runtime evidence, and generated artifacts.
+3. current active docs under `docs/`;
+4. current code, tests, runtime evidence, and generated artifacts.
+
+`docs/olddocs/` is a historical/reference archive. Do not treat files under
+`docs/olddocs/` as the governing plan unless the user explicitly asks for a
+historical audit or comparison.
 
 When these disagree, current user instruction and current repository/runtime
 evidence win. Update stale docs after verification instead of adding a second
@@ -74,6 +76,24 @@ The current priority is the agent control layer that makes the product flow
 real: prompt contracts, reference-image schema, controller gates, and artifact
 ingestion paths. Do not spend another slice only adding service-wrapper
 scaffolding unless it directly unblocks the end-to-end workflow above.
+
+## Execution Harness
+
+For any non-trivial implementation, planning, workflow, runtime,
+frontend-status, or model-service work, read and follow:
+
+```text
+docs/agent_execution_harness/README.md
+docs/agent_execution_harness/task_packet_template.md
+docs/agent_execution_harness/runtime_flow_rules.md
+docs/agent_execution_harness/live_test_policy.md
+docs/agent_execution_harness/documentation_maintenance.md
+```
+
+Use the task packet format for scoped work. Do not treat dry-run, fixture, or
+delegated evidence as live completion. Do not bypass runtime user-action gates
+or handoff-apply boundaries. Record tests, changed files, live calls, errors,
+and documentation updates in the final report.
 
 ## Sub-Agent Policy
 
@@ -199,13 +219,12 @@ Needs an explicit command boundary with recorded outputs:
 Use:
 
 - `docs/README.md` as the docs index;
-- `docs/agent_prompt_contract.md` for LLM node prompt/output rules;
-- `docs/reference_image_schema.md` for natural-language/reference-image intake;
-- `docs/controller_design.md` for state-driven controller gates;
-- `docs/v1_delivery_roadmap.md` for the current end-to-end landing plan;
-- `docs/repo_layout.md` for directory and git policy;
-- `docs/v1_overall_status.md` for high-level status;
-- `docs/v1_landing_progress.md` for detailed implementation evidence.
+- `docs/agent_execution_harness/README.md` as the execution harness entrypoint;
+- `docs/agent_execution_harness/task_packet_template.md` for non-trivial task packets;
+- `docs/agent_execution_harness/runtime_flow_rules.md` for state/runtime boundaries;
+- `docs/agent_execution_harness/live_test_policy.md` for live-service boundaries;
+- current active roadmap, status, demo, prompt, schema, controller, runtime, and
+  layout docs when they exist directly under `docs/`.
 
 Update docs when the actual state changes. Do not let docs claim live generation
 has run unless it actually ran.
