@@ -497,3 +497,11 @@ Verification:
 - Active docs/frontend search excluding olddocs, archived round packages,
   generated HTML galleries, node_modules, and build output found no stale
   legacy endpoint or deprecated-port hits.
+- `cd web/creator_app && npm run build` -> passed.
+- `CREATOR_APP_BASE_URL=http://127.0.0.1:5173 npm run smoke:backend-readonly`
+  -> passed; backend `http://127.0.0.1:5173/api/creator`; evidence
+  `run_logs/frontend_checks/creator_app_backend_readonly_20260702T095326Z`.
+- Follow-up HeroStage image fit/fill/original-view controls:
+  `cd web/creator_app && npm run build` -> passed;
+  `cd web/creator_app && npm run smoke:backend-readonly` -> passed; evidence
+  `run_logs/frontend_checks/creator_app_backend_readonly_20260702T095643Z`.
