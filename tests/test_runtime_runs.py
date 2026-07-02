@@ -226,6 +226,36 @@ def test_nonvisual_workflow_child_does_not_override_parent_run(tmp_path: Path) -
     assert bundle.state["phase"] == "CONCEPT_APPROVED"
 
 
+def test_discover_round04d_concept_collection_returns_real_case_children(tmp_path: Path) -> None:
+    samples_dir = tmp_path / "outputs" / "runs" / "round04d_live_12_samples"
+    for index in range(1, 13):
+        case_dir = samples_dir / f"case_{index:02d}_sample"
+        case_dir.mkdir(parents=True)
+        (case_dir / "state.json").write_text(
+            AgentProjectState(
+                project_id=f"case_{index:02d}",
+                thread_id="t",
+                phase=WorkflowPhase.SUBJECT_ASSET_GENERATION,
+            ).model_dump_json(),
+            encoding="utf-8",
+        )
+        (case_dir / "summary.json").write_text(json.dumps({"case": index}), encoding="utf-8")
+        (case_dir / "frontend_status.json").write_text(
+            json.dumps({"phase": "SUBJECT_ASSET_GENERATION", "status": "concept_ready"}),
+            encoding="utf-8",
+        )
+    (samples_dir / "case_13_no_state").mkdir(parents=True)
+
+    items = discover_runtime_runs(root=tmp_path, collection="round04d_concepts")
+
+    assert len(items) == 12
+    assert items[0].run_id == "round04d_live_12_samples/case_01_sample"
+    assert items[-1].run_id == "round04d_live_12_samples/case_12_sample"
+    assert [item.collection_rank for item in items] == list(range(1, 13))
+    assert {item.collection_id for item in items} == {"round04d_concepts"}
+    assert all(item.has_state for item in items)
+
+
 def test_discover_runtime_runs_prefers_visual_runs_over_newer_intake_runs(tmp_path: Path) -> None:
     visual_dir = tmp_path / "outputs" / "runs" / "visual_run" / "blender_viewer"
     smoke_dir = tmp_path / "outputs" / "runs" / "newer_smoke"

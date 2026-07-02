@@ -7,6 +7,7 @@ import {
   RuntimeAdapter,
   createMockViewModel,
   normalizeRunIndex,
+  normalizeRunIndexItemFromBundle,
   normalizeRuntimeBundle,
 } from './api/runtimeAdapter.js';
 import { IntakeScreen } from './screens/IntakeScreen.jsx';
@@ -25,6 +26,8 @@ const screenMap = {
   delivery: DeliveryScreen,
 };
 
+const DEFAULT_RUNTIME_RUN_COLLECTION = 'round04d_concepts';
+
 function initialScreenFromHash() {
   const hash = window.location.hash.replace('#', '');
   return screenMap[hash] ? hash : 'intake';
@@ -37,6 +40,7 @@ export default function App() {
     loading: false,
     baseUrl: runtimeApiBaseUrl(),
     selectedRunKey: runtimeRunKeyFromUrl(),
+    runCollection: runtimeRunCollectionFromUrl(),
     runs: [],
   });
   const [generationTask, setGenerationTask] = useState(null);
@@ -84,27 +88,30 @@ export default function App() {
     }
 
     const adapter = new RuntimeAdapter({ baseUrl });
-    setRuntimeState((current) => ({ ...current, loading: true, baseUrl }));
+    const runCollection = runtimeRunCollectionFromUrl();
+    setRuntimeState((current) => ({ ...current, loading: true, baseUrl, runCollection }));
     try {
-      const rawRuns = await adapter.listRuns();
-      const runs = normalizeRunIndex(rawRuns);
-      const selectedRunKey = runKey && runs.some((run) => run.runKey === runKey)
-        ? runKey
-        : runs[0]?.runKey;
+      const rawRuns = await adapter.listRuns({ collection: runCollection });
+      let runs = normalizeRunIndex(rawRuns);
+      const selectedRunKey = runKey || runs[0]?.runKey;
       if (!selectedRunKey) {
         throw new Error('Runtime backend returned no runs');
       }
       const rawBundle = await adapter.getRunBundle(selectedRunKey);
+      if (!runs.some((run) => run.runKey === selectedRunKey)) {
+        const selectedRun = normalizeRunIndexItemFromBundle(rawBundle);
+        runs = selectedRun ? [selectedRun, ...runs] : runs;
+      }
       const nextViewModel = normalizeRuntimeBundle(rawBundle, adapter, { runs });
       setViewModel(nextViewModel);
-      setRuntimeState({ loading: false, baseUrl, selectedRunKey, runs });
+      setRuntimeState({ loading: false, baseUrl, selectedRunKey, runCollection, runs });
       if (!window.location.hash) {
         setScreen(nextViewModel.currentScreen);
         window.history.replaceState(null, '', `#${nextViewModel.currentScreen}`);
       }
     } catch (error) {
       setViewModel(createMockViewModel({ source: 'mock-fallback', error: error.message }));
-      setRuntimeState({ loading: false, baseUrl, selectedRunKey: null, runs: [] });
+      setRuntimeState({ loading: false, baseUrl, selectedRunKey: null, runCollection, runs: [] });
     }
   }
 
@@ -213,4 +220,14 @@ function runtimeApiBaseUrl() {
 function runtimeRunKeyFromUrl() {
   const params = new URLSearchParams(window.location.search);
   return params.get('run_key');
+}
+
+function runtimeRunCollectionFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get('run_collection')
+    || params.get('collection')
+    || import.meta.env.VITE_RUNTIME_RUN_COLLECTION
+    || DEFAULT_RUNTIME_RUN_COLLECTION;
+  if (!value || value === 'all') return '';
+  return value;
 }
