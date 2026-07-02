@@ -68,11 +68,11 @@ Persisted outputs:
 - `checkpoints/`
 - rebuilt `runtime_plan.json` unless disabled by caller
 
-The runtime console exposes:
+The current Creator App backend exposes this through 5173 same-origin routes:
 
 ```text
-POST /api/runs/<run_key>/asset-action
-GET  /api/runs/<run_key>/runtime-asset-action
+POST /api/creator/projects/<project_key>/asset-action
+GET  /api/creator/projects/<project_key>/runtime-asset-action
 ```
 
 ## Handoff Apply Integration

@@ -198,4 +198,4 @@ Consequences:
 - Frontend direct `project_key`/`run_key` links still load even when the selected project is not
   present in the current collection.
 - Future demo collections should be added as explicit backend collections
-  rather than relying on global modified-time ordering or the old 8093 service.
+  rather than relying on global modified-time ordering or the old runtime-console service.

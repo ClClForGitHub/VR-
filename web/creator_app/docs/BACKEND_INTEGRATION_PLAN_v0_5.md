@@ -52,7 +52,7 @@ http://10.2.16.106:5173/#concept-review
 2. 所有后端读取通过 `RuntimeAdapter`。
 3. 所有后端结果先进入 `normalizeRuntimeBundle()`。
 4. 组件只消费稳定的 UI ViewModel。
-5. 旧 runtime console / 8093 不作为 Creator App 用户后端。
+5. 旧 runtime console 不作为 Creator App 用户后端。
 6. 后端字段变化时，只改 adapter/normalizer，不改所有 UI 组件。
 
 ---
