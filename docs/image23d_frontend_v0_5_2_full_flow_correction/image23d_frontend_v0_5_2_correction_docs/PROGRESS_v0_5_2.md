@@ -41,7 +41,7 @@
 
 - `npm run build`：通过；仅保留 `model-viewer` 动态 chunk 大小 warning。
 - `CREATOR_APP_BASE_URL=http://10.2.16.106:5173 npm run smoke:screenshots`：通过，8 个桌面/移动页面无水平溢出。
-- `CREATOR_APP_BASE_URL=http://10.2.16.106:5176 CREATOR_APP_RUNTIME_API_BASE_URL=http://10.2.16.106:18093 npm run smoke:backend-readonly`：通过，确认 backend bundle/交付文件渲染。
+- `CREATOR_APP_BASE_URL=http://10.2.16.106:5173 npm run smoke:backend-readonly`：通过；当前后端为 5173 同源 `/api/creator`。
 - Playwright 聚焦交互检查：通过，覆盖 `@` 选择、概念揭幕 overlay、概念组合弹窗、反馈抽屉、模型反馈抽屉、导演台 scene_state 空态。
 
 访问说明：
