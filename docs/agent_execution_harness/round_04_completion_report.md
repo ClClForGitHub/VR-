@@ -96,7 +96,8 @@ scripts/status_glb_viewer.sh:
   exit 0; GLB viewer running on http://10.2.16.106:8092/.
 
 scripts/status_runtime_console.sh:
-  exit 0; runtime console running on http://10.2.16.106:8093/.
+  historical service check; current Creator App frontend/backend contract is
+  5173 same-origin `/api/creator`.
 
 scripts/status_blender51_lab_mcp_bridge.sh:
   exit 0; Blender 5.1.2 Lab MCP bridge socket open on 127.0.0.1:9876.
@@ -251,8 +252,8 @@ assembly selection path:
 ## 13. Frontend Observability
 
 ```text
-GET /api/runs/<run_key> exposes asset_library: schema yes, live cases empty because no generated artifacts
-GET /api/runs/<run_key> exposes active_assembly_selection: schema yes, live cases empty because assembly not reached
+GET /api/creator/projects/<project_key>/bundle exposes asset_library: schema yes, live cases empty because no generated artifacts
+GET /api/creator/projects/<project_key>/bundle exposes active_assembly_selection: schema yes, live cases empty because assembly not reached
 frontend_status shows phase/progress/actions: yes
 concept images visible: no, live generation blocked
 models/assets visible: no, downstream generation not started

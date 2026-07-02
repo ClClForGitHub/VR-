@@ -137,8 +137,8 @@
   URL: http://10.2.16.106:8092/
 
   Runtime console:
-  running pid=368974
-  URL: http://10.2.16.106:8093/
+  historical service from this round; superseded by the 5173 same-origin
+  Creator App backend.
 
   Blender Lab MCP bridge:
   Blender 5.1.2

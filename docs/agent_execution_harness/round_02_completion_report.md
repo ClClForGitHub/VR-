@@ -156,7 +156,8 @@ scripts/status_blender51_lab_mcp_bridge.sh || true
 A40/Hunyuan3D/HY-World status: CUDA device reported available; ports 8091 and
 8081 were listening; no new job submitted.
 GLB viewer: running on port 8092.
-Runtime console: running on port 8093.
+Runtime console: historical service from this round; superseded by the 5173
+same-origin Creator App backend.
 Blender 5.1 Lab MCP bridge: running; socket open on 127.0.0.1:9876.
 ```
 

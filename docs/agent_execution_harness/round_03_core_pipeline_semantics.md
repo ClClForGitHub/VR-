@@ -62,5 +62,6 @@ Read-only status checks:
 
 - `scripts/status_a40_services.sh` -> exit 0; torch saw one NVIDIA A40 and ports 8091/8081 were listening. `nvidia-smi` still reported an NVML device-handle error and existing logs include prior WorldMirror/Gradio path warnings.
 - `scripts/status_glb_viewer.sh` -> exit 0; GLB viewer listening on 8092.
-- `scripts/status_runtime_console.sh` -> exit 0; runtime console listening on 8093.
+- `scripts/status_runtime_console.sh` -> historical service check; current
+  Creator App frontend/backend contract is 5173 same-origin `/api/creator`.
 - `scripts/status_blender51_lab_mcp_bridge.sh` -> exit 0; Blender 5.1.2 MCP bridge socket open on 127.0.0.1:9876, with existing SSBO warnings in recent logs.
