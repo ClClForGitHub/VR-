@@ -94,7 +94,14 @@ class ScriptDomainToolDispatcher:
         *,
         options: CommandExecutionOptions | None,
     ) -> DomainToolDispatchResult:
-        args = _require_args(arguments, ["scene_glb", "asset_glb", "preview_png", "output_blend"])
+        args = _require_args(arguments, ["scene_glb", "preview_png", "output_blend"])
+        asset_glbs = _string_list(arguments.get("asset_glbs"))
+        asset_glb = arguments.get("asset_glb") or (asset_glbs[0] if asset_glbs else None)
+        if asset_glb is None:
+            raise ValueError("missing required domain tool arguments: asset_glb or asset_glbs")
+        args["asset_glb"] = asset_glb
+        if asset_glbs:
+            args["asset_glbs"] = asset_glbs
         if arguments.get("assembly_plan_json"):
             args["assembly_plan_json"] = arguments["assembly_plan_json"]
         command = build_compose_blender_scene_command(
@@ -104,6 +111,7 @@ class ScriptDomainToolDispatcher:
             args["preview_png"],
             args["output_blend"],
             assembly_plan_json=args.get("assembly_plan_json"),
+            asset_glbs=args.get("asset_glbs"),
             **self._blender_kwargs(),
         )
         record = ToolExecutor(self.state).run_command(
@@ -119,6 +127,7 @@ class ScriptDomainToolDispatcher:
             outputs={
                 "preview_png": str(Path(args["preview_png"]).expanduser().resolve()),
                 "output_blend": str(Path(args["output_blend"]).expanduser().resolve()),
+                "asset_glb_count": len(args.get("asset_glbs") or [args["asset_glb"]]),
             },
             options=options,
         )
@@ -584,6 +593,16 @@ def _require_args(arguments: dict[str, Any], required: list[str]) -> dict[str, A
     if missing:
         raise ValueError(f"missing required domain tool arguments: {missing}")
     return {name: arguments[name] for name in required}
+
+
+def _string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (str, Path)):
+        return [str(value)]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item) for item in value if item]
 
 
 def _blend_file_path_for_state(state: AgentProjectState) -> Path | None:

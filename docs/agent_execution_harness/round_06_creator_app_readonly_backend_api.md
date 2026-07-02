@@ -2,11 +2,11 @@
 
 ## Objective
 
-Connect the v0.5 Creator App to the real runtime-console read-only backend API
-while preserving mock fallback. This round ends at real backend API display:
-run list, selected run bundle, file URL normalization, and product-facing
-ViewModel mapping. Write operations, model-viewer, and public UI replacement
-remain later slices.
+Connect the v0.5 Creator App on port 5173 to the real Creator App read-only
+backend mounted under the same origin at `/api/creator`, while preserving mock
+fallback. This round ends at real backend API display: project list, selected
+project bundle, file URL normalization, and product-facing ViewModel mapping.
+Write operations, model-viewer, and public UI replacement remain later slices.
 
 ## Required Reading
 
@@ -22,8 +22,8 @@ docs/agent_execution_harness/round_04_creator_app_mock_migration.md
 docs/agent_execution_harness/round_05_creator_app_responsive_polish.md
 web/creator_app/docs/BACKEND_INTEGRATION_PLAN_v0_5.md
 web/creator_app/docs/CODEX_REACT_IMPLEMENTATION_PROMPTS_v0_5.md
-tools/runtime_console_server.py
-agent_runtime/runtime_runs.py
+web/creator_app/server/creatorBackendPlugin.js
+web/creator_app/src/api/runtimeAdapter.js
 ```
 
 ## Allowed File Scope
@@ -52,16 +52,16 @@ docs/agent_execution_harness/progress_log.md
 
 ## Concrete Tasks
 
-1. Implement `RuntimeAdapter` read-only methods for runs, bundles, and file
-   URLs, with robust JSON/error handling.
+1. Implement `RuntimeAdapter` read-only methods for projects, bundles, and
+   file URLs, with robust JSON/error handling.
 2. Add `normalizeRuntimeBundle(rawBundle, adapter)` to produce a
    CreatorRunViewModel consumed by UI components.
 3. Keep mock fallback when no backend is configured or the backend is
    unreachable.
 4. Wire `App` / shell/screens to receive ViewModel data without changing
    workflow semantics.
-5. Add a backend smoke script that can start or use the runtime console, verify
-   read-only endpoints, and verify the Creator App renders real run metadata.
+5. Add a backend smoke script that verifies the 5173 same-origin read-only
+   endpoints and verifies the Creator App renders real project metadata.
 6. Run build, screenshot smoke, and backend read-only smoke.
 7. Record the mock/live backend boundary and verification evidence.
 
@@ -80,15 +80,19 @@ npm run smoke:backend-readonly
 
 No live model call is allowed in this packet.
 
-Read-only runtime-console status/API checks are allowed. They do not mutate
-runtime state and do not count as live generation.
+Read-only 5173 same-origin API checks are allowed. They do not mutate runtime
+state and do not count as live generation.
 
 ## Acceptance Criteria
 
 - [x] Creator App still runs on mock data without a backend.
-- [x] With runtime-console API available, Creator App can show a real run list
-  and normalized selected-run metadata.
-- [x] File links in normalized data use `/api/runs/<run_key>/file?path=...`
+- [x] With the 5173 same-origin Creator App backend available, Creator App can
+  show a real project list and normalized selected-project metadata.
+- [x] Creator App can request the real Round04D concept collection with
+  `GET /api/creator/projects?collection=round04d_concepts` so the project
+  center shows the 12 concept cases instead of legacy all-runs discovery.
+- [x] File links in normalized data use
+  `/api/creator/projects/<project_key>/file?path=...`
   when relative file paths exist.
 - [x] `npm run build` passes.
 - [x] `npm run smoke:screenshots` passes.
@@ -101,26 +105,41 @@ runtime state and do not count as live generation.
 
 Completed on 2026-07-01.
 
+Superseded on 2026-07-02: the current Creator App user backend is no longer the
+old runtime-console service. The active entrypoint is 5173 with same-origin
+`/api/creator`; the historical notes below are retained only as prior-round
+evidence and must not be used as the current frontend contract.
+
 Verification:
 
 ```text
 cd web/creator_app && npm run build -> passed; Vite transformed 53 modules
 cd web/creator_app && npm run smoke:screenshots -> passed; 8 mock screenshots checked
   output: run_logs/frontend_checks/creator_app_round05_20260701T104232Z
-cd web/creator_app && npm run smoke:backend-readonly -> passed
-  backend: http://127.0.0.1:18093
-  selected run: 20260630_live_user_examples_114143Z
-  output: run_logs/frontend_checks/creator_app_backend_readonly_20260701T103920Z
-Playwright check against existing runtime console:
-  http://127.0.0.1:5173/?api_base=http%3A%2F%2F127.0.0.1%3A8093#delivery
-  source=backend, run options=50, file cards=6, has runtime file link=true
+CREATOR_APP_BASE_URL=http://127.0.0.1:5173 npm run smoke:backend-readonly -> passed
+  backend: http://127.0.0.1:5173/api/creator
+  project count: 12
+  output: run_logs/frontend_checks/creator_app_backend_readonly_20260702T093937Z
+Playwright check against 5173 same-origin backend:
+  http://127.0.0.1:5173/#concept-review
+  source=backend, project options=12, concept images load through /api/creator
+```
+
+Follow-up on 2026-07-02:
+
+```text
+Creator App default run collection -> round04d_concepts
+GET /api/creator/projects?collection=round04d_concepts -> 12 Round04D concept sample cases
+direct project_key loading no longer requires the project to appear in the current list
+FINAL_PREVIEW_IMAGE is consumed as a concept/final-preview image artifact
 ```
 
 Live calls:
 
 ```text
 No live model calls, write API calls, or non-dry-run Blender MCP calls were run.
-Only read-only GET checks against runtime-console API were used.
+Only read-only GET checks against the 5173 same-origin Creator App API were
+used.
 ```
 
 ## Final Report Requirements
@@ -132,7 +151,7 @@ Report:
 - `git diff --stat`;
 - `git status --short`;
 - test commands and outputs;
-- backend smoke endpoint and run key used;
+- backend smoke endpoint and project key used;
 - live calls run, or explicitly no live calls;
 - errors/blockers;
 - next recommended step.

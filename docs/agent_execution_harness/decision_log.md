@@ -166,3 +166,36 @@ Consequences:
   through the same manifest path.
 - The boundary remains a wrapper over codex-self rather than a claim that the
   upstream MCP schema has native image parameters.
+
+## DEC-20260702-creator-app-round04d-collection: Use an explicit real concept-case collection for the Creator App project center
+
+Decision:
+- The Creator App project center defaults to
+  `GET /api/creator/projects?collection=round04d_concepts` on the 5173
+  same-origin Creator App backend.
+- `round04d_concepts` maps to
+  `outputs/runs/round04d_live_12_samples/case_*` and should expose the 12 real
+  Round04D concept sample projects.
+- The legacy runtime-console/all-runs discovery list is not the Creator App
+  project-center backend.
+
+Reason:
+- The old all-runs discovery endpoint prioritizes historical runs with viewer/scene
+  artifacts and can return 50 older runtime entries before the current concept
+  samples are visible.
+- The user-facing Creator App must show the real 12 concept cases that were
+  generated for Round04D, not old placeholder/mock choices.
+- A backend collection keeps the frontend project selector tied to runtime
+  `state.json`/artifact evidence instead of a hard-coded gallery list.
+
+Alternatives considered:
+- Increase the default all-runs limit and let the frontend search for cases.
+- Hard-code 12 base64 run keys directly in the frontend.
+- Replace the Creator App backend with the static HTML concept gallery.
+
+Consequences:
+- 5173 now has a stable same-origin collection query surface for demo data.
+- Frontend direct `project_key`/`run_key` links still load even when the selected project is not
+  present in the current collection.
+- Future demo collections should be added as explicit backend collections
+  rather than relying on global modified-time ordering or the old 8093 service.

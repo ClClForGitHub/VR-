@@ -62,7 +62,7 @@ const SUBJECT_MODEL_TYPES = new Set(['SUBJECT_3D_ASSET']);
 const SCENE_MODEL_TYPES = new Set(['SCENE_3D_ASSET', 'BLENDER_SCENE', 'VIEWER_SCENE']);
 
 export class RuntimeAdapter {
-  constructor({ baseUrl = '' } = {}) {
+  constructor({ baseUrl = '/api/creator' } = {}) {
     this.baseUrl = (baseUrl || '').replace(/\/$/, '');
   }
 
@@ -94,19 +94,19 @@ export class RuntimeAdapter {
     if (collection) query.set('collection', collection);
     if (limit) query.set('limit', String(limit));
     const suffix = query.toString() ? `?${query}` : '';
-    return this.request(`/api/runs${suffix}`);
+    return this.request(`/projects${suffix}`);
   }
 
   getRun(runKey) {
-    return this.request(`/api/runs/${encodeURIComponent(runKey)}`);
+    return this.request(`/projects/${encodeURIComponent(runKey)}`);
   }
 
   getRunBundle(runKey) {
-    return this.request(`/api/runs/${encodeURIComponent(runKey)}/bundle`);
+    return this.request(`/projects/${encodeURIComponent(runKey)}/bundle`);
   }
 
   sendChat(runKey, { text, attachmentIds = [], metadata = {} } = {}) {
-    return this.request(`/api/runs/${encodeURIComponent(runKey)}/chat`, {
+    return this.request(`/projects/${encodeURIComponent(runKey)}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -127,7 +127,7 @@ export class RuntimeAdapter {
     if (slot?.entity_id) form.append('entity_id', slot.entity_id);
     if (slot?.mention) form.append('mention', slot.mention);
     if (slot?.display_label) form.append('display_label', slot.display_label);
-    return this.request(`/api/runs/${encodeURIComponent(runKey)}/upload`, {
+    return this.request(`/projects/${encodeURIComponent(runKey)}/upload`, {
       method: 'POST',
       headers: {},
       body: form,
@@ -136,12 +136,14 @@ export class RuntimeAdapter {
 
   fileUrl(runKey, relativePath) {
     const query = new URLSearchParams({ path: relativePath });
-    return `${this.baseUrl}/api/runs/${encodeURIComponent(runKey)}/file?${query}`;
+    return `${this.baseUrl}/projects/${encodeURIComponent(runKey)}/file?${query}`;
   }
 
   normalizeFileUrl(url) {
     if (!url) return null;
     if (/^https?:\/\//.test(url)) return url;
+    if (url.startsWith('/api/')) return url;
+    if (this.baseUrl && url.startsWith(`${this.baseUrl}/`)) return url;
     return `${this.baseUrl}${url.startsWith('/') ? url : `/${url}`}`;
   }
 }
@@ -178,9 +180,9 @@ export function createMockViewModel({ source = 'mock', error = null } = {}) {
 export function normalizeRunIndex(rawRuns = []) {
   if (!Array.isArray(rawRuns)) return [];
   return rawRuns.map((run) => ({
-    runKey: run.run_key,
+    runKey: run.project_key ?? run.run_key,
     displayName: publicRunLabel(run),
-    relativePath: run.relative_path ?? run.run_id ?? null,
+    relativePath: run.relative_path ?? run.project_id ?? run.run_id ?? null,
     phase: run.frontend_phase ?? null,
     status: run.frontend_status_value ?? null,
     hasViewerScene: Boolean(run.has_viewer_scene),
@@ -192,11 +194,11 @@ export function normalizeRunIndex(rawRuns = []) {
 }
 
 export function normalizeRunIndexItemFromBundle(rawBundle) {
-  if (!rawBundle?.run_key) return null;
+  if (!rawBundle?.project_key && !rawBundle?.run_key) return null;
   return {
-    runKey: rawBundle.run_key,
+    runKey: rawBundle.project_key ?? rawBundle.run_key,
     displayName: publicRunLabel(rawBundle),
-    relativePath: rawBundle.relative_path ?? rawBundle.run_id ?? null,
+    relativePath: rawBundle.relative_path ?? rawBundle.project_id ?? rawBundle.run_id ?? null,
     phase: rawBundle.frontend_status?.phase ?? rawBundle.state?.phase ?? null,
     status: rawBundle.frontend_status?.status ?? null,
     hasViewerScene: Boolean(rawBundle.file_manifest?.files?.some((file) => file.label === 'viewer_scene' && file.exists)),
@@ -230,7 +232,7 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
     : mockConcepts;
   const subjects = subjectArtifacts.length > 0
     ? subjectArtifacts.map((artifact, index) => modelAssetFromArtifact(artifact, rawBundle, adapter, index, '主体模型'))
-    : mockSubjects;
+    : [];
   const sceneAssets = buildSceneAssets(sceneArtifacts, rawBundle, adapter, previewImage);
   const entities = buildEntities(sceneSpec, referenceSlots, concepts, subjects, sceneAssets);
   const assetVersions = buildAssetVersions(concepts, subjects, sceneAssets);
@@ -245,7 +247,7 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
   return {
     source: 'backend',
     error: null,
-    runKey: rawBundle.run_key,
+    runKey: rawBundle.project_key ?? rawBundle.run_key,
     phase,
     publicPhaseLabel: PHASE_LABELS[phase] ?? phase,
     currentScreen: PHASE_TO_SCREEN[phase] ?? 'intake',
@@ -302,21 +304,24 @@ function normalizeFileManifest(bundle, adapter) {
 
 function conceptFromArtifact(artifact, bundle, adapter, assetLibrary, index) {
   const libraryItem = assetLibrary.find((item) => item.artifact_id === artifact.artifact_id);
+  const selectedConceptIds = approvedConceptIdsFromState(bundle.state);
+  const group = conceptGroupForArtifact(artifact);
+  const entityId = conceptEntityIdForArtifact(artifact, group);
   const status = libraryItem?.review_status === 'rejected'
     ? '已拒绝'
-    : libraryItem?.selection_status?.includes('selected')
+    : selectedConceptIds.has(artifact.artifact_id) || libraryItem?.selection_status?.includes('selected')
       ? '已选用'
-      : index === 0 ? '当前查看' : '历史版本';
+      : '候选';
   return {
     id: artifact.artifact_id,
     asset_id: artifact.artifact_id,
-    entity_id: artifact.metadata?.entity_id || conceptEntityId({ kind: artifact.artifact_type?.toLowerCase(), group: conceptGroupForArtifact(artifact) }),
-    version_label: `v${artifact.version ?? index + 1}`,
-    title: readableArtifactTitle(artifact, `概念图 ${index + 1}`),
+    entity_id: entityId,
+    version_label: `v${conceptVersion(artifact, index)}`,
+    title: conceptArtifactTitle(artifact, bundle, group, `概念图 ${index + 1}`),
     status,
     kind: artifact.artifact_type?.toLowerCase() ?? 'concept_image',
-    group: conceptGroupForArtifact(artifact),
-    roleLabel: conceptRoleLabel(conceptGroupForArtifact(artifact)),
+    group,
+    roleLabel: conceptRoleLabel(group),
     image: artifactUrl(bundle, adapter, artifact) || mockConcepts[index % mockConcepts.length]?.image,
     createdAt: artifact.created_at,
     note: artifact.semantic_role || artifact.artifact_type || 'Runtime concept artifact',
@@ -356,6 +361,9 @@ function buildReferenceSlots(state, bundle, adapter) {
     const slot = slots.find((item) => item.slot_id === slotId) || slots[index];
     if (!slot) return;
     slot.slot_kind = kind;
+    slot.entity_id = reference.entity_id || slot.entity_id;
+    slot.display_label = reference.display_label || slot.display_label || publicEntityLabel(slot.entity_id);
+    slot.mention = reference.mention || slot.mention;
     slot.artifact_id = reference.image_id || reference.artifact_id || reference.id || slot.artifact_id;
     slot.image_url = reference.url || reference.uri || reference.image_url || slot.image_url;
     slot.status = slot.image_url ? 'uploaded' : 'empty';
@@ -371,10 +379,12 @@ function normalizeReferenceImages(state, bundle, adapter) {
   if (inputImages.length === 0) return [];
   const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.artifact_id, artifact]));
+  const referenceBinding = referenceBindingFromSceneSpec(state.scene_spec);
   return inputImages.map((image, index) => {
     const artifact = artifactsById.get(image.artifact_id);
     const metadata = artifact?.metadata || {};
-    const kind = normalizeReferenceKind(metadata.binding_role || metadata.slot_kind || metadata.target_type);
+    const binding = referenceBinding.get(image.image_id) || referenceBinding.get(image.artifact_id) || {};
+    const kind = normalizeReferenceKind(metadata.binding_role || metadata.slot_kind || metadata.target_type || binding.binding_role);
     const url = artifactUrl(bundle, adapter, artifact || image) || image.uri || artifact?.uri;
     return {
       id: image.image_id,
@@ -383,12 +393,49 @@ function normalizeReferenceImages(state, bundle, adapter) {
       uri: url,
       image_url: url,
       binding_role: kind,
-      slot_id: metadata.slot_id,
-      entity_id: metadata.entity_id,
-      title: metadata.display_label || image.user_declared_label || image.notes || `上传参考 ${index + 1}`,
-      resolved_name: metadata.original_filename || image.user_declared_label || `上传参考 ${index + 1}`,
+      slot_id: metadata.slot_id || binding.slot_id,
+      entity_id: metadata.entity_id || binding.entity_id,
+      mention: metadata.mention || binding.mention,
+      display_label: metadata.display_label || binding.display_label,
+      title: metadata.display_label || binding.resolved_name || image.user_declared_label || image.notes || `上传参考 ${index + 1}`,
+      resolved_name: binding.resolved_name || metadata.original_filename || image.user_declared_label || `上传参考 ${index + 1}`,
     };
   });
+}
+
+function referenceBindingFromSceneSpec(sceneSpec = {}) {
+  const binding = new Map();
+  const subjects = Array.isArray(sceneSpec.subjects) ? sceneSpec.subjects : [];
+  subjects.slice(0, 5).forEach((subject, index) => {
+    const entityId = subject.subject_id || `subject_${index + 1}`;
+    const imageIds = Array.isArray(subject.reference_image_ids) ? subject.reference_image_ids : [];
+    imageIds.forEach((imageId) => {
+      if (!imageId) return;
+      binding.set(imageId, {
+        binding_role: 'subject',
+        slot_id: `subject_slot_${index + 1}`,
+        entity_id: entityId,
+        mention: `@主体${index + 1}`,
+        display_label: `主体${index + 1}`,
+        resolved_name: subject.display_name || subject.description || `主体${index + 1}`,
+      });
+    });
+  });
+  const sceneImageIds = Array.isArray(sceneSpec.environment?.scene_reference_image_ids)
+    ? sceneSpec.environment.scene_reference_image_ids
+    : [];
+  sceneImageIds.forEach((imageId) => {
+    if (!imageId) return;
+    binding.set(imageId, {
+      binding_role: 'scene',
+      slot_id: 'scene_slot_1',
+      entity_id: 'scene_1',
+      mention: '@场景1',
+      display_label: '场景1',
+      resolved_name: sceneSpec.environment?.description || sceneSpec.title || '场景概念',
+    });
+  });
+  return binding;
 }
 
 function referencesFromSlots(referenceSlots) {
@@ -409,15 +456,44 @@ function normalizeReferenceKind(value) {
 }
 
 function buildEntities(sceneSpec, referenceSlots, concepts, subjects, sceneAssets) {
-  const entityMap = new Map(mockEntities.map((entity) => [entity.entity_id, { ...entity }]));
+  const entityMap = new Map();
+  entityMap.set('overall', {
+    entity_id: 'overall',
+    entity_type: 'overall',
+    display_label: '整体图',
+    resolved_name: sceneSpec.title || '整体概念',
+    source_slot_ids: [],
+  });
+  const sceneSubjects = Array.isArray(sceneSpec.subjects) ? sceneSpec.subjects : [];
+  sceneSubjects.forEach((subject, index) => {
+    const entityId = subject.subject_id || `subject_${index + 1}`;
+    entityMap.set(entityId, {
+      entity_id: entityId,
+      entity_type: 'subject',
+      display_label: `主体${index + 1}`,
+      resolved_name: subject.display_name || subject.description || publicEntityLabel(entityId),
+      source_slot_ids: [],
+    });
+  });
+  if (sceneSpec.scene_id || sceneSpec.environment?.description || concepts.some((asset) => asset.entity_id === 'scene_1')) {
+    entityMap.set('scene_1', {
+      entity_id: 'scene_1',
+      entity_type: 'scene',
+      display_label: '场景1',
+      resolved_name: sceneSpec.environment?.description || sceneSpec.title || sceneSpec.scene_id || '场景概念',
+      source_slot_ids: [],
+    });
+  }
   referenceSlots.forEach((slot) => {
     if (slot.status !== 'uploaded') return;
+    const current = entityMap.get(slot.entity_id);
     entityMap.set(slot.entity_id, {
+      ...current,
       entity_id: slot.entity_id,
       entity_type: slot.slot_kind,
-      display_label: slot.display_label,
-      resolved_name: slot.resolved_name,
-      source_slot_ids: [slot.slot_id],
+      display_label: current?.display_label || slot.display_label,
+      resolved_name: current?.resolved_name || slot.resolved_name,
+      source_slot_ids: [...(current?.source_slot_ids || []), slot.slot_id],
     });
   });
   [...concepts, ...subjects, ...sceneAssets].forEach((asset) => {
@@ -430,15 +506,6 @@ function buildEntities(sceneSpec, referenceSlots, concepts, subjects, sceneAsset
       source_slot_ids: [],
     });
   });
-  if (!entityMap.has('overall')) {
-    entityMap.set('overall', {
-      entity_id: 'overall',
-      entity_type: 'overall',
-      display_label: '整体图',
-      resolved_name: sceneSpec.title || '整体概念',
-      source_slot_ids: [],
-    });
-  }
   return [...entityMap.values()].filter((entity) => (
     entity.entity_type === 'overall'
     || referenceSlots.some((slot) => slot.entity_id === entity.entity_id && slot.status === 'uploaded')
@@ -515,7 +582,7 @@ function buildSceneAssets(sceneArtifacts, bundle, adapter, previewImage) {
     ...modelAssetFromArtifact(artifact, bundle, adapter, index, artifact.artifact_type === 'BLENDER_SCENE' ? 'Blender 场景' : '场景模型'),
     fileFormat: fileFormatFromArtifact(artifact),
   }));
-  if (runtimeAssets.length === 0) return mockSceneAssets;
+  if (runtimeAssets.length === 0 && !previewImage) return [];
   if (previewImage) {
     runtimeAssets.push({
       id: 'runtime_final_preview',
@@ -599,6 +666,62 @@ function conceptGroupForArtifact(artifact) {
   return 'overall';
 }
 
+function conceptEntityIdForArtifact(artifact, group) {
+  if (group === 'overall') return 'overall';
+  if (group === 'scene') return 'scene_1';
+  return artifact.metadata?.entity_id
+    || artifact.linked_subject_id
+    || artifact.metadata?.subject_id
+    || subjectIdFromRequirement(artifact.metadata?.requirement_id)
+    || artifact.metadata?.target_id
+    || 'subject_1';
+}
+
+function subjectIdFromRequirement(requirementId) {
+  const match = String(requirementId || '').match(/^subject_concept:(.+)$/);
+  return match?.[1] || null;
+}
+
+function conceptVersion(artifact, index) {
+  const version = artifact.metadata?.concept_version ?? artifact.version ?? index + 1;
+  const parsed = Number(version);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : version;
+}
+
+function approvedConceptIdsFromState(state = {}) {
+  const conceptBundle = state.concept_bundle || {};
+  const ids = new Set();
+  if (conceptBundle.final_preview_image_id) ids.add(conceptBundle.final_preview_image_id);
+  const sceneIds = Array.isArray(conceptBundle.scene_concept_image_ids) ? conceptBundle.scene_concept_image_ids : [];
+  sceneIds.forEach((id) => id && ids.add(id));
+  const subjectMap = conceptBundle.subject_concept_images || {};
+  Object.values(subjectMap).forEach((value) => {
+    if (Array.isArray(value)) value.forEach((id) => id && ids.add(id));
+    else if (value) ids.add(value);
+  });
+  return ids;
+}
+
+function conceptArtifactTitle(artifact, bundle, group, fallback) {
+  if (group === 'overall') return bundle.state?.scene_spec?.title || '整体预览';
+  if (group === 'scene') return bundle.state?.scene_spec?.environment?.description || bundle.state?.scene_spec?.title || '场景概念';
+  const subjectId = conceptEntityIdForArtifact(artifact, group);
+  const subject = (bundle.state?.scene_spec?.subjects || []).find((item) => item.subject_id === subjectId);
+  if (subject?.display_name) return subject.display_name;
+  const requirementId = artifact.metadata?.requirement_id;
+  const requirements = bundle.state?.concept_bundle?.prompt_pack?.image_requirements;
+  const requirement = Array.isArray(requirements)
+    ? requirements.find((item) => item.requirement_id === requirementId)
+    : null;
+  if (requirement?.user_review_label) {
+    return requirement.user_review_label
+      .replace(/\s+subject concept$/i, '')
+      .replace(/\s+scene concept$/i, '')
+      .replace(/\s+target render$/i, '');
+  }
+  return readableArtifactTitle(artifact, fallback);
+}
+
 function conceptRoleLabel(group) {
   const labels = { overall: '整体图', subject: '主体图', scene: '场景图' };
   return labels[group] || '概念图';
@@ -617,6 +740,8 @@ function publicEntityLabel(entityId = '') {
   if (subject) return `主体${subject[1]}`;
   const scene = entityId.match(/^scene_(\d+)/);
   if (scene) return `场景${scene[1]}`;
+  if (entityId.startsWith('subject_')) return '主体';
+  if (entityId.startsWith('scene_')) return '场景';
   return entityId || '实体';
 }
 

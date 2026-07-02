@@ -3,6 +3,7 @@ import pytest
 from agent_runtime.runtime_profiles import get_hunyuan3d_profile, hunyuan3d_profile_public_summary
 from agent_runtime.runtime_profiles import (
     HUNYUAN3D_GENERATION_PROFILES,
+    RuntimeServiceConfig,
     hunyuan3d_profile_restart_impact,
     select_hunyuan3d_profile_for_subject,
 )
@@ -20,11 +21,18 @@ def test_hunyuan3d_default_profile_matches_current_high_quality_service_defaults
     assert profile.suggested_executor == "sub_agent"
 
 
-def test_hunyuan3d_fast_smoke_profile_is_explicitly_lower_quality() -> None:
+def test_hunyuan3d_default_runtime_policy_balances_full_sample_runs() -> None:
+    config = RuntimeServiceConfig()
+
+    assert config.default_hunyuan3d_profile_id == "hq_textured_1m_768"
+    assert config.default_hunyuan3d_profile_policy == "balanced_per_subject"
+
+
+def test_hunyuan3d_fast_profile_keeps_texture_with_lower_face_count() -> None:
     profile = get_hunyuan3d_profile("fast_shape_50k_768")
     kwargs = profile.payload_kwargs(seed=7, randomize_seed=False)
 
-    assert kwargs["texture"] is False
+    assert kwargs["texture"] is True
     assert kwargs["face_count"] == 50000
     assert kwargs["num_inference_steps"] == 30
     assert kwargs["seed"] == 7
@@ -32,11 +40,11 @@ def test_hunyuan3d_fast_smoke_profile_is_explicitly_lower_quality() -> None:
 
 
 def test_hunyuan3d_profile_summary_includes_payload_defaults() -> None:
-    summary = hunyuan3d_profile_public_summary("hq_shape_1m_768")
+    summary = hunyuan3d_profile_public_summary("fast_shape_50k_768")
 
-    assert summary["payload_defaults"]["texture"] is False
+    assert summary["payload_defaults"]["texture"] is True
     assert summary["payload_defaults"]["octree_resolution"] == 768
-    assert summary["payload_defaults"]["face_count"] == 1000000
+    assert summary["payload_defaults"]["face_count"] == 50000
 
 
 def test_unknown_hunyuan3d_profile_is_rejected() -> None:
@@ -55,27 +63,27 @@ def test_current_hunyuan3d_profiles_are_request_only_and_do_not_require_restart(
         assert "max_num_view" in impact.service_start_fields
 
 
-def test_balanced_subject_profile_selector_keeps_only_hero_characters_textured() -> None:
+def test_balanced_subject_profile_selector_uses_only_kept_profiles() -> None:
     hero = _subject("subject_hero", category="character", priority="hero")
     important = _subject("subject_sidekick", category="character", priority="important")
     prop = _subject("subject_prop", category="prop", priority="important")
 
     assert select_hunyuan3d_profile_for_subject(hero).profile_id == "hq_textured_1m_768"
-    assert select_hunyuan3d_profile_for_subject(important).profile_id == "hq_shape_1m_768"
+    assert select_hunyuan3d_profile_for_subject(important).profile_id == "hq_textured_1m_768"
     assert select_hunyuan3d_profile_for_subject(prop).profile_id == "fast_shape_50k_768"
 
 
-def test_throughput_subject_profile_selector_uses_shape_and_draft_profiles() -> None:
+def test_throughput_subject_profile_selector_uses_only_kept_profiles() -> None:
     hero = _subject("subject_hero_vehicle", category="vehicle", priority="hero")
     background = _subject("subject_bg", category="environment_asset", priority="background")
 
     assert (
         select_hunyuan3d_profile_for_subject(hero, policy="throughput_per_subject").profile_id
-        == "hq_shape_1m_768"
+        == "hq_textured_1m_768"
     )
     assert (
         select_hunyuan3d_profile_for_subject(background, policy="throughput_per_subject").profile_id
-        == "draft_shape_100k_512"
+        == "fast_shape_50k_768"
     )
 
 

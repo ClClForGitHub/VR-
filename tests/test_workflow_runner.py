@@ -573,6 +573,47 @@ def test_local_e2e_workflow_dry_run_uses_single_project_state(tmp_path: Path) ->
 
     tool_log = json.loads((output_dir / "tool_call_log.json").read_text(encoding="utf-8"))
     assert len(tool_log["tool_call_log"]) == 1
+
+
+def test_local_e2e_workflow_dry_run_accepts_multiple_subject_glbs(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    scene_glb = tmp_path / "scene.glb"
+    asset_a = tmp_path / "asset_a.glb"
+    asset_b = tmp_path / "asset_b.glb"
+    blender = tmp_path / "blender"
+    output_dir = tmp_path / "workflow_multi"
+    _touch(root / "tools/compose_blender_scene.py")
+    _touch(scene_glb)
+    _touch(asset_a)
+    _touch(asset_b)
+    _touch(blender)
+
+    summary = run_local_e2e_workflow(
+        root=root,
+        scene_glb=scene_glb,
+        asset_glb=asset_a,
+        asset_glbs=[asset_a, asset_b],
+        output_dir=output_dir,
+        blender_path=blender,
+        dry_run=True,
+    )
+
+    state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
+    assert summary["asset_glbs"] == [str(asset_a.resolve()), str(asset_b.resolve())]
+    assert [asset["asset_id"] for asset in state["subject_assets"]] == [
+        "workflow_subject_glb",
+        "workflow_subject_glb_02",
+    ]
+    assert state["tool_call_log"][0]["arguments"]["asset_glbs"] == [
+        str(asset_a.resolve()),
+        str(asset_b.resolve()),
+    ]
+    assembly_plan = json.loads(Path(summary["compose"]["assembly_plan_json"]).read_text(encoding="utf-8"))
+    assert [item["subject_asset_id"] for item in assembly_plan["subject_assets"]] == [
+        "workflow_subject_glb",
+        "workflow_subject_glb_02",
+    ]
+    tool_log = json.loads((output_dir / "tool_call_log.json").read_text(encoding="utf-8"))
     assert tool_log["tool_call_log"][0]["result_summary"]["dry_run"] is True
     assert tool_log["tool_call_log"][0]["arguments"]["assembly_plan_json"] == summary["compose"]["assembly_plan_json"]
 

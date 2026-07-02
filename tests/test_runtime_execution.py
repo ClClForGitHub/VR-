@@ -382,6 +382,52 @@ def test_runtime_execution_dry_runs_import_scene_asset_from_assembly_plan(tmp_pa
     assert assembly_plan["subject_yaw_degrees"] == 35.0
 
 
+def test_runtime_execution_dry_runs_import_scene_asset_with_multiple_subject_glbs(tmp_path: Path, monkeypatch) -> None:
+    run_dir = _assembly_import_run_dir(tmp_path)
+    drone_glb = _artifact(tmp_path, "drone_glb", ArtifactType.SUBJECT_3D_ASSET, ".glb", b"drone")
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+    state["scene_spec"]["subjects"].append(
+        {
+            "subject_id": "subject_drone",
+            "display_name": "support drone",
+            "category": "prop",
+            "description": "Small flying helper drone.",
+            "needs_2d_concept": True,
+            "needs_3d_asset": True,
+            "asset_strategy": "hunyuan3d_img2asset",
+            "priority": "important",
+        }
+    )
+    state["subject_assets"].append(
+        {
+            "asset_id": drone_glb.artifact_id,
+            "subject_id": "subject_drone",
+            "source_image_id": "concept_drone",
+            "service": "hunyuan3d_2_1",
+            "glb_uri": drone_glb.uri,
+            "status": "succeeded",
+        }
+    )
+    state["artifacts"].append(drone_glb.model_dump(mode="json"))
+    (run_dir / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    calls = _patch_fake_script_dispatcher(monkeypatch)
+    plan = build_and_save_runtime_dispatch_plan(run_dir)
+    assert plan.runtime_plan.jobs[0].domain_tool_name == "import_scene_asset"
+
+    result = execute_next_runtime_job(run_dir, dry_run=True)
+
+    assert result.ok is True
+    assert calls[0][1]["asset_glbs"] == [
+        str((tmp_path / "subject_glb.glb").resolve()),
+        str((tmp_path / "drone_glb.glb").resolve()),
+    ]
+    assembly_plan = json.loads(Path(calls[0][1]["assembly_plan_json"]).read_text(encoding="utf-8"))
+    assert [item["subject_id"] for item in assembly_plan["subject_assets"]] == [
+        "subject_robot",
+        "subject_drone",
+    ]
+
+
 def test_runtime_execution_live_import_scene_asset_registers_blender_scene(tmp_path: Path, monkeypatch) -> None:
     run_dir = _assembly_import_run_dir(tmp_path)
     calls = _patch_fake_script_dispatcher(monkeypatch)
@@ -836,7 +882,10 @@ def _patch_fake_script_dispatcher(monkeypatch):
 
         def dispatch(self, domain_tool_name, arguments, *, options=None):
             dry_run = bool(options and options.dry_run)
-            args = {key: str(value) for key, value in arguments.items()}
+            args = {
+                key: [str(item) for item in value] if isinstance(value, list) else str(value)
+                for key, value in arguments.items()
+            }
             calls.append((domain_tool_name, args, dry_run))
             if not dry_run and domain_tool_name == "export_viewer_scene":
                 Path(args["viewer_glb"]).parent.mkdir(parents=True, exist_ok=True)

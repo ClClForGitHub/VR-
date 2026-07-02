@@ -4,17 +4,19 @@
 
 ---
 
-## 0. 当前仓库落地状态（2026-07-01）
+## 0. 当前仓库落地状态（2026-07-02）
 
 已落地：
 
 ```text
-GET /api/runs
-GET /api/runs/<run_key>/bundle
-GET /api/runs/<run_key>/file?path=...
+GET /api/creator/projects
+GET /api/creator/projects?collection=round04d_concepts
+GET /api/creator/projects/<project_key>/bundle
+GET /api/creator/projects/<project_key>/file?path=...
 RuntimeAdapter
 normalizeRuntimeBundle(rawBundle)
 mock fallback
+model-viewer 有 GLB 时真实加载
 ```
 
 验证：
@@ -28,18 +30,18 @@ npm run smoke:backend-readonly
 仍未落地：
 
 ```text
-POST /chat
-POST /upload
-POST /user-action
-POST /loop
-model-viewer
+POST /api/creator/projects/<project_key>/chat
+POST /api/creator/projects/<project_key>/upload
+POST /api/creator/projects/<project_key>/user-action
+POST /api/creator/projects/<project_key>/asset-action
+POST /api/creator/projects/<project_key>/loop
 旧 public UI 替换
 ```
 
-当前只读接线可通过以下方式手动查看：
+当前前端服务入口固定是 5173。真实后端同源挂载在 5173：
 
 ```text
-http://10.134.142.143:5173/?api_base=%2Fruntime-api#delivery
+http://10.2.16.106:5173/#concept-review
 ```
 
 ---
@@ -50,7 +52,7 @@ http://10.134.142.143:5173/?api_base=%2Fruntime-api#delivery
 2. 所有后端读取通过 `RuntimeAdapter`。
 3. 所有后端结果先进入 `normalizeRuntimeBundle()`。
 4. 组件只消费稳定的 UI ViewModel。
-5. 旧 runtime console 可以继续作为 dev/debug，不作为用户主界面。
+5. 旧 runtime console / 8093 不作为 Creator App 用户后端。
 6. 后端字段变化时，只改 adapter/normalizer，不改所有 UI 组件。
 
 ---
@@ -79,22 +81,80 @@ runtime_console/uploads.jsonl
 
 ## 3. 预期 API
 
-沿用当前 runtime console API 方向：
+Creator App 使用 5173 同源 `/api/creator`：
 
 ```text
-GET  /api/runs
-GET  /api/runs/<run_key>
-GET  /api/runs/<run_key>/bundle
-GET  /api/runs/<run_key>/file?path=...
-GET  /api/runs/<run_key>/events
+GET  /api/creator/projects
+GET  /api/creator/projects?collection=round04d_concepts
+GET  /api/creator/projects/<project_key>
+GET  /api/creator/projects/<project_key>/bundle
+GET  /api/creator/projects/<project_key>/file?path=...
 
-POST /api/runs
-POST /api/runs/<run_key>/chat
-POST /api/runs/<run_key>/upload
-POST /api/runs/<run_key>/plan
-POST /api/runs/<run_key>/loop
-POST /api/runs/<run_key>/user-action
+POST /api/creator/projects/<project_key>/chat
+POST /api/creator/projects/<project_key>/upload
+POST /api/creator/projects/<project_key>/user-action
+POST /api/creator/projects/<project_key>/asset-action
+POST /api/creator/projects/<project_key>/loop
 ```
+
+`round04d_concepts` 是当前 Creator App 项目中心默认集合，映射到：
+
+```text
+outputs/runs/round04d_live_12_samples/case_*
+```
+
+这些 case 是真实 Round04D 概念图样例目录。前端默认请求该集合，避免把
+历史 runtime 列表里的旧 run 当成项目中心数据。
+
+上传与聊天当前前端已经会调用：
+
+```text
+POST /api/creator/projects/<project_key>/upload
+Content-Type: multipart/form-data
+
+file=<image>
+binding_role=subject|scene
+slot_id=subject_slot_1..subject_slot_5|scene_slot_1
+entity_id=subject_1..subject_5|scene_1
+mention=@主体1..@主体5|@场景1
+display_label=主体1..主体5|场景1
+```
+
+后端需返回 `upload_id`、`image_id`、`artifact_id`、`uri`、`metadata`，并把图片写入
+`state.input_images[]` 和 `state.artifacts[]`。随后聊天会发送：
+
+```json
+{
+  "role": "user",
+  "text": "用户本轮需求",
+  "attachment_ids": ["image_upload_xxx"],
+  "metadata": {
+    "source": "creator_app",
+    "reference_mentions": ["@主体1", "@场景1"]
+  }
+}
+```
+
+后端需写入 `runtime_console/chat.jsonl` 和 `state.user_turns[]`，保留
+`attachment_ids` 作为后续 SceneSpec/概念生成可解析的真实图片输入。
+
+多主体概念审稿必须按真实主体拆开：
+
+- `state.scene_spec.subjects[]` 是主体实体来源。每个 subject 都要有稳定
+  `subject_id` 和 `display_name`，前端显示为 `主体1`、`主体2` ...，副标题用
+  `display_name`。
+- `SUBJECT_CONCEPT_IMAGE` 必须能映射回主体：优先
+  `linked_subject_id`，其次 `metadata.subject_id`、`metadata.target_id` 或
+  `metadata.requirement_id = subject_concept:<subject_id>`。
+- `SCENE_CONCEPT_IMAGE` 映射到前端 `scene_1`，显示名来自
+  `state.scene_spec.environment.description`，不要让前端继续显示 mock 的
+  “古老遗迹 / 破碎拱门”等占位文案。
+- 概念 V 系列使用 `metadata.concept_version`。`artifact.version` 只是通用
+  artifact 版本，不足以表达概念重生成 V1/V2/V3。
+- 已选组合以 `state.concept_bundle.final_preview_image_id`、
+  `state.concept_bundle.subject_concept_images`、
+  `state.concept_bundle.scene_concept_image_ids` 为准。前端不能把多主体压成
+  单个 `subject_1`。
 
 ---
 
@@ -239,9 +299,9 @@ type CreatorRunViewModel = {
 
 ```json
 {
-  "viewer_scene_url": "/api/runs/<run_key>/file?path=viewer_export/viewer_scene.glb",
-  "poster_url": "/api/runs/<run_key>/file?path=preview_render/preview.png",
-  "scene_state_url": "/api/runs/<run_key>/file?path=viewer_export/scene_state.json"
+  "viewer_scene_url": "/api/creator/projects/<project_key>/file?path=viewer_export/viewer_scene.glb",
+  "poster_url": "/api/creator/projects/<project_key>/file?path=preview_render/preview.png",
+  "scene_state_url": "/api/creator/projects/<project_key>/file?path=viewer_export/scene_state.json"
 }
 ```
 

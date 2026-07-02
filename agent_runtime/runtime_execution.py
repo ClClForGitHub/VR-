@@ -763,7 +763,16 @@ def _runtime_script_tool_arguments(
     blender_path = arguments.pop("blender_path", None)
     if job.domain_tool_name == "import_scene_asset":
         scene_glb = arguments.get("scene_glb") or _resolve_scene_asset_glb_path(state, arguments.get("scene_asset_id"))
-        asset_glb = arguments.get("asset_glb") or _resolve_subject_asset_glb_path(
+        asset_glbs = []
+        if arguments.get("selected_subject_assets") is not None:
+            asset_glbs = _resolve_subject_asset_glb_paths(
+                state,
+                selected_subject_assets=arguments.get("selected_subject_assets"),
+            )
+        explicit_asset_glbs = _string_list(arguments.get("asset_glbs"))
+        if explicit_asset_glbs:
+            asset_glbs = [Path(path).expanduser().resolve() for path in explicit_asset_glbs]
+        asset_glb = arguments.get("asset_glb") or (asset_glbs[0] if asset_glbs else None) or _resolve_subject_asset_glb_path(
             state,
             subject_asset_id=arguments.get("subject_asset_id"),
             subject_id=arguments.get("subject_id"),
@@ -772,10 +781,13 @@ def _runtime_script_tool_arguments(
             raise ValueError("import_scene_asset requires scene_glb or a state.scene_asset/artifact GLB")
         if asset_glb is None:
             raise ValueError("import_scene_asset requires asset_glb or a state.subject_assets GLB")
+        if not asset_glbs:
+            asset_glbs = [Path(asset_glb).expanduser().resolve()]
         compose_dir = run_dir / "compose"
         compose_dir.mkdir(parents=True, exist_ok=True)
         arguments.setdefault("scene_glb", str(scene_glb))
         arguments.setdefault("asset_glb", str(asset_glb))
+        arguments.setdefault("asset_glbs", [str(path) for path in asset_glbs])
         arguments.setdefault("preview_png", str(compose_dir / "composed_preview.png"))
         arguments.setdefault("output_blend", str(compose_dir / "composed_scene.blend"))
         if not arguments.get("assembly_plan_json") and state.blender_assembly_plan is not None:
@@ -786,7 +798,11 @@ def _runtime_script_tool_arguments(
                 scene_asset_id=str(arguments.get("scene_asset_id") or "workflow_scene_glb"),
                 subject_asset_id=str(arguments.get("subject_asset_id") or "workflow_subject_glb"),
             )
-            _write_json(assembly_plan_json, _model_to_dict(compose_plan))
+            compose_plan_payload = _model_to_dict(compose_plan)
+            subject_asset_specs = _compose_subject_asset_specs(state, arguments=arguments, asset_glbs=asset_glbs)
+            if subject_asset_specs:
+                compose_plan_payload["subject_assets"] = subject_asset_specs
+            _write_json(assembly_plan_json, compose_plan_payload)
             arguments["assembly_plan_json"] = str(assembly_plan_json)
         return arguments, blender_path
     if job.domain_tool_name == "export_viewer_scene":
@@ -892,6 +908,7 @@ def _apply_import_scene_asset_outputs(
             "stage": "runtime_import_scene_asset",
             "execution_id": execution_id,
             "assembly_plan_json": arguments.get("assembly_plan_json"),
+            "asset_glbs": arguments.get("asset_glbs"),
         },
     )
     preview_artifact = artifact_store.register_file(
@@ -903,6 +920,7 @@ def _apply_import_scene_asset_outputs(
             "stage": "runtime_import_scene_asset",
             "execution_id": execution_id,
             "assembly_plan_json": arguments.get("assembly_plan_json"),
+            "asset_glbs": arguments.get("asset_glbs"),
         },
     )
     scene_asset_id = arguments.get("scene_asset_id") or (state.scene_asset.scene_asset_id if state.scene_asset else None)
@@ -1202,6 +1220,96 @@ def _resolve_subject_asset_glb_path(
         if artifact.artifact_type == ArtifactType.SUBJECT_3D_ASSET:
             return Path(artifact.uri).expanduser().resolve()
     return None
+
+
+def _resolve_subject_asset_glb_paths(
+    state: AgentProjectState,
+    *,
+    selected_subject_assets: Any = None,
+) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+    if isinstance(selected_subject_assets, dict):
+        subject_order = [
+            subject.subject_id
+            for subject in (state.scene_spec.subjects if state.scene_spec is not None else [])
+            if subject.subject_id in selected_subject_assets
+        ]
+        subject_order.extend(
+            subject_id for subject_id in selected_subject_assets if subject_id not in set(subject_order)
+        )
+        for subject_id in subject_order:
+            asset_id = selected_subject_assets[subject_id]
+            path = _resolve_subject_asset_glb_path(
+                state,
+                subject_asset_id=asset_id,
+                subject_id=subject_id,
+            )
+            if path is None:
+                continue
+            key = str(path)
+            if key not in seen:
+                paths.append(path)
+                seen.add(key)
+    if paths:
+        return paths
+    for asset in state.subject_assets:
+        if not asset.glb_uri:
+            continue
+        path = Path(asset.glb_uri).expanduser().resolve()
+        key = str(path)
+        if key not in seen:
+            paths.append(path)
+            seen.add(key)
+    return paths
+
+
+def _compose_subject_asset_specs(
+    state: AgentProjectState,
+    *,
+    arguments: dict[str, Any],
+    asset_glbs: list[Path],
+) -> list[dict[str, Any]]:
+    selected = arguments.get("selected_subject_assets")
+    selected_by_path: dict[str, tuple[str | None, str | None]] = {}
+    if isinstance(selected, dict):
+        for subject_id, asset_id in selected.items():
+            path = _resolve_subject_asset_glb_path(state, subject_asset_id=asset_id, subject_id=subject_id)
+            if path is not None:
+                selected_by_path[str(path)] = (str(subject_id), str(asset_id))
+    specs = []
+    for index, path in enumerate(asset_glbs):
+        subject_id = None
+        asset_id = None
+        selected_pair = selected_by_path.get(str(path))
+        if selected_pair is not None:
+            subject_id, asset_id = selected_pair
+        else:
+            for asset in state.subject_assets:
+                if asset.glb_uri and str(Path(asset.glb_uri).expanduser().resolve()) == str(path):
+                    subject_id = asset.subject_id
+                    asset_id = asset.asset_id
+                    break
+        spec = {
+            "asset_glb": str(path),
+            "asset_index": index,
+        }
+        if subject_id:
+            spec["subject_id"] = subject_id
+        if asset_id:
+            spec["subject_asset_id"] = asset_id
+        specs.append(spec)
+    return specs
+
+
+def _string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (str, Path)):
+        return [str(value)]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item) for item in value if item]
 
 
 def _artifact_uri_by_id(

@@ -1,3 +1,4 @@
+import argparse
 import json
 import math
 import sys
@@ -51,6 +52,82 @@ def load_assembly_plan(path):
         raise SystemExit(f"Assembly plan JSON does not exist: {plan_path}")
     with plan_path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("scene_glb")
+    parser.add_argument("asset_glb")
+    parser.add_argument("preview_png")
+    parser.add_argument("output_blend")
+    parser.add_argument("assembly_plan_json", nargs="?")
+    parser.add_argument("--asset-glbs-json")
+    return parser.parse_args(argv)
+
+
+def load_asset_specs(primary_asset_glb, assembly_plan, asset_glbs_json):
+    plan_specs = assembly_plan.get("subject_assets") if isinstance(assembly_plan.get("subject_assets"), list) else []
+    path_items = []
+    if asset_glbs_json:
+        decoded = json.loads(asset_glbs_json)
+        if not isinstance(decoded, list):
+            raise SystemExit("--asset-glbs-json must decode to a list")
+        path_items = decoded
+    elif plan_specs:
+        path_items = [
+            item.get("asset_glb") or item.get("glb_path") or item.get("path")
+            for item in plan_specs
+            if isinstance(item, dict) and (item.get("asset_glb") or item.get("glb_path") or item.get("path"))
+        ]
+    if not path_items:
+        path_items = [str(primary_asset_glb)]
+
+    specs = []
+    for index, item in enumerate(path_items):
+        spec = dict(plan_specs[index]) if index < len(plan_specs) and isinstance(plan_specs[index], dict) else {}
+        if isinstance(item, dict):
+            spec.update(item)
+            asset_path = item.get("asset_glb") or item.get("glb_path") or item.get("path")
+        else:
+            asset_path = item
+        if not asset_path:
+            raise SystemExit(f"Missing asset path for subject asset index {index}")
+        spec["asset_glb"] = str(asset_path)
+        spec.setdefault("asset_index", index)
+        specs.append(spec)
+    return specs
+
+
+def default_target_region(index, total, fallback):
+    presets = {
+        1: [fallback],
+        2: [(-0.24, -0.18), (0.24, -0.18)],
+        3: [(-0.30, -0.20), (0.0, -0.10), (0.30, -0.20)],
+        4: [(-0.30, -0.24), (0.30, -0.24), (-0.18, 0.08), (0.18, 0.08)],
+        5: [(-0.34, -0.24), (0.0, -0.24), (0.34, -0.24), (-0.18, 0.10), (0.18, 0.10)],
+        6: [(-0.34, -0.25), (0.0, -0.25), (0.34, -0.25), (-0.34, 0.10), (0.0, 0.10), (0.34, 0.10)],
+        7: [(-0.36, -0.26), (-0.12, -0.26), (0.12, -0.26), (0.36, -0.26), (-0.24, 0.10), (0.0, 0.10), (0.24, 0.10)],
+    }
+    row = presets.get(total)
+    if row is not None and index < len(row):
+        return row[index]
+    columns = min(4, max(1, total))
+    col = index % columns
+    row_index = index // columns
+    x = -0.36 + 0.72 * (col / max(columns - 1, 1))
+    y = -0.26 + 0.34 * row_index
+    return x, max(-0.35, min(0.35, y))
+
+
+def asset_plan_value(asset_spec, assembly_plan, key, default=None):
+    if key in asset_spec:
+        return asset_spec[key]
+    return assembly_plan.get(key, default)
+
+
+def safe_name(value, fallback):
+    raw = str(value or fallback)
+    return "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in raw)
 
 
 def numeric_pair(value, default):
@@ -124,14 +201,16 @@ def main():
         sep = sys.argv.index("--")
     except ValueError as exc:
         raise SystemExit(
-            "Usage: blender -b --python compose_blender_scene.py -- scene.glb asset.glb preview.png output.blend"
+            "Usage: blender -b --python compose_blender_scene.py -- scene.glb asset.glb preview.png output.blend [assembly_plan.json] [--asset-glbs-json JSON]"
         ) from exc
 
-    scene_glb = Path(sys.argv[sep + 1])
-    asset_glb = Path(sys.argv[sep + 2])
-    preview_png = Path(sys.argv[sep + 3])
-    output_blend = Path(sys.argv[sep + 4])
-    assembly_plan = load_assembly_plan(sys.argv[sep + 5] if len(sys.argv) > sep + 5 else None)
+    args = parse_args(sys.argv[sep + 1 :])
+    scene_glb = Path(args.scene_glb)
+    asset_glb = Path(args.asset_glb)
+    preview_png = Path(args.preview_png)
+    output_blend = Path(args.output_blend)
+    assembly_plan = load_assembly_plan(args.assembly_plan_json)
+    asset_specs = load_asset_specs(asset_glb, assembly_plan, args.asset_glbs_json)
 
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete()
@@ -151,64 +230,103 @@ def main():
     scene_reference_height = max(scene_height, scene_horizontal * 0.16)
     scene_max_dim = max(scene_size.x, scene_size.y, scene_size.z, 1e-3)
 
-    before = set(bpy.context.scene.objects)
-    bpy.ops.import_scene.gltf(filepath=str(asset_glb))
-    asset_objects = [obj for obj in bpy.context.scene.objects if obj not in before and obj.type == "MESH"]
-    if not asset_objects:
-        raise SystemExit(f"No asset mesh objects imported from {asset_glb}")
+    asset_objects = []
+    asset_summaries = []
+    cleared_scene_objects = []
+    total_assets = len(asset_specs)
+    global_region = numeric_pair(assembly_plan.get("target_region_normalized"), (-0.18, 0.18))
+    for asset_index, asset_spec in enumerate(asset_specs):
+        current_asset_glb = Path(asset_spec["asset_glb"])
+        before = set(bpy.context.scene.objects)
+        bpy.ops.import_scene.gltf(filepath=str(current_asset_glb))
+        current_objects = [obj for obj in bpy.context.scene.objects if obj not in before and obj.type == "MESH"]
+        if not current_objects:
+            raise SystemExit(f"No asset mesh objects imported from {current_asset_glb}")
 
-    asset_mat = bpy.data.materials.new("Hunyuan3D_Asset_Material")
-    asset_mat.diffuse_color = (0.72, 0.58, 0.48, 1.0)
-    asset_mat.use_nodes = True
-    bsdf = asset_mat.node_tree.nodes.get("Principled BSDF")
-    if bsdf is not None:
-        bsdf.inputs["Base Color"].default_value = asset_mat.diffuse_color
-        bsdf.inputs["Roughness"].default_value = 0.65
-    ensure_material(asset_objects, asset_mat)
+        asset_mat = bpy.data.materials.new(f"Hunyuan3D_Asset_Material_{asset_index + 1:02d}")
+        asset_mat.diffuse_color = (0.72, 0.58, 0.48, 1.0)
+        asset_mat.use_nodes = True
+        bsdf = asset_mat.node_tree.nodes.get("Principled BSDF")
+        if bsdf is not None:
+            bsdf.inputs["Base Color"].default_value = asset_mat.diffuse_color
+            bsdf.inputs["Roughness"].default_value = 0.65
+        ensure_material(current_objects, asset_mat)
 
-    asset_min, asset_max = bounds_of(asset_objects)
-    asset_center = (asset_min + asset_max) * 0.5
-    asset_size = asset_max - asset_min
-    asset_height = max(asset_size.z, 1e-3)
-    target_height_ratio = numeric_value(assembly_plan.get("target_height_ratio"), 0.42, minimum=0.05, maximum=1.5)
-    target_height = scene_reference_height * target_height_ratio
-    scale = target_height / asset_height
-    subject_yaw_degrees = numeric_value(assembly_plan.get("subject_yaw_degrees"), 0.0, minimum=-180.0, maximum=180.0)
+        asset_min, asset_max = bounds_of(current_objects)
+        asset_center = (asset_min + asset_max) * 0.5
+        asset_size = asset_max - asset_min
+        asset_height = max(asset_size.z, 1e-3)
+        default_height_ratio = 0.42 if total_assets == 1 else 0.26
+        target_height_ratio = numeric_value(
+            asset_plan_value(asset_spec, assembly_plan, "target_height_ratio", default_height_ratio),
+            default_height_ratio,
+            minimum=0.05,
+            maximum=1.5,
+        )
+        target_height = scene_reference_height * target_height_ratio
+        scale = target_height / asset_height
+        subject_yaw_degrees = numeric_value(
+            asset_plan_value(asset_spec, assembly_plan, "subject_yaw_degrees", 0.0),
+            0.0,
+            minimum=-180.0,
+            maximum=180.0,
+        )
 
-    region_x, region_y = numeric_pair(assembly_plan.get("target_region_normalized"), (-0.18, 0.18))
-    target = Vector((
-        scene_center.x + scene_size.x * region_x,
-        scene_center.y + scene_size.y * region_y,
-        scene_min.z,
-    ))
-    clearance_radius_normalized = numeric_value(
-        assembly_plan.get("subject_clearance_radius_normalized"),
-        0.0,
-        minimum=0.0,
-        maximum=0.5,
-    )
-    clearance_min_height_ratio = numeric_value(
-        assembly_plan.get("subject_clearance_min_height_ratio"),
-        0.12,
-        minimum=0.0,
-        maximum=1.0,
-    )
-    cleared_scene_objects = clear_scene_occluders(
-        scene_objects,
-        target,
-        radius=max(scene_size.x, scene_size.y) * clearance_radius_normalized,
-        min_height=scene_height * clearance_min_height_ratio,
-        ground_z=scene_min.z,
-    )
-    asset_transform = (
-        Matrix.Translation(target + Vector((0, 0, target_height * 0.5)))
-        @ Matrix.Rotation(math.radians(subject_yaw_degrees), 4, "Z")
-        @ Matrix.Diagonal((scale, scale, scale, 1.0))
-        @ Matrix.Translation(-asset_center)
-    )
-    for obj in asset_objects:
-        obj.matrix_world = asset_transform @ obj.matrix_world
-        obj.name = "Hunyuan3D_" + obj.name
+        default_region = default_target_region(asset_index, total_assets, global_region)
+        region_x, region_y = numeric_pair(
+            asset_plan_value(asset_spec, assembly_plan, "target_region_normalized", default_region),
+            default_region,
+        )
+        target = Vector((
+            scene_center.x + scene_size.x * region_x,
+            scene_center.y + scene_size.y * region_y,
+            scene_min.z,
+        ))
+        clearance_radius_normalized = numeric_value(
+            asset_plan_value(asset_spec, assembly_plan, "subject_clearance_radius_normalized", 0.0),
+            0.0,
+            minimum=0.0,
+            maximum=0.5,
+        )
+        clearance_min_height_ratio = numeric_value(
+            asset_plan_value(asset_spec, assembly_plan, "subject_clearance_min_height_ratio", 0.12),
+            0.12,
+            minimum=0.0,
+            maximum=1.0,
+        )
+        cleared_scene_objects.extend(
+            clear_scene_occluders(
+                scene_objects,
+                target,
+                radius=max(scene_size.x, scene_size.y) * clearance_radius_normalized,
+                min_height=scene_height * clearance_min_height_ratio,
+                ground_z=scene_min.z,
+            )
+        )
+        asset_transform = (
+            Matrix.Translation(target + Vector((0, 0, target_height * 0.5)))
+            @ Matrix.Rotation(math.radians(subject_yaw_degrees), 4, "Z")
+            @ Matrix.Diagonal((scale, scale, scale, 1.0))
+            @ Matrix.Translation(-asset_center)
+        )
+        name_prefix = "Hunyuan3D_" + safe_name(
+            asset_spec.get("subject_id") or asset_spec.get("subject_asset_id"),
+            f"subject_{asset_index + 1:02d}",
+        )
+        for obj in current_objects:
+            obj.matrix_world = asset_transform @ obj.matrix_world
+            obj.name = f"{name_prefix}_{obj.name}"
+        asset_objects.extend(current_objects)
+        asset_summaries.append(
+            {
+                "asset_glb": str(current_asset_glb),
+                "mesh_objects": len(current_objects),
+                "scale": scale,
+                "target": target,
+                "target_height_ratio": target_height_ratio,
+                "subject_yaw_degrees": subject_yaw_degrees,
+            }
+        )
     bpy.context.view_layer.update()
 
     all_meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
@@ -296,14 +414,15 @@ def main():
 
     print(f"Imported scene: {scene_glb}")
     print(f"Scene mesh objects: {len(scene_objects)}")
-    print(f"Imported asset: {asset_glb}")
+    print(f"Imported assets: {[summary['asset_glb'] for summary in asset_summaries]}")
+    print(f"Asset count: {len(asset_summaries)}")
     print(f"Asset mesh objects: {len(asset_objects)}")
     if assembly_plan:
         print(f"Assembly plan: {assembly_plan.get('plan_id', 'unnamed')}")
-    print(f"Asset scale: {scale:.6f}")
+    print(f"Asset scales: {[round(summary['scale'], 6) for summary in asset_summaries]}")
     print(f"Scene reference height: {scene_reference_height:.6f}")
-    print(f"Asset yaw degrees: {subject_yaw_degrees:.3f}")
-    print(f"Asset target: {tuple(round(v, 4) for v in target)}")
+    print(f"Asset yaw degrees: {[round(summary['subject_yaw_degrees'], 3) for summary in asset_summaries]}")
+    print(f"Asset targets: {[tuple(round(v, 4) for v in summary['target']) for summary in asset_summaries]}")
     print(f"Cleared scene occluders: {cleared_scene_objects}")
     print(f"Camera direction: {tuple(round(v, 4) for v in camera_direction)}")
     print(f"Camera frame: {camera_frame}")

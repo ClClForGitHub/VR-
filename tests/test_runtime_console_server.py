@@ -73,6 +73,45 @@ def test_runtime_console_events_endpoint_streams_ready_event(tmp_path: Path) -> 
     assert '"ok": true' in body
 
 
+def test_runtime_console_runs_endpoint_supports_round04d_collection(tmp_path: Path) -> None:
+    samples_dir = tmp_path / "outputs" / "runs" / "round04d_live_12_samples"
+    for index in range(1, 13):
+        case_dir = samples_dir / f"case_{index:02d}_sample"
+        case_dir.mkdir(parents=True)
+        (case_dir / "state.json").write_text(
+            AgentProjectState(
+                project_id=f"case_{index:02d}",
+                thread_id="t",
+                phase=WorkflowPhase.SUBJECT_ASSET_GENERATION,
+            ).model_dump_json(),
+            encoding="utf-8",
+        )
+        (case_dir / "summary.json").write_text("{}", encoding="utf-8")
+        (case_dir / "frontend_status.json").write_text(
+            json.dumps({"phase": "SUBJECT_ASSET_GENERATION", "status": "concept_ready"}),
+            encoding="utf-8",
+        )
+    server = ThreadingHTTPServer(("127.0.0.1", 0), RuntimeConsoleHandler)
+    server.root = tmp_path
+    server.static_root = tmp_path
+    server.public_urls = PublicUrlConfig()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/api/runs?collection=round04d_concepts"
+        with urllib.request.urlopen(url, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert len(payload) == 12
+    assert payload[0]["relative_path"] == "round04d_live_12_samples/case_01_sample"
+    assert payload[-1]["relative_path"] == "round04d_live_12_samples/case_12_sample"
+    assert {item["collection_id"] for item in payload} == {"round04d_concepts"}
+
+
 def test_runtime_console_asset_action_endpoint_applies_frontend_selection(tmp_path: Path) -> None:
     created = create_runtime_console_run(root=tmp_path, run_id="run_asset_action")
     run_dir = Path(created.run_dir)

@@ -3050,6 +3050,268 @@ body {
   border-radius: 8px;
 }
 
+.project-center {
+  position: relative;
+  z-index: 40;
+}
+
+.project-center__trigger {
+  min-width: 190px;
+  justify-content: space-between;
+  padding: 9px 13px;
+  border-color: rgba(77, 235, 243, .2);
+  background: linear-gradient(180deg, rgba(14, 25, 32, .94), rgba(7, 12, 16, .94));
+}
+
+.project-center__trigger-main,
+.project-center__trigger-meta {
+  display: inline-flex;
+  align-items: center;
+}
+
+.project-center__trigger-main {
+  color: var(--text-main);
+  font-weight: 850;
+}
+
+.project-center__trigger-meta {
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid rgba(77, 235, 243, .22);
+  border-radius: 999px;
+  color: var(--glow);
+  background: rgba(77, 235, 243, .08);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.project-center.is-open .project-center__trigger {
+  border-color: rgba(77, 235, 243, .56);
+  box-shadow: 0 0 28px rgba(77, 235, 243, .16);
+}
+
+.project-center-native-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  border: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.project-center__popover {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(560px, calc(100vw - 36px));
+  max-height: min(720px, calc(100vh - 96px));
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(77, 235, 243, .28);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(10, 17, 23, .98), rgba(5, 9, 13, .98)),
+    radial-gradient(circle at 18% 8%, rgba(77, 235, 243, .13), transparent 32%);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, .58);
+}
+
+.project-center__header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.project-center__header div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.project-center__header span {
+  color: var(--accent-warm);
+  font-size: 12px;
+  font-weight: 880;
+  text-transform: uppercase;
+}
+
+.project-center__header strong {
+  color: var(--text-main);
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.project-center__header button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 8px;
+  color: #c9d8dc;
+  background: rgba(255, 255, 255, .045);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.project-center__tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.project-center__tools input,
+.project-center__tools button {
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 8px;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, .045);
+}
+
+.project-center__tools input {
+  min-width: 0;
+  padding: 0 12px;
+  outline: none;
+}
+
+.project-center__tools input:focus {
+  border-color: rgba(77, 235, 243, .55);
+  box-shadow: 0 0 0 3px rgba(77, 235, 243, .08);
+}
+
+.project-center__tools button {
+  padding: 0 14px;
+  color: #cfe0e3;
+}
+
+.project-center__current {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(247, 189, 97, .22);
+  border-radius: 8px;
+  background: rgba(247, 189, 97, .065);
+}
+
+.project-center__current span,
+.project-center__current small {
+  color: #aebec2;
+  font-size: 12px;
+}
+
+.project-center__current strong {
+  min-width: 0;
+  color: var(--text-main);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.project-center__current small {
+  overflow-wrap: anywhere;
+}
+
+.project-center__list {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-right: 4px;
+  overflow: auto;
+}
+
+.project-run-card {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, .035);
+  text-align: left;
+}
+
+.project-run-card:hover,
+.project-run-card.is-active {
+  border-color: rgba(77, 235, 243, .48);
+  color: var(--text-main);
+  background: rgba(77, 235, 243, .08);
+}
+
+.project-run-card.is-active {
+  box-shadow: inset 4px 0 0 var(--glow);
+}
+
+.project-run-card__rank {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(77, 235, 243, .26);
+  border-radius: 8px;
+  color: var(--glow);
+  background: rgba(77, 235, 243, .08);
+  font-weight: 900;
+}
+
+.project-run-card__body {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.project-run-card__body strong,
+.project-run-card__body small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-run-card__body strong {
+  color: inherit;
+  font-size: 16px;
+}
+
+.project-run-card__body small {
+  color: #91a4aa;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.project-run-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.project-run-card__badges em {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 999px;
+  color: #c7d6da;
+  background: rgba(255, 255, 255, .04);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.project-center__empty {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(255, 255, 255, .18);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, .025);
+}
+
 .workspace-body {
   grid-template-columns: 264px minmax(0, 1fr);
   min-height: calc(100vh - 72px);
@@ -4028,6 +4290,35 @@ body {
 
   .intake-chat-workbench .generation-launch-strip .big-action {
     width: 100%;
+  }
+
+  .project-center {
+    position: static;
+    min-width: 0;
+  }
+
+  .project-center__trigger {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .project-center__popover {
+    position: fixed;
+    top: 86px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100vh - 104px);
+  }
+
+  .project-center__tools,
+  .project-run-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-run-card__rank {
+    width: 40px;
+    height: 40px;
   }
 }
 

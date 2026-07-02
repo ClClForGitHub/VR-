@@ -4,7 +4,7 @@ Use this checklist after each Round 04 live case.
 
 ## API Snapshot
 
-- [ ] `GET /api/runs/<run_key>` returns current phase/status.
+- [ ] `GET /api/creator/projects/<project_key>/bundle` returns current phase/status.
 - [ ] Concept requirements are visible.
 - [ ] Asset library is visible.
 - [ ] Active assembly selection is visible.
@@ -25,4 +25,3 @@ Use this checklist after each Round 04 live case.
 - [ ] Scene asset links are accessible.
 - [ ] Final preview image is accessible.
 - [ ] Viewer GLB URL works or records exact failure.
-

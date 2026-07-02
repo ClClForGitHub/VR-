@@ -178,6 +178,7 @@ def run_local_e2e_workflow(
     scene_glb: str | Path,
     asset_glb: str | Path,
     output_dir: str | Path,
+    asset_glbs: list[str | Path] | tuple[str | Path, ...] | None = None,
     blender_path: str | Path | None = None,
     viewer_base_url: str = "http://127.0.0.1:8092",
     compose_timeout_seconds: float = 300,
@@ -202,7 +203,10 @@ def run_local_e2e_workflow(
     requested_stages = _normalize_stages(stages)
     root_path = Path(root).expanduser().resolve()
     scene_path = Path(scene_glb).expanduser().resolve()
-    asset_path = Path(asset_glb).expanduser().resolve()
+    asset_paths = [Path(path).expanduser().resolve() for path in (asset_glbs or [asset_glb])]
+    if not asset_paths:
+        asset_paths = [Path(asset_glb).expanduser().resolve()]
+    asset_path = asset_paths[0]
     scene_spec_path = Path(scene_spec_json).expanduser().resolve() if scene_spec_json else None
     scene_spec = _load_scene_spec_json(scene_spec_path) if scene_spec_path is not None else None
     output_path = Path(output_dir).expanduser().resolve()
@@ -232,26 +236,31 @@ def run_local_e2e_workflow(
         semantic_role="source_scene_glb",
         metadata={"stage": "input"},
     )
-    subject_artifact = artifact_store.register_file(
-        asset_path,
-        ArtifactType.SUBJECT_3D_ASSET,
-        artifact_id="workflow_subject_glb",
-        semantic_role="source_subject_glb",
-        metadata={"stage": "input"},
-    )
-    state.artifacts.extend([scene_artifact, subject_artifact])
-    subject_id = _first_scene_subject_id(scene_spec) or "subject_001"
-    state.subject_assets.append(
-        Asset3DRecord(
-            asset_id=subject_artifact.artifact_id,
-            subject_id=subject_id,
-            source_image_id="workflow_subject_source",
-            service="existing_asset",
-            glb_uri=subject_artifact.uri,
-            status="succeeded",
-            generation_params={"stage": "input", "source": "local_e2e_existing_glb"},
+    subject_artifacts = []
+    scene_subject_ids = [subject.subject_id for subject in scene_spec.subjects] if scene_spec is not None else []
+    for index, path in enumerate(asset_paths):
+        artifact_id = "workflow_subject_glb" if index == 0 else f"workflow_subject_glb_{index + 1:02d}"
+        subject_artifact = artifact_store.register_file(
+            path,
+            ArtifactType.SUBJECT_3D_ASSET,
+            artifact_id=artifact_id,
+            semantic_role="source_subject_glb",
+            metadata={"stage": "input", "asset_index": index},
         )
-    )
+        subject_artifacts.append(subject_artifact)
+        subject_id = scene_subject_ids[index] if index < len(scene_subject_ids) else f"subject_{index + 1:03d}"
+        state.subject_assets.append(
+            Asset3DRecord(
+                asset_id=subject_artifact.artifact_id,
+                subject_id=subject_id,
+                source_image_id=f"workflow_subject_source_{index + 1:02d}",
+                service="existing_asset",
+                glb_uri=subject_artifact.uri,
+                status="succeeded",
+                generation_params={"stage": "input", "source": "local_e2e_existing_glb", "asset_index": index},
+            )
+        )
+    state.artifacts.extend([scene_artifact, *subject_artifacts])
     state.scene_asset = Scene3DRecord(
         scene_asset_id=scene_artifact.artifact_id,
         service="proxy_blender_scene",
@@ -272,6 +281,7 @@ def run_local_e2e_workflow(
         root_path=root_path,
         scene_path=scene_path,
         asset_path=asset_path,
+        asset_paths=asset_paths,
         compose_dir=compose_dir,
         blender_path=blender_path,
         timeout_seconds=compose_timeout_seconds,
@@ -392,6 +402,7 @@ def run_local_e2e_workflow(
         "root": str(root_path),
         "scene_glb": str(scene_path),
         "asset_glb": str(asset_path),
+        "asset_glbs": [str(path) for path in asset_paths],
         "scene_spec_json": str(scene_spec_path) if scene_spec_path is not None else None,
         "scene_spec_id": scene_spec.scene_id if scene_spec is not None else None,
         "output_dir": str(output_path),
@@ -2237,6 +2248,7 @@ def _run_compose_stage(
     root_path: Path,
     scene_path: Path,
     asset_path: Path,
+    asset_paths: list[Path],
     compose_dir: Path,
     blender_path: str | Path | None,
     timeout_seconds: float,
@@ -2254,13 +2266,25 @@ def _run_compose_stage(
         extra_summary={
             "scene_artifact_id": "workflow_scene_glb",
             "subject_asset_artifact_id": "workflow_subject_glb",
+            "subject_asset_count": len(asset_paths),
         },
     )
     preview_png = compose_dir / "composed_preview.png"
     output_blend = compose_dir / "composed_scene.blend"
     assembly_plan = build_compose_scene_plan(state)
     assembly_plan_json = compose_dir / "assembly_plan.json"
-    write_json(assembly_plan_json, model_to_dict(assembly_plan))
+    assembly_plan_payload = model_to_dict(assembly_plan)
+    if len(asset_paths) > 1:
+        assembly_plan_payload["subject_assets"] = [
+            {
+                "asset_glb": str(path),
+                "asset_index": index,
+                "subject_id": state.subject_assets[index].subject_id if index < len(state.subject_assets) else None,
+                "subject_asset_id": state.subject_assets[index].asset_id if index < len(state.subject_assets) else None,
+            }
+            for index, path in enumerate(asset_paths)
+        ]
+    write_json(assembly_plan_json, assembly_plan_payload)
     result = ScriptDomainToolDispatcher(
         state=state,
         root=root_path,
@@ -2270,6 +2294,7 @@ def _run_compose_stage(
         {
             "scene_glb": str(scene_path),
             "asset_glb": str(asset_path),
+            "asset_glbs": [str(path) for path in asset_paths],
             "preview_png": str(preview_png),
             "output_blend": str(output_blend),
             "assembly_plan_json": str(assembly_plan_json),
@@ -3264,6 +3289,7 @@ def main() -> int:
     local_e2e.add_argument("--root", default="/home/team/zouzhiyuan/image23D_Agent")
     local_e2e.add_argument("--scene-glb", required=True)
     local_e2e.add_argument("--asset-glb", required=True)
+    local_e2e.add_argument("--asset-glbs", default="", help="Comma-separated subject GLBs for multi-subject composition.")
     local_e2e.add_argument("--output-dir", required=True)
     local_e2e.add_argument("--scene-spec-json")
     local_e2e.add_argument("--blender-path")
@@ -3441,10 +3467,12 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "local-e2e":
+        local_asset_glbs = [item.strip() for item in args.asset_glbs.split(",") if item.strip()]
         summary = run_local_e2e_workflow(
             root=args.root,
             scene_glb=args.scene_glb,
             asset_glb=args.asset_glb,
+            asset_glbs=local_asset_glbs or None,
             output_dir=args.output_dir,
             blender_path=args.blender_path,
             viewer_base_url=args.viewer_base_url,

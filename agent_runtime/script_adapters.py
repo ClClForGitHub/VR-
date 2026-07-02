@@ -7,6 +7,7 @@ parallel execution paths.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -77,6 +78,7 @@ def build_compose_blender_scene_command(
     output_blend: str | Path,
     *,
     assembly_plan_json: str | Path | None = None,
+    asset_glbs: list[str | Path] | tuple[str | Path, ...] | None = None,
     blender_path: str | Path = DEFAULT_BLENDER_PATH,
 ) -> ScriptCommand:
     root_path = _resolve_root(root)
@@ -84,6 +86,9 @@ def build_compose_blender_scene_command(
     script = _require_file(root_path / "tools/compose_blender_scene.py", "compose_blender_scene.py")
     scene = _require_file(scene_glb, "scene GLB")
     asset = _require_file(asset_glb, "asset GLB")
+    extra_assets = [_require_file(path, "asset GLB") for path in (asset_glbs or [])]
+    if not extra_assets:
+        extra_assets = [asset]
     png = _resolve_output(output_png)
     blend = _resolve_output(output_blend)
     plan = _resolve_output(assembly_plan_json) if assembly_plan_json is not None else None
@@ -100,9 +105,11 @@ def build_compose_blender_scene_command(
     ]
     if plan is not None:
         argv.append(str(plan))
+    if len(extra_assets) > 1:
+        argv.extend(["--asset-glbs-json", json.dumps([str(path) for path in extra_assets], ensure_ascii=True)])
     return ScriptCommand(
         cwd=str(root_path),
-        description="Compose an existing scene GLB and subject GLB through tools/compose_blender_scene.py",
+        description="Compose an existing scene GLB and subject GLB(s) through tools/compose_blender_scene.py",
         argv=argv,
     )
 

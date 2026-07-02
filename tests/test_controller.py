@@ -329,6 +329,59 @@ def test_controller_blender_payload_prefers_active_assembly_selection() -> None:
     assert payload["object_placements"][0]["placement_hint"] == {"target_region": "front_right"}
 
 
+def test_controller_blender_payload_includes_multiple_subject_assets() -> None:
+    scene_spec = _scene_spec()
+    scene_spec.subjects.append(
+        SubjectSpec(
+            subject_id="subject_drone",
+            display_name="support drone",
+            category="prop",
+            description="Small flying helper drone.",
+        )
+    )
+    state = AgentProjectState(
+        project_id="project_001",
+        thread_id="thread_001",
+        phase=WorkflowPhase.BLENDER_ASSEMBLY_EXECUTION,
+        scene_spec=scene_spec,
+        blender_assembly_plan=BlenderAssemblyPlan(plan_id="assembly_plan_001"),
+        subject_assets=[
+            Asset3DRecord(
+                asset_id="asset_robot",
+                subject_id="subject_robot",
+                source_image_id="concept_robot",
+                glb_uri="/tmp/robot.glb",
+                status="succeeded",
+            ),
+            Asset3DRecord(
+                asset_id="asset_drone",
+                subject_id="subject_drone",
+                source_image_id="concept_drone",
+                glb_uri="/tmp/drone.glb",
+                status="succeeded",
+            ),
+        ],
+        scene_asset=Scene3DRecord(
+            scene_asset_id="scene_asset_001",
+            service="hy_world",
+            raw_output_type="mesh",
+            adapted_artifact_ids=["scene_glb_001"],
+            blender_import_mode="mesh_import",
+            status="adapted",
+        ),
+    )
+
+    plan = build_controller_plan(state)
+    payload = plan.actions[0].payload
+
+    assert payload["subject_id"] == "subject_robot"
+    assert payload["subject_asset_id"] == "asset_robot"
+    assert payload["selected_subject_assets"] == {
+        "subject_robot": "asset_robot",
+        "subject_drone": "asset_drone",
+    }
+
+
 def test_controller_schedules_planned_blender_edit_before_preview_refresh() -> None:
     state = AgentProjectState(
         project_id="project_001",

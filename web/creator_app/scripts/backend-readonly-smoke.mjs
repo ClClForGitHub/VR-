@@ -5,8 +5,8 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(process.cwd(), '../..');
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
-const backendUrl = (process.env.CREATOR_APP_RUNTIME_API_BASE_URL || 'http://127.0.0.1:18093').replace(/\/$/, '');
 const creatorUrl = (process.env.CREATOR_APP_BASE_URL || 'http://127.0.0.1:5176').replace(/\/$/, '');
+const backendUrl = `${creatorUrl}/api/creator`;
 const runCollection = process.env.CREATOR_APP_RUN_COLLECTION || 'round04d_concepts';
 const outputDir = process.env.CREATOR_APP_BACKEND_SMOKE_DIR
   ? path.resolve(process.env.CREATOR_APP_BACKEND_SMOKE_DIR)
@@ -19,22 +19,6 @@ async function canReach(url) {
   } catch {
     return false;
   }
-}
-
-function startRuntimeConsole() {
-  const url = new URL(backendUrl);
-  return spawn(process.env.PYTHON || 'python', [
-    path.join(repoRoot, 'tools', 'runtime_console_server.py'),
-    '--host',
-    url.hostname || '127.0.0.1',
-    '--port',
-    url.port || '18093',
-    '--root',
-    repoRoot,
-  ], {
-    cwd: repoRoot,
-    stdio: 'ignore',
-  });
 }
 
 function startCreatorApp() {
@@ -50,7 +34,7 @@ function startCreatorApp() {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      VITE_RUNTIME_API_BASE_URL: backendUrl,
+      VITE_RUNTIME_API_BASE_URL: '/api/creator',
     },
     stdio: 'ignore',
   });
@@ -78,46 +62,42 @@ async function stopProcess(child) {
 }
 
 function apiRunsUrl() {
-  const url = new URL(`${backendUrl}/api/runs`);
+  const url = new URL(`${backendUrl}/projects`);
   if (runCollection) url.searchParams.set('collection', runCollection);
   return url.toString();
 }
 
-let backendProcess;
 let creatorProcess;
 
 try {
   await mkdir(outputDir, { recursive: true });
-
-  if (!(await canReach(apiRunsUrl()))) {
-    backendProcess = startRuntimeConsole();
-    await waitFor(apiRunsUrl());
-  }
-
-  const runsResponse = await fetch(apiRunsUrl());
-  const runs = await runsResponse.json();
-  if (!Array.isArray(runs) || runs.length === 0) {
-    throw new Error('Runtime backend returned no runs');
-  }
-  if (runCollection === 'round04d_concepts' && runs.length !== 12) {
-    throw new Error(`Expected 12 round04d concept runs, got ${runs.length}`);
-  }
-  const selectedRun = runs.find((run) => run.relative_path?.includes('case_02_wuthering_beach')) || runs[0];
-  const bundleResponse = await fetch(`${backendUrl}/api/runs/${encodeURIComponent(selectedRun.run_key)}/bundle`);
-  const bundle = await bundleResponse.json();
-  if (!bundle.frontend_status && !bundle.state) {
-    throw new Error(`Selected run has no state/frontend_status: ${selectedRun.display_name}`);
-  }
 
   if (!(await canReach(creatorUrl))) {
     creatorProcess = startCreatorApp();
     await waitFor(creatorUrl);
   }
 
+  await waitFor(apiRunsUrl());
+  const projectsResponse = await fetch(apiRunsUrl());
+  const projects = await projectsResponse.json();
+  if (!Array.isArray(projects) || projects.length === 0) {
+    throw new Error('Creator backend returned no projects');
+  }
+  if (runCollection === 'round04d_concepts' && projects.length !== 12) {
+    throw new Error(`Expected 12 round04d concept projects, got ${projects.length}`);
+  }
+  const selectedProject = projects.find((project) => project.relative_path?.includes('case_02_wuthering_beach')) || projects[0];
+  const selectedProjectKey = selectedProject.project_key || selectedProject.run_key;
+  const bundleResponse = await fetch(`${backendUrl}/projects/${encodeURIComponent(selectedProjectKey)}/bundle`);
+  const bundle = await bundleResponse.json();
+  if (!bundle.frontend_status && !bundle.state) {
+    throw new Error(`Selected project has no state/frontend_status: ${selectedProject.display_name}`);
+  }
+
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
-  const appUrl = `${creatorUrl}/?api_base=${encodeURIComponent(backendUrl)}&run_collection=${encodeURIComponent(runCollection)}&run_key=${encodeURIComponent(selectedRun.run_key)}#concept-review`;
+  const appUrl = `${creatorUrl}/?run_collection=${encodeURIComponent(runCollection)}&run_key=${encodeURIComponent(selectedProjectKey)}#concept-review`;
   await page.goto(appUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector('.creator-shell[data-runtime-source="backend"]', { state: 'visible', timeout: 15000 });
   await page.waitForSelector('.concept-option', { state: 'visible', timeout: 15000 });
@@ -131,8 +111,12 @@ try {
       runKey: shell?.getAttribute('data-run-key'),
       title: document.querySelector('.project-title')?.textContent?.trim(),
       conceptOptionCount: conceptOptions.length,
-      hasRuntimeConceptImage: conceptImages.some((src) => src.includes('/api/runs/') && src.includes('/file?path=')),
-      runOptionCount: document.querySelectorAll('.run-select-label option').length,
+      hasRuntimeConceptImage: conceptImages.some((src) => src.includes('/api/creator/projects/') && src.includes('/file?path=')),
+      runOptionCount: Math.max(
+        document.querySelectorAll('.project-center-native-select option').length,
+        document.querySelectorAll('.project-run-card').length,
+        document.querySelectorAll('.run-select-label option').length,
+      ),
       bodyWidth: document.body.scrollWidth,
       viewportWidth: window.innerWidth,
     };
@@ -144,11 +128,11 @@ try {
   if (domAudit.source !== 'backend') {
     throw new Error(`Creator App did not use backend source: ${JSON.stringify(domAudit)}`);
   }
-  if (domAudit.runKey !== selectedRun.run_key) {
-    throw new Error(`Creator App selected unexpected run: ${JSON.stringify(domAudit)}`);
+  if (domAudit.runKey !== selectedProjectKey) {
+    throw new Error(`Creator App selected unexpected project: ${JSON.stringify(domAudit)}`);
   }
-  if (domAudit.runOptionCount < runs.length) {
-    throw new Error(`Creator App did not expose the backend run collection: ${JSON.stringify(domAudit)}`);
+  if (domAudit.runOptionCount < projects.length) {
+    throw new Error(`Creator App did not expose the backend project collection: ${JSON.stringify(domAudit)}`);
   }
   if (domAudit.conceptOptionCount < 1 || !domAudit.hasRuntimeConceptImage) {
     throw new Error(`Creator App did not render backend concept images: ${JSON.stringify(domAudit)}`);
@@ -162,11 +146,11 @@ try {
     creatorUrl,
     runCollection,
     outputDir,
-    selectedRun: {
-      runKey: selectedRun.run_key,
-      displayName: selectedRun.display_name,
-      phase: selectedRun.frontend_phase,
-      status: selectedRun.frontend_status_value,
+    selectedProject: {
+      projectKey: selectedProjectKey,
+      displayName: selectedProject.display_name,
+      phase: selectedProject.frontend_phase,
+      status: selectedProject.frontend_status_value,
     },
     bundle: {
       phase: bundle.frontend_status?.phase || bundle.state?.phase || null,
@@ -183,9 +167,8 @@ try {
 
   console.log(`backend: ${backendUrl}`);
   console.log(`creator: ${creatorUrl}`);
-  console.log(`run: ${selectedRun.display_name}`);
+  console.log(`project: ${selectedProject.display_name}`);
   console.log(`evidence: ${outputDir}`);
 } finally {
   await stopProcess(creatorProcess);
-  await stopProcess(backendProcess);
 }

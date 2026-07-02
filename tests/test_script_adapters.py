@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -91,6 +92,32 @@ def test_compose_command_accepts_optional_assembly_plan_json(tmp_path: Path) -> 
     )
 
     assert command.argv[-1] == str(plan.resolve())
+
+
+def test_compose_command_accepts_multiple_subject_glbs(tmp_path: Path) -> None:
+    root = _make_root(tmp_path)
+    blender = tmp_path / "blender"
+    scene = tmp_path / "scene.glb"
+    asset_a = tmp_path / "asset_a.glb"
+    asset_b = tmp_path / "asset_b.glb"
+    _touch(blender)
+    _touch(scene)
+    _touch(asset_a)
+    _touch(asset_b)
+
+    command = build_compose_blender_scene_command(
+        root,
+        scene,
+        asset_a,
+        tmp_path / "composed.png",
+        tmp_path / "composed.blend",
+        asset_glbs=[asset_a, asset_b],
+        blender_path=blender,
+    )
+
+    flag_index = command.argv.index("--asset-glbs-json")
+    paths = json.loads(command.argv[flag_index + 1])
+    assert paths == [str(asset_a.resolve()), str(asset_b.resolve())]
 
 
 def test_render_command_requires_existing_input_glb(tmp_path: Path) -> None:

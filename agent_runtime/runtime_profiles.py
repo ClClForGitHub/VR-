@@ -65,7 +65,7 @@ class RuntimeServiceConfig(BaseModel):
     hunyuan3d_start_max_num_view: int = 8
     hunyuan3d_low_vram_mode: bool = True
     default_hunyuan3d_profile_id: str = "hq_textured_1m_768"
-    default_hunyuan3d_profile_policy: Hunyuan3DProfileSelectionPolicy = "global"
+    default_hunyuan3d_profile_policy: Hunyuan3DProfileSelectionPolicy = "balanced_per_subject"
     hunyuan3d_safe_concurrency_limit: int = 1
 
 
@@ -148,44 +148,21 @@ HUNYUAN3D_GENERATION_PROFILES: dict[str, Hunyuan3DGenerationProfile] = {
             "High face count and texture generation should be treated as a long-running job.",
         ],
     ),
-    "hq_shape_1m_768": Hunyuan3DGenerationProfile(
-        profile_id="hq_shape_1m_768",
-        label="High quality shape-only 1M/768",
-        description="High-detail geometry without texture generation.",
-        texture=False,
-        octree_resolution=768,
-        num_inference_steps=50,
-        num_chunks=200000,
-        face_count=1000000,
-        duration_class="long",
-        suggested_executor="sub_agent",
-        notes=["Useful when texture generation is not needed but geometry quality still matters."],
-    ),
     "fast_shape_50k_768": Hunyuan3DGenerationProfile(
         profile_id="fast_shape_50k_768",
-        label="Fast shape-only smoke 50K/768",
-        description="Lower-face-count shape-only smoke profile for wiring and QA checks.",
-        texture=False,
+        label="Fast textured 50K/768",
+        description="Lower-face-count textured profile for routine assets and throughput-sensitive full runs.",
+        texture=True,
         octree_resolution=768,
         num_inference_steps=30,
         num_chunks=200000,
         face_count=50000,
-        duration_class="medium",
-        suggested_executor="background_worker",
-        notes=["This is a runtime smoke preset, not final asset quality."],
-    ),
-    "draft_shape_100k_512": Hunyuan3DGenerationProfile(
-        profile_id="draft_shape_100k_512",
-        label="Draft shape-only 100K/512",
-        description="Lower octree and face count for draft generation when fast feedback matters.",
-        texture=False,
-        octree_resolution=512,
-        num_inference_steps=20,
-        num_chunks=100000,
-        face_count=100000,
-        duration_class="short",
-        suggested_executor="background_worker",
-        notes=["Only use for draft iteration; do not treat as final output."],
+        duration_class="long",
+        suggested_executor="sub_agent",
+        notes=[
+            "Keeps texture generation enabled while reducing geometry steps and face count.",
+            "Treat as a live generation job; lower face count does not make texture generation instant.",
+        ],
     ),
 }
 
@@ -315,23 +292,19 @@ def _profile_id_for_subject(
 
     if policy == "throughput_per_subject":
         if priority == "hero" and category in {"character", "animal", "vehicle"}:
-            return "hq_shape_1m_768", "throughput policy keeps hero geometry high but skips texture"
-        if category in {"character", "animal", "vehicle", "furniture"} and priority != "background":
-            return "fast_shape_50k_768", "throughput policy uses fast shape for non-hero articulated subjects"
-        return "draft_shape_100k_512", "throughput policy uses draft shape for background/simple assets"
+            return "hq_textured_1m_768", "throughput policy keeps hero subjects on the high-quality textured profile"
+        return "fast_shape_50k_768", "throughput policy uses the fast textured 50K profile for all non-hero assets"
 
     if priority == "hero" and category in {"character", "animal"}:
         return "hq_textured_1m_768", "balanced policy keeps hero organic subjects textured"
     if priority == "hero" and category == "vehicle":
-        return "hq_shape_1m_768", "balanced policy keeps hero vehicle geometry high without texture"
+        return "hq_textured_1m_768", "balanced policy keeps hero vehicles on the high-quality textured profile"
     if category in {"character", "animal"}:
-        return "hq_shape_1m_768", "balanced policy skips texture for non-hero organic subjects to reduce runtime"
+        return "hq_textured_1m_768", "balanced policy keeps character/animal subjects on the high-quality textured profile"
     if category in {"vehicle", "furniture"}:
-        return "fast_shape_50k_768", "balanced policy uses fast shape for non-hero vehicle/furniture assets"
+        return "fast_shape_50k_768", "balanced policy uses the fast textured profile for non-hero vehicle/furniture assets"
     if category in {"prop", "architecture_part", "environment_asset"}:
-        if priority == "background":
-            return "draft_shape_100k_512", "balanced policy uses draft shape for background/simple assets"
-        return "fast_shape_50k_768", "balanced policy uses fast shape for simple scene assets"
+        return "fast_shape_50k_768", "balanced policy uses the fast textured profile for simple scene assets"
     return fallback_profile_id, "balanced policy fallback profile"
 
 

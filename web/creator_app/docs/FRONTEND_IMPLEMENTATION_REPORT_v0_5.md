@@ -263,7 +263,7 @@ http://127.0.0.1:5173/
 1. React 原型本地跑通。
 2. 补齐响应式和组件比例。
 3. 接入真实图片 URL 和静态资源。
-4. 接入 RuntimeAdapter，先读 `GET /api/runs/<run_key>/bundle`。
+4. 接入 RuntimeAdapter，先读 `GET /api/creator/projects/<project_key>/bundle`。
 5. 做 ViewModel normalization。
 6. 接入聊天、上传、用户动作。
 7. 接入 model-viewer。
@@ -290,4 +290,3 @@ http://127.0.0.1:5173/
 ```
 
 Codex 第一阶段只做静态 React mock，不接真实后端。第二阶段才接 RuntimeAdapter。第三阶段接 viewer。
-

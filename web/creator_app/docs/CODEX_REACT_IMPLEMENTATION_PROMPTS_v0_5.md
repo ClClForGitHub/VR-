@@ -80,9 +80,10 @@ Prompt:
 
 ```text
 实现 RuntimeAdapter 的只读能力：
-- GET /api/runs
-- GET /api/runs/<run_key>/bundle
-- GET /api/runs/<run_key>/file?path=...
+- GET /api/creator/projects
+- GET /api/creator/projects?collection=round04d_concepts
+- GET /api/creator/projects/<project_key>/bundle
+- GET /api/creator/projects/<project_key>/file?path=...
 
 新增 normalizeRuntimeBundle(rawBundle)，把 raw bundle 转为 CreatorRunViewModel。
 UI 仍保留 mock fallback。
@@ -104,8 +105,8 @@ Prompt:
 
 ```text
 实现 ChatComposer 的真实提交：
-- POST /api/runs/<run_key>/chat
-- POST /api/runs/<run_key>/upload
+- POST /api/creator/projects/<project_key>/chat
+- POST /api/creator/projects/<project_key>/upload
 
 实现 @图片引用选择：
 - 上传后生成 alias：@图片1、@图片2...
@@ -179,7 +180,7 @@ Prompt:
 - manifest/readme
 - package zip
 
-所有下载链接走 /api/runs/<run_key>/file?path=...
+所有下载链接走 /api/creator/projects/<project_key>/file?path=...
 ```
 
 ---

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from './Button.jsx';
 import { HeroStage } from './HeroStage.jsx';
 import { Panel } from './Panel.jsx';
@@ -8,10 +8,22 @@ export function ConceptSelectionBoard({ entities = [], assetVersions = [], appro
   const conceptEntities = useMemo(() => conceptEntityList(entities, conceptVersions), [conceptVersions, entities]);
   const [activeEntityId, setActiveEntityId] = useState('overall');
   const [selection, setSelection] = useState(() => initialSelection(conceptEntities, conceptVersions, approvedSelection));
+  const conceptEntitySignature = conceptEntities.map((entity) => entity.entity_id).join('|');
+  const conceptVersionSignature = conceptVersions.map((asset) => `${asset.asset_id}:${asset.entity_id}:${asset.status}`).join('|');
+  const approvedSignature = JSON.stringify(approvedSelection || {});
   const activeEntity = conceptEntities.find((entity) => entity.entity_id === activeEntityId) || conceptEntities[0];
   const activeVersions = conceptVersions.filter((asset) => asset.entity_id === activeEntity?.entity_id);
   const activeAsset = activeVersions.find((asset) => asset.asset_id === selection[activeEntity?.entity_id]) || activeVersions[0] || conceptVersions[0];
   const approvedPayload = selectionToApproved(selection, conceptVersions);
+
+  useEffect(() => {
+    setSelection(initialSelection(conceptEntities, conceptVersions, approvedSelection));
+    setActiveEntityId((current) => (
+      conceptEntities.some((entity) => entity.entity_id === current)
+        ? current
+        : conceptEntities[0]?.entity_id || 'overall'
+    ));
+  }, [conceptEntitySignature, conceptVersionSignature, approvedSignature]);
 
   function selectAsset(asset) {
     setSelection((current) => ({ ...current, [asset.entity_id]: asset.asset_id }));

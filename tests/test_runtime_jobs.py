@@ -56,7 +56,7 @@ def test_runtime_plan_marks_hunyuan3d_subject_generation_as_sub_agent_long_job()
     assert subject_job.tool_arguments["texture"] is True
     assert subject_job.tool_arguments["octree_resolution"] == 768
     assert subject_job.tool_arguments["face_count"] == 1000000
-    assert subject_job.tool_arguments["hunyuan3d_profile_policy"] == "global"
+    assert subject_job.tool_arguments["hunyuan3d_profile_policy"] == "balanced_per_subject"
     assert subject_job.tool_arguments["subject_hunyuan_profiles"] == {"subject_robot": "hq_textured_1m_768"}
     assert subject_job.job_id in plan.sub_agent_job_ids
     assert subject_job.job_id in plan.long_running_job_ids
@@ -75,7 +75,7 @@ def test_runtime_plan_can_use_fast_hunyuan3d_profile_for_smoke_jobs() -> None:
 
     subject_job = next(job for job in plan.jobs if job.domain_tool_name == "build_subject_asset")
     assert subject_job.profile_id == "fast_shape_50k_768"
-    assert subject_job.tool_arguments["texture"] is False
+    assert subject_job.tool_arguments["texture"] is True
     assert subject_job.tool_arguments["face_count"] == 50000
     assert subject_job.tool_arguments["num_inference_steps"] == 30
     assert subject_job.tool_arguments["hunyuan3d_profile_policy"] == "global"
@@ -107,9 +107,9 @@ def test_runtime_plan_can_select_mixed_subject_profiles_for_throughput() -> None
     assert subject_job.tool_arguments["hunyuan3d_profile_policy"] == "throughput_per_subject"
     assert subject_job.tool_arguments["subject_hunyuan_profiles"] == {
         "subject_robot": "fast_shape_50k_768",
-        "subject_background_crate": "draft_shape_100k_512",
+        "subject_background_crate": "fast_shape_50k_768",
     }
-    assert subject_job.tool_arguments["subject_hunyuan_profile_kwargs"]["subject_background_crate"]["octree_resolution"] == 512
+    assert subject_job.tool_arguments["subject_hunyuan_profile_kwargs"]["subject_background_crate"]["octree_resolution"] == 768
 
 
 def test_runtime_plan_turns_user_gate_into_waiting_user_job() -> None:

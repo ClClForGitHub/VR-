@@ -339,6 +339,10 @@ def _blender_assembly_tool_payload(state: AgentProjectState) -> dict[str, object
         payload["scene_asset_id"] = selection.selected_scene_asset_id
     elif state.scene_asset is not None:
         payload["scene_asset_id"] = state.scene_asset.scene_asset_id
+    if selection is None:
+        subject_assets_by_subject = _subject_asset_ids_by_subject(state)
+        if len(subject_assets_by_subject) > 1:
+            payload["selected_subject_assets"] = subject_assets_by_subject
     subject_id = _primary_assembly_subject_id(state)
     if subject_id is not None:
         payload["subject_id"] = subject_id
@@ -346,6 +350,14 @@ def _blender_assembly_tool_payload(state: AgentProjectState) -> dict[str, object
     if subject_asset_id is not None:
         payload["subject_asset_id"] = subject_asset_id
     return payload
+
+
+def _subject_asset_ids_by_subject(state: AgentProjectState) -> dict[str, str]:
+    selected: dict[str, str] = {}
+    for asset in state.subject_assets:
+        if asset.subject_id and asset.asset_id and (asset.glb_uri or asset.mesh_uri or asset.obj_uri):
+            selected.setdefault(asset.subject_id, asset.asset_id)
+    return selected
 
 
 def _primary_assembly_subject_id(state: AgentProjectState) -> str | None:

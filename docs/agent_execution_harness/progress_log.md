@@ -86,8 +86,9 @@ Known issues:
   derived `frontend_status.json` contract are ready for a later UI slice.
 
 Next:
-- Wire runtime-console UI controls to `POST /api/runs/<run_key>/asset-action`
-  and render the new asset-library/selection fields.
+- Wire Creator App UI controls through the 5173 same-origin backend, using
+  `/api/creator/projects/<project_key>/asset-action`, and render the new
+  asset-library/selection fields.
 
 ## 2026-07-01 - Round 03 core pipeline semantics
 
@@ -205,12 +206,14 @@ Next:
 Scope:
 - Continue v0.5 through real backend API connection, stopping before write
   actions, model-viewer, and public UI replacement.
-- Connect `web/creator_app/` to runtime-console read-only APIs with mock
-  fallback preserved.
+- Historical note: this slice first used the old runtime-console read-only
+  APIs. That path is now superseded by the 5173 same-origin `/api/creator`
+  backend described in the 2026-07-02 entries below.
 
 Changed:
-- Implemented read-only `RuntimeAdapter` for `GET /api/runs`,
-  `GET /api/runs/<run_key>/bundle`, and file URLs.
+- Implemented the first read-only `RuntimeAdapter` path for runtime project
+  listings, bundles, and file URLs; the active endpoints are now the
+  `/api/creator/projects` equivalents.
 - Added `normalizeRuntimeBundle(rawBundle)` to convert runtime state,
   `frontend_status.json`, `scene_state.json`, artifacts, and file manifests
   into a product-facing CreatorRunViewModel.
@@ -225,15 +228,8 @@ Verification:
 - `cd web/creator_app && npm run smoke:screenshots` -> passed; 8 mock
   screenshots checked. Evidence:
   `run_logs/frontend_checks/creator_app_round05_20260701T104232Z`.
-- `cd web/creator_app && npm run smoke:backend-readonly` -> passed against
-  `http://127.0.0.1:18093`, selected run
-  `20260630_live_user_examples_114143Z`, fileCount 26, fileCards 6. Evidence:
-  `run_logs/frontend_checks/creator_app_backend_readonly_20260701T103920Z`.
-- Existing runtime console `http://127.0.0.1:8093/api/runs` -> 50 runs.
-- Playwright check on
-  `http://127.0.0.1:5173/?api_base=http%3A%2F%2F127.0.0.1%3A8093#delivery`
-  -> `source=backend`, `runOptions=50`, `fileCards=6`,
-  `hasRuntimeFileLink=true`.
+- Superseded backend-readonly evidence from this day used the old runtime
+  console. Current accepted evidence is the later 5173 `/api/creator` smoke.
 
 Known issues:
 - This round did not implement POST `/chat`, `/upload`, `/user-action`, or
@@ -350,3 +346,123 @@ Verification:
 Known issues:
 - Runtime upload filenames include generated upload IDs, so preflight records
   upload glob patterns and resolves exact paths only after a live run.
+
+## 2026-07-02 - Creator App Round04D concept collection wiring
+
+Scope:
+- Connect the running Creator App project center to the 12 real Round04D
+  concept sample runs.
+- Use the 5173 Creator App same-origin `/api/creator` backend path; do not
+  depend on the deprecated runtime-console service, create another gallery
+  runner, or mutate runtime output state.
+
+Changed:
+- Added `GET /api/creator/projects?collection=round04d_concepts` for
+  `outputs/runs/round04d_live_12_samples/case_*`.
+- Updated Creator App runtime loading to default to `/api/creator`, request
+  `round04d_concepts`, and load a direct `project_key`/`run_key` even if that
+  project is not in the current list.
+- Added `FINAL_PREVIEW_IMAGE` to the frontend concept-image artifact set so
+  final target previews appear in concept/asset views.
+- Updated backend read-only smoke to verify the 12-case collection and concept
+  image rendering instead of an old delivery run.
+- Updated Creator App backend contract, frontend backend-integration notes,
+  README, Round06 notes, and the decision log.
+
+Verification:
+- Superseded by the same-origin 5173 verification below.
+
+Known issues:
+- This slice is read-only display wiring. It does not run live image/model
+  generation and does not submit concept/model/final approval actions.
+- Existing uncommitted frontend upload/chat wiring remains in the working tree
+  and was not reverted.
+
+Next:
+- Run targeted backend tests, Creator App build, and backend-readonly smoke
+  against the 12-case collection.
+
+## 2026-07-02 - Creator App project center and backend contract handoff
+
+Scope:
+- Treat `http://10.2.16.106:5173/` as the Creator App frontend entrypoint.
+- Wire the topbar project center to the same-origin 5173 backend 12-sample
+  project collection.
+- Document the exact backend API contract needed for project switching,
+  reference upload, and chat submission.
+
+Changed:
+- Reworked `AppShell` project center from a small select into a searchable
+  backend sample panel with current run, refresh, status chips, and stable
+  case numbering.
+- Kept a hidden native select for automated collection checks while the visible
+  UI uses project cards.
+- Updated backend smoke checks to recognize the new project center.
+- Updated Creator App backend contract, README, and backend integration plan
+  with the 5173 same-origin `/api/creator` boundary plus planned `/upload` and
+  `/chat` request/response requirements.
+
+Verification:
+- `curl -I http://127.0.0.1:5173/` -> HTTP 200.
+- `cd web/creator_app && npm run build` -> passed.
+- `python -m pytest tests/test_runtime_runs.py tests/test_runtime_console_server.py tests/test_runtime_console.py -q` -> 20 passed.
+- Superseded: the earlier smoke used a separate runtime API target. The current
+  accepted check must use 5173 same-origin `/api/creator`.
+- `GET http://127.0.0.1:5173/api/creator/projects?collection=round04d_concepts`
+  -> 12 projects, first `case_01_tft_little_gwen`, last
+  `case_12_stellar_blade_raven_adam_xion`.
+- Browser check on `http://127.0.0.1:5173/#concept-review` -> backend source,
+  12 project-center options, concept images served from
+  `/api/creator/projects/<project_key>/file`.
+- `CREATOR_APP_BASE_URL=http://127.0.0.1:5173 npm run smoke:backend-readonly`
+  -> passed; backend `http://127.0.0.1:5173/api/creator`; evidence
+  `run_logs/frontend_checks/creator_app_backend_readonly_20260702T093937Z`.
+
+Known issues:
+- Concept/model/final approval, asset-action, and loop submission remain the
+  next backend write-action wiring slice.
+- `<model-viewer>` is real when backend provides GLB URLs; no-GLB cases still
+  correctly show waiting/fallback states.
+
+## 2026-07-02 - Creator App multi-subject concept normalizer correction
+
+Scope:
+- Fix Creator App concept review so Round04D backend samples with multiple
+  subjects and V-series concepts are not collapsed into one mock subject or
+  mock scene placeholder.
+
+Changed:
+- Removed backend-mode concept entity seeding from mock entities.
+- Normalized concept entity ids from `linked_subject_id`,
+  `metadata.subject_id`, `metadata.target_id`, and
+  `metadata.requirement_id`.
+- Used `metadata.concept_version` and `state.concept_bundle` as the selected
+  V-series source of truth.
+- Bound reference slots from `scene_spec.subjects[].reference_image_ids` and
+  `environment.scene_reference_image_ids` when upload metadata is absent.
+- Reset local concept-board selection when switching backend projects.
+- Updated backend contract docs with multi-subject and V-series requirements.
+
+Verification:
+- `cd web/creator_app && npm run build` -> passed.
+- `python -m pytest tests/test_runtime_runs.py tests/test_runtime_console_server.py tests/test_runtime_console.py -q` -> 20 passed.
+- 5173 same-origin DOM check on Case 02 -> no mock placeholder text; entities
+  show `主体1 Q版菲比`, `主体2 Q版弗洛洛`, `主体3 Q版达妮娅`,
+  `主体4 终末地女管理员二创角色咕咕嘎嘎`, and `场景1 沙滩场景...`; selected
+  rows all use v2.
+- `cd web/creator_app && npm run smoke:backend-readonly` -> passed; evidence
+  under `run_logs/frontend_checks/multi_subject_mapping_smoke`.
+
+## 2026-07-02 - Pre-commit verification for runtime compose and Creator App backend
+
+Scope:
+- Verify the current related runtime, controller, compose, Creator App backend,
+  frontend, test, and documentation changes before committing them to `main`.
+
+Verification:
+- `git diff --check` -> passed.
+- `python -m pytest tests/test_controller.py tests/test_domain_dispatcher.py tests/test_runtime_console_server.py tests/test_runtime_execution.py tests/test_runtime_jobs.py tests/test_runtime_profiles.py tests/test_script_adapters.py tests/test_workflow_runner.py -q` -> 140 passed.
+- `cd web/creator_app && npm run build` -> passed; Vite emitted the existing
+  large `model-viewer` chunk warning.
+- `cd web/creator_app && npm run smoke:backend-readonly` -> passed; evidence
+  `run_logs/frontend_checks/creator_app_backend_readonly_20260702T094737Z`.

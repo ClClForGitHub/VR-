@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 
@@ -317,6 +318,40 @@ def test_dispatcher_import_scene_asset_wraps_existing_compose_script(tmp_path: P
     assert state.tool_call_log[0].raw_tool_calls[0]["argv"][3] == str(
         (root / "tools/compose_blender_scene.py").resolve()
     )
+
+
+def test_dispatcher_import_scene_asset_accepts_multiple_subject_glbs(tmp_path: Path) -> None:
+    root = _make_root(tmp_path)
+    blender = tmp_path / "blender"
+    scene = tmp_path / "scene.glb"
+    asset_a = tmp_path / "asset_a.glb"
+    asset_b = tmp_path / "asset_b.glb"
+    _touch(blender)
+    _touch(scene)
+    _touch(asset_a)
+    _touch(asset_b)
+    state = _state()
+
+    result = ScriptDomainToolDispatcher(
+        state=state,
+        root=root,
+        blender_path=blender,
+    ).dispatch(
+        "import_scene_asset",
+        {
+            "scene_glb": scene,
+            "asset_glbs": [asset_a, asset_b],
+            "preview_png": tmp_path / "composed.png",
+            "output_blend": tmp_path / "composed.blend",
+        },
+        options=CommandExecutionOptions(dry_run=True),
+    )
+
+    argv = state.tool_call_log[0].raw_tool_calls[0]["argv"]
+    flag_index = argv.index("--asset-glbs-json")
+    assert json.loads(argv[flag_index + 1]) == [str(asset_a.resolve()), str(asset_b.resolve())]
+    assert result.arguments["asset_glb"] == str(asset_a)
+    assert result.outputs["asset_glb_count"] == 2
 
 
 def test_dispatcher_export_viewer_scene_wraps_existing_export_script(tmp_path: Path) -> None:

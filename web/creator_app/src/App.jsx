@@ -213,8 +213,8 @@ function generationKindForPhase(phase) {
 
 function runtimeApiBaseUrl() {
   const params = new URLSearchParams(window.location.search);
-  const fromQuery = params.get('api_base') || params.get('api');
-  return (fromQuery || import.meta.env.VITE_RUNTIME_API_BASE_URL || '').replace(/\/$/, '');
+  if (params.get('mock') === '1') return '';
+  return (import.meta.env.VITE_RUNTIME_API_BASE_URL || '/api/creator').replace(/\/$/, '');
 }
 
 function runtimeRunKeyFromUrl() {
