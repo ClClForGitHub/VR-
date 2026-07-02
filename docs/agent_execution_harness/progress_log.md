@@ -466,3 +466,29 @@ Verification:
   large `model-viewer` chunk warning.
 - `cd web/creator_app && npm run smoke:backend-readonly` -> passed; evidence
   `run_logs/frontend_checks/creator_app_backend_readonly_20260702T094737Z`.
+- Follow-up frontend adapter check after adding SceneSpec-derived intake and
+  reference-slot context: `cd web/creator_app && npm run build` -> passed;
+  `cd web/creator_app && npm run smoke:backend-readonly` -> passed; evidence
+  `run_logs/frontend_checks/creator_app_backend_readonly_20260702T095307Z`.
+
+## 2026-07-02 - Creator App 5173 contract doc sweep
+
+Scope:
+- Align current Creator App docs, current frontend implementation notes, and
+  design-handoff prototype notes to the active 5173 same-origin backend
+  contract.
+- Remove stale copyable references to old runtime-console ports, URL query API
+  switching, and legacy runtime-run paths from current docs/search scope.
+
+Changed:
+- Creator App now ignores URL query API-base overrides; the default backend is
+  `/api/creator`, with `?mock=1` retained only for explicit mock mode.
+- Current docs now name `GET /api/creator/projects?collection=round04d_concepts`
+  as the project-center source of truth for the 12 Round04D concept cases.
+- File, bundle, chat, upload, user-action, asset-action, and loop contract text
+  now uses `/api/creator/projects/<project_key>/...`.
+
+Verification:
+- Active docs/frontend search excluding olddocs, archived round packages,
+  generated HTML galleries, node_modules, and build output found no stale
+  legacy endpoint or deprecated-port hits.

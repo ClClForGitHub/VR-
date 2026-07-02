@@ -173,6 +173,8 @@ export function createMockViewModel({ source = 'mock', error = null } = {}) {
     cameraPresets: mockCameraPresets,
     activeObjectId: mockSceneObjects[0]?.id ?? null,
     fileManifest: [],
+    sceneSpec: null,
+    intake: null,
     runtime: { runs: [], bundle: null, generationStatus: null },
   };
 }
@@ -275,6 +277,8 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
     cameraPresets,
     activeObjectId,
     fileManifest: files,
+    sceneSpec,
+    intake: buildIntakeContext(state, referenceSlots),
     runtime: {
       runs,
       bundle: rawBundle,
@@ -349,7 +353,7 @@ function modelAssetFromArtifact(artifact, bundle, adapter, index, modelType) {
 
 function buildReferenceSlots(state, bundle, adapter) {
   const referenceImages = normalizeReferenceImages(state, bundle, adapter);
-  const slots = mockReferenceSlots.map((slot) => ({ ...slot }));
+  const slots = createReferenceSlotsFromSceneSpec(state.scene_spec);
   if (!Array.isArray(referenceImages) || referenceImages.length === 0) return slots;
 
   const nextSubjectIndex = { value: 0 };
@@ -364,10 +368,44 @@ function buildReferenceSlots(state, bundle, adapter) {
     slot.entity_id = reference.entity_id || slot.entity_id;
     slot.display_label = reference.display_label || slot.display_label || publicEntityLabel(slot.entity_id);
     slot.mention = reference.mention || slot.mention;
-    slot.artifact_id = reference.image_id || reference.artifact_id || reference.id || slot.artifact_id;
+    slot.image_id = reference.image_id || reference.id || slot.image_id;
+    slot.artifact_id = reference.artifact_id || reference.image_id || reference.id || slot.artifact_id;
     slot.image_url = reference.url || reference.uri || reference.image_url || slot.image_url;
     slot.status = slot.image_url ? 'uploaded' : 'empty';
     slot.resolved_name = reference.title || reference.resolved_name || reference.display_name || slot.resolved_name;
+  });
+  return slots;
+}
+
+function createReferenceSlotsFromSceneSpec(sceneSpec = {}) {
+  const subjects = Array.isArray(sceneSpec.subjects) ? sceneSpec.subjects : [];
+  const slots = subjects.slice(0, 5).map((subject, index) => ({
+    slot_id: `subject_slot_${index + 1}`,
+    slot_kind: 'subject',
+    display_label: `主体${index + 1}`,
+    mention: `@主体${index + 1}`,
+    entity_id: subject.subject_id || `subject_${index + 1}`,
+    status: 'empty',
+    resolved_name: subject.display_name || subject.description || null,
+  }));
+  for (let index = slots.length; index < 5; index += 1) {
+    slots.push({
+      slot_id: `subject_slot_${index + 1}`,
+      slot_kind: 'subject',
+      display_label: `主体${index + 1}`,
+      mention: `@主体${index + 1}`,
+      entity_id: `subject_${index + 1}`,
+      status: 'empty',
+    });
+  }
+  slots.push({
+    slot_id: 'scene_slot_1',
+    slot_kind: 'scene',
+    display_label: '场景1',
+    mention: '@场景1',
+    entity_id: 'scene_1',
+    status: 'empty',
+    resolved_name: sceneSpec.environment?.description || sceneSpec.title || null,
   });
   return slots;
 }
@@ -449,6 +487,54 @@ function referencesFromSlots(referenceSlots) {
     slotId: slot.slot_id,
     entityId: slot.entity_id,
   }));
+}
+
+function buildIntakeContext(state = {}, referenceSlots = []) {
+  const sceneSpec = state.scene_spec || {};
+  const userTurns = Array.isArray(state.user_turns) ? state.user_turns : [];
+  const mentionByImageId = new Map();
+  referenceSlots.forEach((slot) => {
+    if (slot.image_id) mentionByImageId.set(slot.image_id, slot.mention);
+    if (slot.artifact_id) mentionByImageId.set(slot.artifact_id, slot.mention);
+  });
+  const fallbackPrompt = sceneSpec.user_goal
+    || sceneSpec.prompt
+    || sceneSpec.title
+    || sceneSpec.environment?.description
+    || '';
+  const normalizedTurns = userTurns.map((turn, index) => ({
+    id: turn.turn_id || `turn_${index + 1}`,
+    role: 'user',
+    label: '用户',
+    meta: PHASE_LABELS[turn.phase_at_turn] || turn.phase_at_turn || '历史消息',
+    text: turn.text || '',
+    mentions: (turn.image_ids || []).map((imageId) => mentionByImageId.get(imageId)).filter(Boolean),
+    attachmentIds: turn.image_ids || [],
+    createdAt: turn.created_at || null,
+  })).filter((turn) => turn.text);
+  if (normalizedTurns.length === 0 && fallbackPrompt) {
+    normalizedTurns.push({
+      id: 'scene-spec-fallback',
+      role: 'user',
+      label: '用户',
+      meta: 'SceneSpec',
+      text: fallbackPrompt,
+      mentions: referenceSlots.filter((slot) => slot.status === 'uploaded').map((slot) => slot.mention),
+      attachmentIds: [],
+      createdAt: null,
+    });
+  }
+  const subjectNames = Array.isArray(sceneSpec.subjects)
+    ? sceneSpec.subjects.map((subject) => subject.display_name).filter(Boolean)
+    : [];
+  return {
+    title: sceneSpec.title || '',
+    environment: sceneSpec.environment?.description || '',
+    styleKeywords: Array.isArray(sceneSpec.style?.style_keywords) ? sceneSpec.style.style_keywords : [],
+    subjectNames,
+    userTurns: normalizedTurns,
+    conversationSummary: state.conversation_summary || null,
+  };
 }
 
 function normalizeReferenceKind(value) {
