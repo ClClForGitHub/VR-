@@ -1,3 +1,4 @@
+import base64
 import importlib.util
 import json
 import threading
@@ -148,6 +149,54 @@ def test_runtime_console_asset_action_endpoint_applies_frontend_selection(tmp_pa
     assert state_payload["asset_library"][0]["selection_status"] == "selected_for_model_generation"
     assert state_payload["asset_library"][0]["review_status"] == "rejected"
     assert action_summary["latest_record"]["action_type"] == "select_concept_for_subject_generation"
+
+
+def test_runtime_console_upload_endpoint_records_reference_slot_metadata(tmp_path: Path) -> None:
+    created = create_runtime_console_run(root=tmp_path, run_id="run_upload")
+    run_dir = Path(created.run_dir)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), RuntimeConsoleHandler)
+    server.root = tmp_path
+    server.static_root = tmp_path
+    server.public_urls = PublicUrlConfig()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        run_key = urllib.parse.quote(created.run_id, safe="")
+        url = f"http://127.0.0.1:{server.server_port}/api/runs/{run_key}/upload"
+        body = json.dumps(
+            {
+                "filename": "subject.png",
+                "content_base64": base64.b64encode(b"fake-png").decode("ascii"),
+                "mime_type": "image/png",
+                "metadata": {
+                    "binding_role": "subject",
+                    "slot_id": "subject_slot_1",
+                    "entity_id": "subject_1",
+                    "mention": "@主体1",
+                    "display_label": "主体1",
+                },
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+
+    assert payload["ok"] is True
+    assert payload["image_id"]
+    assert payload["metadata"]["slot_id"] == "subject_slot_1"
+    assert state["artifacts"][0]["metadata"]["mention"] == "@主体1"
+    assert state["input_images"][0]["user_declared_label"] == "主体1"
 
 
 def _scene_spec() -> SceneSpec:

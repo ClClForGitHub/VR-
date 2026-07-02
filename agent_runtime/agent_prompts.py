@@ -44,6 +44,18 @@ class SceneInterpreterOutput(BaseModel):
     open_questions: list[str] = Field(default_factory=list)
 
 
+class IdentitySearchEvidence(BaseModel):
+    subject_id: str
+    requested_name: str | None = None
+    resolved_identity: str | None = None
+    source_urls: list[str] = Field(default_factory=list)
+    source_titles: list[str] = Field(default_factory=list)
+    search_queries: list[str] = Field(default_factory=list)
+    visual_traits: list[str] = Field(default_factory=list)
+    confidence: float | None = None
+    issues: list[str] = Field(default_factory=list)
+
+
 class ConceptPromptPlannerOutput(BaseModel):
     final_preview_prompt: str
     subject_prompts: dict[str, str] = Field(default_factory=dict)
@@ -53,6 +65,7 @@ class ConceptPromptPlannerOutput(BaseModel):
     requires_clarification: bool = False
     open_questions: list[str] = Field(default_factory=list)
     identity_notes: list[str] = Field(default_factory=list)
+    identity_search_evidence: list[IdentitySearchEvidence] = Field(default_factory=list)
 
 
 class FeedbackPatchParserOutput(BaseModel):
@@ -157,7 +170,10 @@ NODE_SPECS: dict[str, PromptNodeSpec] = {
     "ReferenceBindingValidator": PromptNodeSpec(
         node_name="ReferenceBindingValidator",
         phase=WorkflowPhase.INTAKE,
-        responsibility="Validate explicit image-purpose declarations and request clarification when missing.",
+        responsibility=(
+            "Validate explicit purpose declarations for already uploaded reference images. "
+            "If no images were uploaded, return no bindings and do not block text-only generation."
+        ),
         output_model_name="ReferenceBindingValidatorOutput",
         context_keys=["user_text", "input_images", "declared_bindings"],
     ),
@@ -271,7 +287,9 @@ def build_node_prompt(
         f"Current task: {spec.responsibility}\n"
         f"Current WorkflowPhase: {spec.phase.value}.\n"
         f"Allowed domain tools for planning only: {allowed_tools_text}.\n"
-        "Use only the supplied context_json. Do not use hidden conversation memory as fact.\n"
+        "Use supplied context_json as project/runtime fact. For nodes that explicitly require "
+        "provider web search, use provider-returned public search evidence only for external "
+        "identity/appearance facts; do not use hidden conversation memory as fact.\n"
         "Do not execute tools. Do not call raw MCP tools. Do not invent artifact ids, job ids, "
         "file paths, or tool results.\n"
         "If required information is missing, set the model's clarification/open-question fields "
@@ -293,6 +311,51 @@ def build_node_prompt(
 
 
 def _node_specific_prompt_rules(node_name: str) -> str:
+    if node_name == "ReferenceBindingValidator":
+        return (
+            "ReferenceBindingValidator rules:\n"
+            "- This node only validates uploaded/reference image bindings. It must not request optional "
+            "reference images for a text-only request.\n"
+            "- If context_json.input_images is empty, output valid_bindings=[], requires_clarification=false, "
+            "open_questions=[], and issues=[]. Let SceneSpecCompiler and ConceptPromptPlanner handle "
+            "named character identity through provider web search.\n"
+            "- Set requires_clarification=true only when an uploaded image exists but its user-declared "
+            "purpose or target is ambiguous, missing, or contradictory.\n"
+        )
+    if node_name == "SceneInterpreter":
+        return (
+            "SceneInterpreter rules:\n"
+            "- Do not turn ordinary missing art-direction details into open_questions. If the user omits "
+            "pose, time of day, exact prop placement, camera, or mood, summarize a sensible default instead.\n"
+            "- For named IP/game/anime/brand characters, preserve the exact user-written names and IP in "
+            "subject_summaries. Do not ask the user to describe official appearances when identity research "
+            "can be supplied downstream.\n"
+        )
+    if node_name == "SceneSpecCompiler":
+        return (
+            "SceneSpecCompiler rules:\n"
+            "- For named IP/game/anime/brand characters, provider-level web search is allowed and expected "
+            "when available. Search the exact user name plus IP/game title before writing appearance notes.\n"
+            "- Treat context_json.identity_research as hints only. Verify them against provider web search; "
+            "if search evidence conflicts with context_json.identity_research, prefer the search evidence "
+            "and preserve the user's requested subject identity.\n"
+            "- Use verified evidence to resolve canonical_identity, aliases, and concrete appearance notes "
+            "for named IP/game/anime/brand characters.\n"
+            "- Do not put 'needs official source/search confirmation' or incomplete visual research into "
+            "open_questions. Preserve the requested character identity with lower identity_confidence and "
+            "let ConceptPromptPlanner perform stricter identity_search_evidence collection.\n"
+            "- If an identity_research row provides subject_id_hint for a requested subject, use that stable "
+            "subject_id unless it conflicts with another subject.\n"
+            "- Preserve user text spans and stable subject ids derived from the user names when possible. "
+            "Do not silently rename a character to a different role.\n"
+            "- Do not create open_questions for optional creative choices such as pose, time of day, exact "
+            "prop placement, camera, or mood; choose clear defaults that fit the request.\n"
+            "- For primary requested character, vehicle, prop, furniture, or architecture subjects that the "
+            "user expects to appear as individual Blender assets, set needs_3d_asset=true. Set needs_3d_asset=false "
+            "only for background environment details that should remain part of the scene/world asset.\n"
+            "- Only keep open_questions for information the user must answer, such as ambiguous image "
+            "bindings, multiple possible requested subjects, or contradictory user intent.\n"
+        )
     if node_name != "ConceptPromptPlanner":
         return ""
     return (
@@ -300,12 +363,27 @@ def _node_specific_prompt_rules(node_name: str) -> str:
         "- Treat scene_spec as the source of truth for subjects, environment, camera, lighting, "
         "props, and constraints.\n"
         "- For any subject that names an IP, franchise, game, anime, brand, or specific "
-        "character, require explicit identity research evidence before writing generation "
-        "prompts. If this node is delegated to an agent/MCP channel with web-search capability, "
-        "that agent must search the web for the character/IP, prefer official sources, and "
-        "summarize the verified identity in context before prompt writing. If no search evidence "
-        "is present in context_json, do not rely on model memory; set requires_clarification=true "
-        "or add identity_notes describing the missing research.\n"
+        "character, provider-level web search is allowed and expected when available. Search the web "
+        "for the exact character name plus IP/game title before writing subject_prompts. Prefer official "
+        "publisher pages; if official pages lack visual details, add a reliable secondary source and "
+        "record both URLs.\n"
+        "- In live runtime, provider web search may already be enabled for this node. Do not claim "
+        "'no provider web search available' unless context_json.provider_web_search explicitly says it "
+        "is disabled or unavailable.\n"
+        "- Treat context_json.identity_research rows with ok=true, source_urls, and visual_traits as "
+        "explicit Codex/web-search evidence. If fresh provider search is unavailable or source snippets "
+        "are not exposed by the provider, copy and normalize those rows into identity_search_evidence "
+        "instead of asking the user to describe official appearances.\n"
+        "- If fresh provider search conflicts with context_json.identity_research, prefer the fresh "
+        "search evidence and mention the conflict in identity_notes.\n"
+        "- For every named/IP subject, populate identity_search_evidence with subject_id, requested_name, "
+        "resolved_identity, source_urls, source_titles when available, search_queries, and concrete "
+        "visual_traits used in the prompt. Visual traits must be specific enough to draw: hair color/style, "
+        "eye color, outfit colors/materials, silhouette/accessories, weapon/instrument/motif when visible. "
+        "Generic traits such as 'female character' or 'official design' are not enough.\n"
+        "- Also include an identity_notes entry summarizing the evidence and any conflict resolution. If "
+        "no web/search evidence can be produced for a named/IP subject, set requires_clarification=true "
+        "and add an open_question instead of generating that subject from memory.\n"
         "- Preserve exact subject identity. Use display_name, canonical_identity, identity_aliases, "
         "source_text_span, and reference_image_ids when present. Do not silently substitute or "
         "rename a character. If identity is uncertain, set requires_clarification=true and add "
@@ -370,16 +448,37 @@ def _enrich_concept_image_requirements(
         return defaults
 
     defaults_by_id = {item.requirement_id: item for item in defaults}
-    enriched: list[ConceptImageRequirement] = []
+    matched_defaults: dict[str, ConceptImageRequirement] = {}
+    used_default_ids: set[str] = set()
+    id_aliases: dict[str, str] = {}
     for item in provided:
         default = defaults_by_id.get(item.requirement_id)
         if default is None:
+            default = _semantic_default_for_requirement(item, defaults, used_default_ids)
+        if default is None:
+            continue
+        matched_defaults[item.requirement_id] = default
+        used_default_ids.add(default.requirement_id)
+        if item.requirement_id != default.requirement_id:
+            id_aliases[item.requirement_id] = default.requirement_id
+
+    enriched: list[ConceptImageRequirement] = []
+    for item in provided:
+        default = matched_defaults.get(item.requirement_id)
+        if default is None:
             enriched.append(item)
             continue
-        updates: dict[str, Any] = {}
+        updates: dict[str, Any] = {
+            "requirement_id": default.requirement_id,
+            "target_id": default.target_id,
+            "prompt_key": default.prompt_key,
+        }
+        mapped_sources = _map_requirement_ids(item.source_requirement_ids, id_aliases)
         if not item.input_reference_image_ids and default.input_reference_image_ids:
             updates["input_reference_image_ids"] = list(default.input_reference_image_ids)
-        if not item.source_requirement_ids and default.source_requirement_ids:
+        if mapped_sources:
+            updates["source_requirement_ids"] = mapped_sources
+        elif default.source_requirement_ids:
             updates["source_requirement_ids"] = list(default.source_requirement_ids)
         if item.generation_mode == "text_to_image" and default.generation_mode != "text_to_image":
             updates["generation_mode"] = default.generation_mode
@@ -392,6 +491,46 @@ def _enrich_concept_image_requirements(
     provided_ids = {item.requirement_id for item in enriched}
     enriched.extend(item for item in defaults if item.requirement_id not in provided_ids)
     return _with_target_render_dependencies(enriched, scene_spec=scene_spec)
+
+
+def _semantic_default_for_requirement(
+    item: ConceptImageRequirement,
+    defaults: list[ConceptImageRequirement],
+    used_default_ids: set[str],
+) -> ConceptImageRequirement | None:
+    candidates = [default for default in defaults if default.requirement_id not in used_default_ids]
+    if item.output_type == "subject_concept" and item.target_id:
+        for default in candidates:
+            if default.output_type == "subject_concept" and default.target_id == item.target_id:
+                return default
+    if item.output_type == "scene_concept":
+        for default in candidates:
+            if default.output_type != "scene_concept":
+                continue
+            if item.target_id and default.target_id == item.target_id:
+                return default
+            if item.prompt_key == default.prompt_key:
+                return default
+        for default in candidates:
+            if default.output_type == "scene_concept":
+                return default
+    if item.output_type == "target_render":
+        for default in candidates:
+            if default.output_type == "target_render":
+                return default
+    return None
+
+
+def _map_requirement_ids(requirement_ids: list[str], aliases: dict[str, str]) -> list[str]:
+    mapped: list[str] = []
+    seen: set[str] = set()
+    for requirement_id in requirement_ids:
+        resolved = aliases.get(requirement_id, requirement_id)
+        if resolved in seen:
+            continue
+        mapped.append(resolved)
+        seen.add(resolved)
+    return mapped
 
 
 def _default_concept_image_requirements(

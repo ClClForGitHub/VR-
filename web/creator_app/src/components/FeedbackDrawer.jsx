@@ -1,99 +1,131 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from './Button.jsx';
-import { Composer } from './Composer.jsx';
+import {
+  buildConceptFeedbackPayload,
+  buildFeedbackMentionOptions,
+  buildModelFeedbackPayload,
+  MentionKind,
+} from '../api/contracts.js';
 
-export function FeedbackDrawer({ open, selection, entities = [], referenceSlots = [], onClose, onRegenerate, onOpenCompare }) {
-  const targets = useMemo(() => feedbackTargets(entities), [entities]);
-  const [activeTargetId, setActiveTargetId] = useState(targets[0]?.id || 'overall');
-  const [feedbackByTarget, setFeedbackByTarget] = useState({});
+export function FeedbackDrawer({
+  open,
+  mode = 'concept',
+  selection,
+  selectedModelCombination,
+  selectedModel,
+  selectedEntity,
+  entities = [],
+  assetVersions = [],
+  referenceSlots = [],
+  onClose,
+  onSubmit,
+  onRegenerate,
+  onOpenCompare,
+}) {
+  const [feedbackText, setFeedbackText] = useState('');
+  const [newReferenceOptions, setNewReferenceOptions] = useState([]);
+  const textareaRef = useRef(null);
+  const baseMentionOptions = useMemo(() => buildFeedbackMentionOptions({
+    mode,
+    entities,
+    assetVersions,
+    referenceSlots,
+    selection,
+    selectedModel,
+    selectedEntity,
+  }), [assetVersions, entities, mode, referenceSlots, selectedEntity, selectedModel, selection]);
+  const mentionOptions = [...baseMentionOptions, ...newReferenceOptions];
+  const title = mode === 'model' ? '模型修改意见' : '概念修改意见';
+  const submitLabel = mode === 'model' ? '提交模型反馈' : '发送反馈并重生成';
 
   if (!open) return null;
 
+  function insertToken(token) {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setFeedbackText((current) => `${current}${current ? ' ' : ''}${token} `);
+      return;
+    }
+    const start = textarea.selectionStart ?? feedbackText.length;
+    const end = textarea.selectionEnd ?? feedbackText.length;
+    const next = `${feedbackText.slice(0, start)}${token} ${feedbackText.slice(end)}`;
+    setFeedbackText(next);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + token.length + 1, start + token.length + 1);
+    });
+  }
+
+  function addReferenceUpload() {
+    const nextIndex = referenceSlots.filter((slot) => slot.status === 'uploaded').length + newReferenceOptions.length + 1;
+    const token = `@参考图${nextIndex}`;
+    const option = {
+      token,
+      kind: MentionKind.REFERENCE_IMAGE,
+      referenceId: `draft_feedback_ref_${nextIndex}`,
+      displayLabel: `${token} · 新上传参考`,
+    };
+    setNewReferenceOptions((current) => [...current, option]);
+    insertToken(token);
+  }
+
   function submit() {
-    const feedback_targets = targets
-      .map((target) => ({
-        target_type: target.target_type,
-        entity_id: target.entity_id,
-        asset_id: selectedAssetForTarget(selection, target),
-        feedback_text: feedbackByTarget[target.id] || '',
-        new_reference_artifact_ids: [],
-      }))
-      .filter((target) => target.feedback_text.trim().length > 0);
-    onRegenerate?.({ action_type: 'request_concept_changes', feedback_targets });
+    const payload = mode === 'model'
+      ? buildModelFeedbackPayload({
+        feedbackText,
+        mentionOptions,
+        selectedModelCombination,
+        newReferenceUploadIds: newReferenceOptions.map((option) => option.referenceId),
+      })
+      : buildConceptFeedbackPayload({
+        feedbackText,
+        mentionOptions,
+        selectedConceptCombination: selection,
+        newReferenceUploadIds: newReferenceOptions.map((option) => option.referenceId),
+      });
+    onSubmit?.(payload);
+    onRegenerate?.(payload);
   }
 
   return (
-    <aside className="feedback-drawer" role="dialog" aria-modal="true" aria-label="概念反馈">
+    <aside className="feedback-drawer" role="dialog" aria-modal="true" aria-label={title}>
       <div className="feedback-drawer__scrim" onClick={onClose} />
-      <div className="feedback-drawer__panel">
+      <div className="feedback-drawer__panel feedback-drawer__panel--unified">
         <header>
           <div>
-            <span className="eyebrow">Concept Feedback</span>
-            <h2>针对实体提出修改</h2>
+            <span className="eyebrow">{mode === 'model' ? 'Model Feedback' : 'Concept Feedback'}</span>
+            <h2>{title}</h2>
           </div>
           <Button variant="icon" onClick={onClose}>×</Button>
         </header>
         <section className="drawer-section">
-          <h3>反馈目标</h3>
-          <div className="entity-chip-grid">
-            {targets.map((target) => (
-              <button
-                key={target.id}
-                type="button"
-                className={target.id === activeTargetId ? 'is-selected' : ''}
-                onClick={() => setActiveTargetId(target.id)}
-              >
-                <strong>{target.label}</strong>
-                {target.name && <span>{target.name}</span>}
+          <h3>@ 引用目标</h3>
+          <div className="mention-chip-grid">
+            {mentionOptions.map((option) => (
+              <button key={`${option.kind}-${option.token}-${option.versionId || option.referenceId || option.entityId || ''}`} type="button" onClick={() => insertToken(option.token)}>
+                <strong>{option.token}</strong>
+                <span>{option.displayLabel}</span>
               </button>
             ))}
           </div>
         </section>
         <section className="drawer-section">
-          <h3>{targets.find((target) => target.id === activeTargetId)?.label || '反馈'}哪里不好？</h3>
+          <h3>反馈正文</h3>
           <textarea
-            value={feedbackByTarget[activeTargetId] || ''}
-            placeholder="用自然语言描述问题，例如：主体1头部太小，机械感不够强。"
-            onChange={(event) => setFeedbackByTarget((current) => ({ ...current, [activeTargetId]: event.target.value }))}
+            ref={textareaRef}
+            value={feedbackText}
+            placeholder={mode === 'model'
+              ? '@主体1模型v2 金属角不够锋利。@场景1模型v1 地面比例太大。'
+              : '@主体1 头部太小。@场景1 建筑再高一点。@整体图 增加暖光。'}
+            onChange={(event) => setFeedbackText(event.target.value)}
           />
         </section>
-        <section className="drawer-section">
-          <h3>上传新参考 / @ 引用</h3>
-          <Composer
-            compact
-            referenceSlots={referenceSlots}
-            placeholder="补充说明或插入 @主体1 / @场景1..."
-            onSend={({ message }) => setFeedbackByTarget((current) => ({
-              ...current,
-              [activeTargetId]: `${current[activeTargetId] || ''}${current[activeTargetId] ? '\n' : ''}${message}`,
-            }))}
-          />
-        </section>
-        <div className="split-actions">
-          <Button onClick={onOpenCompare}>查看已选组合</Button>
-          <Button variant="primary" onClick={submit}>发送反馈并重生成</Button>
+        <div className="feedback-drawer__toolbar">
+          <Button onClick={addReferenceUpload}>上传新参考</Button>
+          {onOpenCompare && <Button onClick={onOpenCompare}>查看已选择</Button>}
+          <Button variant="primary" onClick={submit} disabled={feedbackText.trim().length === 0}>{submitLabel}</Button>
         </div>
       </div>
     </aside>
   );
-}
-
-function feedbackTargets(entities) {
-  return entities
-    .filter((entity) => ['overall', 'subject', 'scene'].includes(entity.entity_type))
-    .map((entity) => ({
-      id: entity.entity_id,
-      label: entity.display_label,
-      name: entity.resolved_name,
-      target_type: entity.entity_type,
-      entity_id: entity.entity_id === 'overall' ? undefined : entity.entity_id,
-    }));
-}
-
-function selectedAssetForTarget(selection, target) {
-  if (!selection) return undefined;
-  if (target.target_type === 'overall') return selection.overall_concept_asset_id;
-  if (target.target_type === 'subject') return selection.subject_concept_asset_ids?.[target.entity_id];
-  if (target.target_type === 'scene') return selection.scene_concept_asset_ids?.[target.entity_id];
-  return undefined;
 }

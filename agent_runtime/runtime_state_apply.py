@@ -243,7 +243,8 @@ def _apply_node_output(
 ) -> tuple[AgentProjectState, list[str], dict[str, Any]]:
     if node_name == "ReferenceBindingValidator":
         output = ReferenceBindingValidatorOutput(**parsed_output)
-        if output.requires_clarification or output.open_questions or output.issues:
+        clarification_blocks_flow = output.requires_clarification and bool(state.input_images or output.valid_bindings)
+        if clarification_blocks_flow:
             raise ValueError(f"ReferenceBindingValidator output requires clarification: {output.open_questions or output.issues}")
         bindings = [plan.to_reference_binding(index=index) for index, plan in enumerate(output.valid_bindings, start=1)]
         updated = apply_state_updates(
@@ -251,10 +252,23 @@ def _apply_node_output(
             node_name="ReferenceBindingValidator",
             updates={"reference_bindings": _merge_reference_bindings(state.reference_bindings, bindings)},
         )
-        return updated, ["reference_bindings"], {"binding_count": len(bindings)}
+        return updated, ["reference_bindings"], {
+            "binding_count": len(bindings),
+            "nonblocking_issue_count": len(output.issues),
+            "nonblocking_open_question_count": len(output.open_questions),
+            "ignored_text_only_clarification": bool(output.requires_clarification and not clarification_blocks_flow),
+        }
 
     if node_name == "SceneSpecCompiler":
         scene_spec = SceneSpec(**parsed_output)
+        original_open_questions = list(scene_spec.open_questions)
+        blocking_open_questions = [
+            question
+            for question in original_open_questions
+            if not _is_nonblocking_identity_research_question(question)
+        ]
+        if blocking_open_questions != original_open_questions:
+            scene_spec = scene_spec.model_copy(update={"open_questions": blocking_open_questions})
         next_phase = WorkflowPhase.SCENE_SPEC_DRAFT if scene_spec.open_questions else WorkflowPhase.SCENE_SPEC_READY
         updated = apply_state_updates(
             state,
@@ -265,6 +279,7 @@ def _apply_node_output(
             "scene_id": scene_spec.scene_id,
             "subject_count": len(scene_spec.subjects),
             "open_question_count": len(scene_spec.open_questions),
+            "nonblocking_identity_research_question_count": len(original_open_questions) - len(blocking_open_questions),
             "next_phase": next_phase.value,
         }
 
@@ -484,6 +499,37 @@ def _validate_blender_edit_tool_calls(output: BlenderEditRouterOutput) -> None:
     ]
     if invalid:
         raise ValueError(f"BlenderEditRouter planned tools not allowed in BLENDER_EDIT: {invalid}")
+
+
+def _is_nonblocking_identity_research_question(question: str) -> bool:
+    lowered = question.strip().lower()
+    if not lowered:
+        return False
+    research_terms = (
+        "官方资料",
+        "官方设定",
+        "进一步确认",
+        "网络搜索",
+        "联网搜索",
+        "搜索",
+        "检索",
+        "资料来源",
+        "source",
+        "web",
+        "search",
+        "evidence",
+        "visual evidence",
+    )
+    identity_terms = (
+        "外观",
+        "发色",
+        "服饰",
+        "identity",
+        "character",
+        "appearance",
+        "visual",
+    )
+    return any(term in lowered for term in research_terms) and any(term in lowered for term in identity_terms)
 
 
 def _ensure_blender_scene_objects_for_edit(

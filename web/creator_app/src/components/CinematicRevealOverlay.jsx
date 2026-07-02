@@ -17,7 +17,7 @@ export function CinematicRevealOverlay({ concept, open, onEnterReview, onClose }
       </div>
       <div className="cinematic-reveal__actions">
         <Button onClick={onClose}>留在当前页</Button>
-        <Button variant="primary" onClick={onEnterReview}>进入概念审稿</Button>
+        <Button variant="primary" onClick={onEnterReview}>跳过动画，进入概念选择</Button>
       </div>
     </div>
   );

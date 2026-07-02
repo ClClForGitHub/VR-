@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from './components/AppShell.jsx';
 import { CinematicRevealOverlay } from './components/CinematicRevealOverlay.jsx';
 import { GenerationStatusDock } from './components/GenerationStatusDock.jsx';
+import { AssetMemoryDrawer } from './components/AssetMemoryDrawer.jsx';
 import {
   RuntimeAdapter,
   createMockViewModel,
@@ -11,7 +12,6 @@ import {
 import { IntakeScreen } from './screens/IntakeScreen.jsx';
 import { ConceptReviewScreen } from './screens/ConceptReviewScreen.jsx';
 import { ModelReviewScreen } from './screens/ModelReviewScreen.jsx';
-import { AssetMemoryScreen } from './screens/AssetMemoryScreen.jsx';
 import { CompositionScreen } from './screens/CompositionScreen.jsx';
 import { FinalReviewScreen } from './screens/FinalReviewScreen.jsx';
 import { DeliveryScreen } from './screens/DeliveryScreen.jsx';
@@ -20,7 +20,6 @@ const screenMap = {
   intake: IntakeScreen,
   'concept-review': ConceptReviewScreen,
   'model-review': ModelReviewScreen,
-  'asset-memory': AssetMemoryScreen,
   composition: CompositionScreen,
   'final-review': FinalReviewScreen,
   delivery: DeliveryScreen,
@@ -28,7 +27,6 @@ const screenMap = {
 
 function initialScreenFromHash() {
   const hash = window.location.hash.replace('#', '');
-  if (hash === 'reveal' || hash === 'feedback-compare') return 'concept-review';
   return screenMap[hash] ? hash : 'intake';
 }
 
@@ -43,6 +41,7 @@ export default function App() {
   });
   const [generationTask, setGenerationTask] = useState(null);
   const [revealConcept, setRevealConcept] = useState(null);
+  const [assetMemoryOpen, setAssetMemoryOpen] = useState(false);
 
   const Screen = useMemo(() => screenMap[screen] ?? IntakeScreen, [screen]);
 
@@ -116,6 +115,38 @@ export default function App() {
     loadRuntime({ runKey });
   }
 
+  async function uploadReference({ file, slot } = {}) {
+    if (!file) throw new Error('请选择要上传的图片');
+    if (!runtimeState.baseUrl || !runtimeState.selectedRunKey) {
+      return {
+        ok: false,
+        local_only: true,
+        image_id: `local_${Date.now()}`,
+        artifact_id: null,
+        filename: file.name,
+      };
+    }
+    const adapter = new RuntimeAdapter({ baseUrl: runtimeState.baseUrl });
+    const result = await adapter.uploadReference(runtimeState.selectedRunKey, { file, slot });
+    await loadRuntime({ runKey: runtimeState.selectedRunKey });
+    return result;
+  }
+
+  async function sendRuntimeChat(payload = {}) {
+    if (!runtimeState.baseUrl || !runtimeState.selectedRunKey || !payload.message) return null;
+    const adapter = new RuntimeAdapter({ baseUrl: runtimeState.baseUrl });
+    const result = await adapter.sendChat(runtimeState.selectedRunKey, {
+      text: payload.message,
+      attachmentIds: payload.attachment_ids || [],
+      metadata: {
+        source: 'creator_app',
+        reference_mentions: payload.reference_mentions || [],
+      },
+    });
+    await loadRuntime({ runKey: runtimeState.selectedRunKey });
+    return result;
+  }
+
   useEffect(() => {
     loadRuntime();
   }, []);
@@ -133,9 +164,22 @@ export default function App() {
         runtimeState={runtimeState}
         onSelectRun={selectRun}
         onRefreshRuntime={() => loadRuntime({ runKey: runtimeState.selectedRunKey })}
+        onOpenAssetMemory={() => setAssetMemoryOpen(true)}
       >
-        <Screen onNavigate={navigate} viewModel={viewModel} onStartGeneration={startGeneration} />
+        <Screen
+          onNavigate={navigate}
+          viewModel={viewModel}
+          onStartGeneration={startGeneration}
+          onUploadReference={uploadReference}
+          onSendRuntimeChat={sendRuntimeChat}
+          onOpenAssetMemory={() => setAssetMemoryOpen(true)}
+        />
       </AppShell>
+      <AssetMemoryDrawer
+        open={assetMemoryOpen}
+        viewModel={viewModel}
+        onClose={() => setAssetMemoryOpen(false)}
+      />
       <GenerationStatusDock
         task={generationTask || runtimeGenerationTask}
         onComplete={completeGeneration}

@@ -190,7 +190,7 @@ def _planner_output_issues(
     for subject in scene_spec.subjects:
         if not _subject_requires_identity_evidence(subject):
             continue
-        if _has_identity_evidence(subject, output.identity_notes):
+        if _has_identity_evidence(subject, output):
             continue
         if output.requires_clarification and output.open_questions:
             continue
@@ -231,14 +231,123 @@ def _subject_requires_identity_evidence(subject: Any) -> bool:
     )
 
 
-def _has_identity_evidence(subject: Any, identity_notes: list[str]) -> bool:
-    if not identity_notes:
-        return False
+def _has_identity_evidence(subject: Any, output: ConceptPromptPlannerOutput) -> bool:
+    for evidence in output.identity_search_evidence:
+        if not _evidence_matches_subject(subject, evidence):
+            continue
+        if evidence.issues:
+            continue
+        if not evidence.source_urls:
+            continue
+        if len(_specific_visual_traits(evidence.visual_traits)) < 3:
+            continue
+        return True
+    return False
+
+
+def _evidence_matches_subject(subject: Any, evidence: Any) -> bool:
     needles = [
         subject.subject_id,
         subject.display_name,
         subject.canonical_identity,
         *subject.identity_aliases,
     ]
-    normalized_notes = "\n".join(identity_notes).casefold()
-    return any(str(needle).casefold() in normalized_notes for needle in needles if needle)
+    haystack = "\n".join(
+        str(value)
+        for value in [
+            evidence.subject_id,
+            evidence.requested_name,
+            evidence.resolved_identity,
+            *evidence.search_queries,
+        ]
+        if value
+    ).casefold()
+    return any(str(needle).casefold() in haystack for needle in needles if needle)
+
+
+_VISUAL_CUE_WORDS = {
+    "hair",
+    "eye",
+    "eyes",
+    "outfit",
+    "dress",
+    "skirt",
+    "coat",
+    "jacket",
+    "sleeve",
+    "glove",
+    "stocking",
+    "boots",
+    "shoe",
+    "shoes",
+    "hat",
+    "horn",
+    "accessory",
+    "ornament",
+    "silhouette",
+    "weapon",
+    "instrument",
+    "violin",
+    "flower",
+    "motif",
+    "green",
+    "red",
+    "pink",
+    "blue",
+    "purple",
+    "violet",
+    "white",
+    "black",
+    "gold",
+    "silver",
+    "blonde",
+    "cyan",
+    "teal",
+    "灰",
+    "白",
+    "黑",
+    "红",
+    "粉",
+    "蓝",
+    "绿",
+    "紫",
+    "金",
+    "银",
+    "发",
+    "头发",
+    "瞳",
+    "眼",
+    "裙",
+    "袖",
+    "手套",
+    "鞋",
+    "帽",
+    "饰",
+    "花",
+    "琴",
+}
+
+
+_GENERIC_VISUAL_PHRASES = {
+    "female character",
+    "official identity",
+    "official design",
+    "wuthering waves character",
+    "anime-game costume complexity",
+    "simplified into clean chibi shapes",
+    "do not substitute another unrelated cute character",
+}
+
+
+def _specific_visual_traits(traits: list[str]) -> list[str]:
+    specific: list[str] = []
+    for trait in traits:
+        text = str(trait).strip()
+        if not text:
+            continue
+        lowered = text.casefold()
+        if lowered in _GENERIC_VISUAL_PHRASES:
+            continue
+        if any(word in lowered for word in _VISUAL_CUE_WORDS):
+            specific.append(text)
+    return specific

@@ -5,11 +5,21 @@ from agent_runtime.llm_providers import LLMChatResult, build_provider_configs
 
 
 class FakeChatClient:
+    calls = []
+
     def __init__(self, config, api_key):
         self.config = config
         self.api_key = api_key
 
     def chat(self, **kwargs):
+        self.__class__.calls.append(kwargs)
+        request_summary = {
+            "model": kwargs["model"],
+            "response_format_json": kwargs["response_format_json"],
+        }
+        if kwargs.get("extra_body"):
+            request_summary["enable_search"] = bool(kwargs["extra_body"].get("enable_search"))
+            request_summary["search_options"] = kwargs["extra_body"].get("search_options")
         return LLMChatResult(
             ok=True,
             provider=self.config.provider,
@@ -22,10 +32,7 @@ class FakeChatClient:
                     "negative_prompt": "blurry, low quality",
                 }
             ),
-            request_summary={
-                "model": kwargs["model"],
-                "response_format_json": kwargs["response_format_json"],
-            },
+            request_summary=request_summary,
         )
 
 
@@ -80,6 +87,7 @@ def test_llm_node_reports_schema_validation_errors() -> None:
 
 
 def test_llm_node_live_path_uses_injected_client_and_json_mode() -> None:
+    FakeChatClient.calls = []
     configs = build_provider_configs(env={"QWEN_API_KEY": "fake-qwen-secret"})
 
     result = run_llm_node(
@@ -94,5 +102,24 @@ def test_llm_node_live_path_uses_injected_client_and_json_mode() -> None:
     assert result.provider == "qwen"
     assert result.model == "qwen3.7-max"
     assert result.request_summary["response_format_json"] is True
+    assert result.request_summary["enable_search"] is True
+    assert result.request_summary["search_options"]["forced_search"] is True
+    assert FakeChatClient.calls[-1]["extra_body"]["enable_search"] is True
     assert result.parsed_output["subject_prompts"]["subject_robot"].startswith("front")
 
+
+def test_llm_node_search_can_be_disabled_for_qwen() -> None:
+    FakeChatClient.calls = []
+    configs = build_provider_configs(env={"QWEN_API_KEY": "fake-qwen-secret"})
+
+    result = run_llm_node(
+        node_name="ConceptPromptPlanner",
+        context_json={"scene_spec": {"scene_id": "scene_001"}},
+        provider_configs=configs,
+        env={"QWEN_API_KEY": "fake-qwen-secret", "QWEN_ENABLE_SEARCH": "false"},
+        client_factory=lambda config, api_key: FakeChatClient(config, api_key),
+    )
+
+    assert result.ok is True
+    assert "enable_search" not in result.request_summary
+    assert FakeChatClient.calls[-1]["extra_body"] is None

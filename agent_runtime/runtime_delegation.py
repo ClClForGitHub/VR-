@@ -156,7 +156,12 @@ def _create_handoff_record(
         "state_summary": _state_summary(state),
         "input_files": input_files,
         "expected_outputs": expected_outputs,
-        "task_prompt": _task_prompt(state, execution, concept_generation=concept_generation),
+        "task_prompt": _task_prompt(
+            state,
+            execution,
+            concept_generation=concept_generation,
+            subject_asset_generation=subject_asset_generation,
+        ),
         "operator_notes": [
             "Do not mutate state.json directly; register outputs through the existing workflow/runtime apply path.",
             "Keep generated binaries under this run directory or its artifact store.",
@@ -262,6 +267,7 @@ def _task_prompt(
     execution: RuntimeJobExecutionRecord,
     *,
     concept_generation: dict[str, Any] | None = None,
+    subject_asset_generation: dict[str, Any] | None = None,
 ) -> str:
     if execution.domain_tool_name in {"generate_concept_images", "regenerate_concept_images"}:
         prompt_pack = state.concept_bundle.prompt_pack if state.concept_bundle is not None else None
@@ -342,6 +348,7 @@ def _task_prompt(
                 "result_summary": execution.result_summary,
                 "required_outputs": execution.required_outputs,
             },
+            "subject_asset_generation": subject_asset_generation,
         }
         return (
             "You are a bounded subject-asset worker for the image23D Blender scene agent.\n"
@@ -349,7 +356,8 @@ def _task_prompt(
             "Task:\n"
             "- Generate or submit 3D subject GLB assets for the SceneSpec subjects below.\n"
             "- Use selected_subject_concepts as the source image input for Hunyuan3D when present; otherwise use the approved concept image artifact URI(s).\n"
-            "- Prefer the runtime job's Hunyuan3D profile/command hint; keep profile overrides explicit in your result.\n"
+            "- If subject_hunyuan_profiles is present, split calls by subject and use each subject's selected Hunyuan3D profile.\n"
+            "- Otherwise prefer the runtime job's Hunyuan3D profile/command hint; keep profile overrides explicit in your result.\n"
             "- If live generation is submitted asynchronously, return the service job id and status evidence.\n"
             "- If a completed GLB is available, return the GLB path, asset id, subject id, and QA evidence for handoff-apply.\n"
             "\n"
@@ -432,6 +440,7 @@ def _concept_generation_handoff_payload(
     ]
     return {
         "ok": True,
+        "concept_version": state.concept_bundle.concept_version if state.concept_bundle is not None else None,
         "scene_spec": _scene_spec_prompt_snapshot(state),
         "reference_images": _input_image_prompt_snapshot(state),
         "reference_bindings": _reference_binding_prompt_snapshot(state),
@@ -587,6 +596,10 @@ def _subject_asset_generation_handoff_payload(
             selected=selected,
         ),
         "hunyuan3d_profile": _runtime_job_metadata(runtime_job).get("hunyuan3d_profile"),
+        "hunyuan3d_profile_policy": tool_arguments.get("hunyuan3d_profile_policy"),
+        "hunyuan3d_profiles_by_subject": tool_arguments.get("subject_hunyuan_profiles") or {},
+        "hunyuan3d_profile_kwargs_by_subject": tool_arguments.get("subject_hunyuan_profile_kwargs") or {},
+        "hunyuan3d_profile_plan_by_subject": _runtime_job_metadata(runtime_job).get("subject_hunyuan_profile_plan") or {},
         "profile_id": (
             runtime_job.get("profile_id")
             if runtime_job is not None

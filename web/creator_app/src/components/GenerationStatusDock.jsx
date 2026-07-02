@@ -115,7 +115,7 @@ export function GenerationStatusDock({ task, onComplete, onCancel }) {
 function displayedProgress(elapsedMs, expectedMs, backendDone) {
   if (backendDone) return 100;
   const ratio = elapsedMs / Math.max(1, expectedMs);
-  if (ratio < 0.72) return Math.max(3, Math.floor(ratio * 90));
-  if (ratio < 1.0) return 90 + Math.floor(((ratio - 0.72) / 0.28) * 5);
+  if (ratio < 0.72) return Math.max(3, Math.floor(ratio * 85));
+  if (ratio < 1.0) return 85 + Math.floor(((ratio - 0.72) / 0.28) * 10);
   return Math.min(99, 95 + Math.floor(Math.log1p(ratio - 1) * 2));
 }

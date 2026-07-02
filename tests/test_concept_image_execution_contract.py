@@ -1,4 +1,5 @@
 import json
+import base64
 from pathlib import Path
 
 from agent_runtime.concept_image_execution import (
@@ -10,9 +11,14 @@ from agent_runtime.concept_image_execution import (
 )
 
 
+PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+)
+
+
 def test_concept_image_execution_resolves_inputs_and_source_outputs(tmp_path: Path) -> None:
     reference = tmp_path / "subject_ref.png"
-    reference.write_bytes(b"reference")
+    reference.write_bytes(PNG_BYTES)
     backend = _FakeConceptBackend()
 
     result = execute_concept_image_handoff(
@@ -62,7 +68,7 @@ def test_concept_image_execution_blocks_missing_required_reference(tmp_path: Pat
 
 def test_concept_image_execution_does_not_downgrade_image_guided_to_text(tmp_path: Path) -> None:
     reference = tmp_path / "subject_ref.png"
-    reference.write_bytes(b"reference")
+    reference.write_bytes(PNG_BYTES)
     backend = _TextOnlyBackend()
 
     result = execute_concept_image_handoff(
@@ -100,7 +106,7 @@ class _FakeConceptBackend(ConceptImageBackend):
         self.calls.append(request)
         output = Path(request.output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(f"fake image {request.requirement_id}".encode("utf-8"))
+        output.write_bytes(PNG_BYTES)
         return ConceptImageBackendGenerationResult(
             ok=True,
             backend=self.backend_name,

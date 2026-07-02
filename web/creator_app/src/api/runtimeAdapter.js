@@ -54,6 +54,7 @@ const ARTIFACT_IMAGE_TYPES = new Set([
   'CONCEPT_IMAGE',
   'SUBJECT_CONCEPT_IMAGE',
   'SCENE_CONCEPT_IMAGE',
+  'FINAL_PREVIEW_IMAGE',
   'PREVIEW_RENDER',
 ]);
 
@@ -88,8 +89,12 @@ export class RuntimeAdapter {
     return payload;
   }
 
-  listRuns() {
-    return this.request('/api/runs');
+  listRuns({ collection, limit } = {}) {
+    const query = new URLSearchParams();
+    if (collection) query.set('collection', collection);
+    if (limit) query.set('limit', String(limit));
+    const suffix = query.toString() ? `?${query}` : '';
+    return this.request(`/api/runs${suffix}`);
   }
 
   getRun(runKey) {
@@ -98,6 +103,35 @@ export class RuntimeAdapter {
 
   getRunBundle(runKey) {
     return this.request(`/api/runs/${encodeURIComponent(runKey)}/bundle`);
+  }
+
+  sendChat(runKey, { text, attachmentIds = [], metadata = {} } = {}) {
+    return this.request(`/api/runs/${encodeURIComponent(runKey)}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: 'user',
+        text,
+        attachment_ids: attachmentIds,
+        metadata,
+      }),
+    });
+  }
+
+  uploadReference(runKey, { file, slot } = {}) {
+    if (!file) throw new Error('uploadReference requires a file');
+    const form = new FormData();
+    form.append('file', file, file.name || 'reference.png');
+    if (slot?.slot_kind) form.append('binding_role', slot.slot_kind);
+    if (slot?.slot_id) form.append('slot_id', slot.slot_id);
+    if (slot?.entity_id) form.append('entity_id', slot.entity_id);
+    if (slot?.mention) form.append('mention', slot.mention);
+    if (slot?.display_label) form.append('display_label', slot.display_label);
+    return this.request(`/api/runs/${encodeURIComponent(runKey)}/upload`, {
+      method: 'POST',
+      headers: {},
+      body: form,
+    });
   }
 
   fileUrl(runKey, relativePath) {
@@ -146,12 +180,31 @@ export function normalizeRunIndex(rawRuns = []) {
   return rawRuns.map((run) => ({
     runKey: run.run_key,
     displayName: publicRunLabel(run),
+    relativePath: run.relative_path ?? run.run_id ?? null,
     phase: run.frontend_phase ?? null,
     status: run.frontend_status_value ?? null,
     hasViewerScene: Boolean(run.has_viewer_scene),
     hasSceneState: Boolean(run.has_scene_state),
     modifiedAt: run.modified_at ?? null,
+    collectionId: run.collection_id ?? null,
+    collectionRank: run.collection_rank ?? null,
   })).filter((run) => run.runKey);
+}
+
+export function normalizeRunIndexItemFromBundle(rawBundle) {
+  if (!rawBundle?.run_key) return null;
+  return {
+    runKey: rawBundle.run_key,
+    displayName: publicRunLabel(rawBundle),
+    relativePath: rawBundle.relative_path ?? rawBundle.run_id ?? null,
+    phase: rawBundle.frontend_status?.phase ?? rawBundle.state?.phase ?? null,
+    status: rawBundle.frontend_status?.status ?? null,
+    hasViewerScene: Boolean(rawBundle.file_manifest?.files?.some((file) => file.label === 'viewer_scene' && file.exists)),
+    hasSceneState: Boolean(rawBundle.scene_state),
+    modifiedAt: null,
+    collectionId: null,
+    collectionRank: null,
+  };
 }
 
 export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
@@ -170,7 +223,7 @@ export function normalizeRuntimeBundle(rawBundle, adapter, { runs = [] } = {}) {
   const subjectArtifacts = artifacts.filter((artifact) => SUBJECT_MODEL_TYPES.has(artifact.artifact_type));
   const sceneArtifacts = artifacts.filter((artifact) => SCENE_MODEL_TYPES.has(artifact.artifact_type));
   const previewImage = findPreviewImage(rawBundle, adapter, artifacts, files);
-  const referenceSlots = buildReferenceSlots(state);
+  const referenceSlots = buildReferenceSlots(state, rawBundle, adapter);
   const references = referencesFromSlots(referenceSlots);
   const concepts = imageArtifacts.length > 0
     ? imageArtifacts.map((artifact, index) => conceptFromArtifact(artifact, rawBundle, adapter, assetLibrary, index))
@@ -289,8 +342,8 @@ function modelAssetFromArtifact(artifact, bundle, adapter, index, modelType) {
   };
 }
 
-function buildReferenceSlots(state) {
-  const referenceImages = state.reference_images || state.references || [];
+function buildReferenceSlots(state, bundle, adapter) {
+  const referenceImages = normalizeReferenceImages(state, bundle, adapter);
   const slots = mockReferenceSlots.map((slot) => ({ ...slot }));
   if (!Array.isArray(referenceImages) || referenceImages.length === 0) return slots;
 
@@ -299,7 +352,7 @@ function buildReferenceSlots(state) {
   referenceImages.slice(0, 6).forEach((reference, index) => {
     const kind = normalizeReferenceKind(reference.binding_role || reference.role || reference.target_type);
     const slotIndex = kind === 'scene' ? nextSceneIndex.value++ : nextSubjectIndex.value++;
-    const slotId = kind === 'scene' ? 'scene_slot_1' : `subject_slot_${slotIndex + 1}`;
+    const slotId = reference.slot_id || (kind === 'scene' ? 'scene_slot_1' : `subject_slot_${slotIndex + 1}`);
     const slot = slots.find((item) => item.slot_id === slotId) || slots[index];
     if (!slot) return;
     slot.slot_kind = kind;
@@ -309,6 +362,33 @@ function buildReferenceSlots(state) {
     slot.resolved_name = reference.title || reference.resolved_name || reference.display_name || slot.resolved_name;
   });
   return slots;
+}
+
+function normalizeReferenceImages(state, bundle, adapter) {
+  const explicitReferences = state.reference_images || state.references || [];
+  if (Array.isArray(explicitReferences) && explicitReferences.length > 0) return explicitReferences;
+  const inputImages = Array.isArray(state.input_images) ? state.input_images : [];
+  if (inputImages.length === 0) return [];
+  const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
+  const artifactsById = new Map(artifacts.map((artifact) => [artifact.artifact_id, artifact]));
+  return inputImages.map((image, index) => {
+    const artifact = artifactsById.get(image.artifact_id);
+    const metadata = artifact?.metadata || {};
+    const kind = normalizeReferenceKind(metadata.binding_role || metadata.slot_kind || metadata.target_type);
+    const url = artifactUrl(bundle, adapter, artifact || image) || image.uri || artifact?.uri;
+    return {
+      id: image.image_id,
+      image_id: image.image_id,
+      artifact_id: image.artifact_id,
+      uri: url,
+      image_url: url,
+      binding_role: kind,
+      slot_id: metadata.slot_id,
+      entity_id: metadata.entity_id,
+      title: metadata.display_label || image.user_declared_label || image.notes || `上传参考 ${index + 1}`,
+      resolved_name: metadata.original_filename || image.user_declared_label || `上传参考 ${index + 1}`,
+    };
+  });
 }
 
 function referencesFromSlots(referenceSlots) {
@@ -515,6 +595,7 @@ function conceptGroupForArtifact(artifact) {
   const haystack = `${artifact.artifact_type || ''} ${artifact.semantic_role || ''} ${artifact.artifact_id || ''}`.toLowerCase();
   if (haystack.includes('subject')) return 'subject';
   if (haystack.includes('scene')) return 'scene';
+  if (haystack.includes('target') || haystack.includes('final_preview')) return 'overall';
   return 'overall';
 }
 
@@ -533,9 +614,9 @@ function conceptEntityId(asset) {
 function publicEntityLabel(entityId = '') {
   if (entityId === 'overall') return '整体图';
   const subject = entityId.match(/^subject_(\d+)/);
-  if (subject) return `主体 ${subject[1]}`;
+  if (subject) return `主体${subject[1]}`;
   const scene = entityId.match(/^scene_(\d+)/);
-  if (scene) return `场景 ${scene[1]}`;
+  if (scene) return `场景${scene[1]}`;
   return entityId || '实体';
 }
 
@@ -691,7 +772,23 @@ function readableArtifactTitle(artifact, fallback) {
 }
 
 function publicRunLabel(run) {
+  const caseLabel = round04dCaseLabel(run.relative_path || run.run_id);
+  if (caseLabel) return caseLabel;
   return run.display_name || run.run_id || run.relative_path || 'Runtime Run';
+}
+
+function round04dCaseLabel(relativePath = '') {
+  const match = String(relativePath).match(/^round04d_live_12_samples\/case_(\d+)_(.+)$/);
+  if (!match) return null;
+  return `Case ${match[1]} · ${titleCaseSlug(match[2])}`;
+}
+
+function titleCaseSlug(slug = '') {
+  return slug
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function fileFormatFromArtifact(artifact) {

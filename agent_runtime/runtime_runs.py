@@ -54,6 +54,8 @@ class RuntimeRunIndexItem(BaseModel):
     has_viewer_scene: bool = False
     frontend_phase: str | None = None
     frontend_status_value: str | None = None
+    collection_id: str | None = None
+    collection_rank: int | None = None
 
 
 class RuntimeRunFileRecord(BaseModel):
@@ -104,10 +106,13 @@ def discover_runtime_runs(
     *,
     root: str | Path = "/home/team/zouzhiyuan/image23D_Agent",
     limit: int = 50,
+    collection: str | None = None,
 ) -> list[RuntimeRunIndexItem]:
     runs_root = Path(root).expanduser().resolve() / "outputs" / "runs"
     if not runs_root.exists():
         return []
+    if collection:
+        return _discover_collection_runs(runs_root, collection=collection, limit=limit)
     items = []
     for run_dir in _candidate_run_dirs(runs_root):
         items.append(_index_item(runs_root, run_dir))
@@ -235,7 +240,13 @@ def resolve_runtime_run_dir(
     return run_dir
 
 
-def _index_item(runs_root: Path, run_dir: Path) -> RuntimeRunIndexItem:
+def _index_item(
+    runs_root: Path,
+    run_dir: Path,
+    *,
+    collection_id: str | None = None,
+    collection_rank: int | None = None,
+) -> RuntimeRunIndexItem:
     effective = _best_runtime_dir(run_dir)
     relative_path = _relative_run_path(runs_root, run_dir)
     parts = Path(relative_path).parts
@@ -262,7 +273,44 @@ def _index_item(runs_root: Path, run_dir: Path) -> RuntimeRunIndexItem:
         has_viewer_scene=_viewer_scene_path(effective) is not None,
         frontend_phase=frontend_status.get("phase") if isinstance(frontend_status.get("phase"), str) else None,
         frontend_status_value=frontend_status.get("status") if isinstance(frontend_status.get("status"), str) else None,
+        collection_id=collection_id,
+        collection_rank=collection_rank,
     )
+
+
+def _discover_collection_runs(runs_root: Path, *, collection: str, limit: int) -> list[RuntimeRunIndexItem]:
+    collection_id = _canonical_collection_id(collection)
+    if collection_id == "round04d_concepts":
+        collection_root = runs_root / "round04d_live_12_samples"
+        case_dirs = [
+            child
+            for child in sorted(collection_root.glob("case_*"))
+            if child.is_dir() and _has_runtime_files(child)
+        ]
+        items = [
+            _index_item(
+                runs_root,
+                run_dir,
+                collection_id=collection_id,
+                collection_rank=index + 1,
+            )
+            for index, run_dir in enumerate(case_dirs)
+        ]
+        return items[:limit]
+    raise ValueError(f"unknown run collection: {collection}")
+
+
+def _canonical_collection_id(collection: str) -> str:
+    normalized = collection.strip().lower().replace("-", "_")
+    aliases = {
+        "round04d": "round04d_concepts",
+        "round04d_concept": "round04d_concepts",
+        "round04d_concepts": "round04d_concepts",
+        "round04d_live_12_samples": "round04d_concepts",
+        "live_12_samples": "round04d_concepts",
+        "concept_samples": "round04d_concepts",
+    }
+    return aliases.get(normalized, normalized)
 
 
 def _candidate_run_dirs(runs_root: Path) -> list[Path]:

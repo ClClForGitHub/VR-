@@ -80,6 +80,70 @@ def test_runtime_state_apply_reference_binding_candidate_updates_state_and_plan(
     assert records[0].execution_id == "exec_ref"
 
 
+def test_runtime_state_apply_reference_binding_keeps_nonblocking_questions(tmp_path: Path) -> None:
+    created = create_runtime_console_run(root=tmp_path, run_id="run_001")
+    append_console_message(
+        created.run_dir,
+        role="user",
+        text="Generate three named game characters on a beach, no reference images.",
+    )
+    build_and_save_runtime_dispatch_plan(created.run_dir)
+    _write_completed_execution(
+        Path(created.run_dir),
+        execution_id="exec_ref",
+        job_id="job_01_intake_ReferenceBindingValidator",
+        node_name="ReferenceBindingValidator",
+        parsed_output={
+            "valid_bindings": [],
+            "requires_clarification": False,
+            "open_questions": ["Optional reference images can improve visual accuracy."],
+            "issues": ["No reference images were supplied; text-only generation will be used."],
+        },
+    )
+
+    result = apply_next_runtime_candidate(created.run_dir)
+    records = read_runtime_apply_records(created.run_dir)
+
+    assert result.ok is True
+    assert result.record is not None
+    assert result.record.status == "applied"
+    assert result.record.applied_fields == ["reference_bindings"]
+    assert result.record.result_summary["binding_count"] == 0
+    assert result.record.result_summary["nonblocking_open_question_count"] == 1
+    assert result.record.result_summary["nonblocking_issue_count"] == 1
+    assert records[0].status == "applied"
+
+
+def test_runtime_state_apply_ignores_text_only_reference_clarification(tmp_path: Path) -> None:
+    created = create_runtime_console_run(root=tmp_path, run_id="run_001")
+    append_console_message(
+        created.run_dir,
+        role="user",
+        text="Generate named game characters on a beach, no reference images.",
+    )
+    build_and_save_runtime_dispatch_plan(created.run_dir)
+    _write_completed_execution(
+        Path(created.run_dir),
+        execution_id="exec_ref",
+        job_id="job_01_intake_ReferenceBindingValidator",
+        node_name="ReferenceBindingValidator",
+        parsed_output={
+            "valid_bindings": [],
+            "requires_clarification": True,
+            "open_questions": ["Do you want to upload optional character references?"],
+            "issues": ["No reference images were supplied."],
+        },
+    )
+
+    result = apply_next_runtime_candidate(created.run_dir)
+
+    assert result.ok is True
+    assert result.record is not None
+    assert result.record.status == "applied"
+    assert result.record.result_summary["binding_count"] == 0
+    assert result.record.result_summary["ignored_text_only_clarification"] is True
+
+
 def test_runtime_state_apply_scene_spec_candidate_advances_phase_and_checkpoint(tmp_path: Path) -> None:
     run_dir = tmp_path / "outputs" / "runs" / "run_001"
     run_dir.mkdir(parents=True)
@@ -112,6 +176,37 @@ def test_runtime_state_apply_scene_spec_candidate_advances_phase_and_checkpoint(
     assert summary["stage_checkpoints"][0]["node_name"] == "SceneSpecCompiler"
     assert frontend_status["phase"] == "SCENE_SPEC_READY"
     assert (run_dir / "checkpoints" / "checkpoints.jsonl").exists()
+
+
+def test_runtime_state_apply_scene_spec_filters_research_only_questions(tmp_path: Path) -> None:
+    run_dir = tmp_path / "outputs" / "runs" / "run_scene_research_questions"
+    run_dir.mkdir(parents=True)
+    state = AgentProjectState(
+        project_id="p",
+        thread_id="t",
+        phase=WorkflowPhase.SCENE_SPEC_DRAFT,
+    )
+    (run_dir / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
+    (run_dir / "summary.json").write_text(json.dumps({"ok": True, "workflow": "runtime-console"}), encoding="utf-8")
+    payload = _scene_spec_payload(subject_id="subject_frolova_chibi")
+    payload["open_questions"] = ["弗洛洛的具体外观设定（发色、服饰）需进一步确认《鸣潮》官方资料。"]
+    _write_completed_execution(
+        run_dir,
+        execution_id="exec_scene",
+        job_id="job_01_scenespec_SceneSpecCompiler",
+        node_name="SceneSpecCompiler",
+        parsed_output=payload,
+    )
+
+    result = apply_next_runtime_candidate(run_dir, rebuild_plan=True)
+    state_payload = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+
+    assert result.ok is True
+    assert result.record is not None
+    assert result.record.result_summary["open_question_count"] == 0
+    assert result.record.result_summary["nonblocking_identity_research_question_count"] == 1
+    assert state_payload["phase"] == "SCENE_SPEC_READY"
+    assert state_payload["scene_spec"]["open_questions"] == []
 
 
 def test_runtime_run_bundle_exposes_runtime_apply_files(tmp_path: Path) -> None:

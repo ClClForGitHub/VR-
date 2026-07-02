@@ -62,6 +62,7 @@ class RuntimeConsoleUploadResult(BaseModel):
     size_bytes: int
     sha256: str
     created_at: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 def create_runtime_console_run(
@@ -179,6 +180,7 @@ def save_console_upload(
     filename: str,
     content: bytes,
     mime_type: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> RuntimeConsoleUploadResult:
     if not content:
         raise ValueError("upload content must not be empty")
@@ -195,6 +197,11 @@ def save_console_upload(
     now = utc_now_iso()
     artifact_id = None
     image_id = None
+    upload_metadata = {
+        "upload_id": upload_id,
+        "original_filename": filename,
+        **(metadata or {}),
+    }
 
     if (path / "state.json").exists() and guessed_mime.startswith("image/"):
         state = _read_state(path)
@@ -210,7 +217,7 @@ def save_console_upload(
                 size_bytes=len(content),
                 sha256=digest,
                 created_at=now,
-                metadata={"upload_id": upload_id, "original_filename": filename},
+                metadata=upload_metadata,
             )
         )
         state.input_images.append(
@@ -219,7 +226,8 @@ def save_console_upload(
                 artifact_id=artifact_id,
                 uri=str(target),
                 mime_type=guessed_mime,
-                notes="Uploaded through runtime console.",
+                user_declared_label=upload_metadata.get("display_label"),
+                notes=upload_metadata.get("mention") or "Uploaded through runtime console.",
             )
         )
         state.updated_at = now
@@ -236,6 +244,7 @@ def save_console_upload(
         size_bytes=len(content),
         sha256=digest,
         created_at=now,
+        metadata=upload_metadata,
     )
     _append_jsonl(console_dir / "uploads.jsonl", _model_to_dict(result))
     return result
@@ -281,4 +290,3 @@ def _model_to_dict(model: Any) -> dict[str, Any]:
     if hasattr(model, "model_dump"):
         return model.model_dump(mode="json")
     return model.dict()
-

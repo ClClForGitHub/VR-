@@ -28,7 +28,7 @@ export const referenceSlots = [
   {
     slot_id: 'subject_slot_1',
     slot_kind: 'subject',
-    display_label: '主体 1',
+    display_label: '主体1',
     mention: '@主体1',
     entity_id: 'subject_1',
     artifact_id: 'ref_subject_001',
@@ -39,7 +39,7 @@ export const referenceSlots = [
   {
     slot_id: 'subject_slot_2',
     slot_kind: 'subject',
-    display_label: '主体 2',
+    display_label: '主体2',
     mention: '@主体2',
     entity_id: 'subject_2',
     artifact_id: 'ref_subject_002',
@@ -50,7 +50,7 @@ export const referenceSlots = [
   ...[3, 4, 5].map((index) => ({
     slot_id: `subject_slot_${index}`,
     slot_kind: 'subject',
-    display_label: `主体 ${index}`,
+    display_label: `主体${index}`,
     mention: `@主体${index}`,
     entity_id: `subject_${index}`,
     status: 'empty',
@@ -58,7 +58,7 @@ export const referenceSlots = [
   {
     slot_id: 'scene_slot_1',
     slot_kind: 'scene',
-    display_label: '场景 1',
+    display_label: '场景1',
     mention: '@场景1',
     entity_id: 'scene_1',
     artifact_id: 'ref_scene_001',
@@ -70,9 +70,9 @@ export const referenceSlots = [
 
 export const entities = [
   { entity_id: 'overall', entity_type: 'overall', display_label: '整体图', resolved_name: '最终氛围与构图', source_slot_ids: [] },
-  { entity_id: 'subject_1', entity_type: 'subject', display_label: '主体 1', resolved_name: '机械灵兽 · 霜牙', source_slot_ids: ['subject_slot_1'] },
-  { entity_id: 'subject_2', entity_type: 'subject', display_label: '主体 2', resolved_name: '重装机甲 · 战士', source_slot_ids: ['subject_slot_2'] },
-  { entity_id: 'scene_1', entity_type: 'scene', display_label: '场景 1', resolved_name: '古老遗迹', source_slot_ids: ['scene_slot_1'] },
+  { entity_id: 'subject_1', entity_type: 'subject', display_label: '主体1', resolved_name: '机械灵兽 · 霜牙', source_slot_ids: ['subject_slot_1'] },
+  { entity_id: 'subject_2', entity_type: 'subject', display_label: '主体2', resolved_name: '重装机甲 · 战士', source_slot_ids: ['subject_slot_2'] },
+  { entity_id: 'scene_1', entity_type: 'scene', display_label: '场景1', resolved_name: '古老遗迹', source_slot_ids: ['scene_slot_1'] },
 ];
 
 export const references = referenceSlots

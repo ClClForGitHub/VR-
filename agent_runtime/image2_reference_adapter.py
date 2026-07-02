@@ -311,6 +311,7 @@ def build_codex_self_image2_prompt(
         "This is one isolated requirement. Do not rely on previous chat context.\n"
         "Do not run shell commands to inspect images. Do not use file names, metadata, OCR, Python, PIL, ImageMagick, or binary reads as a substitute for vision.\n"
         "Before image generation, call the image viewing tool once for each listed attachment view_path.\n"
+        "If the prompt names a specific IP/game/anime character and no subject reference image is attached, use available web/search capability to verify the character's visual identity before generation. If web/search is unavailable, rely only on explicit visual traits and source URLs already written in the prompt; do not invent identity details from memory.\n"
         "Then generate exactly one new bitmap image. Do not paste or collage the input image; use it as a visual reference.\n\n"
         "Attachment manifest:\n"
         + "\n".join(attachment_lines)
@@ -674,6 +675,11 @@ def _attachment(
 
 def _mode_rules(output_type: str, generation_mode: str, attachment_count: int) -> str:
     if output_type == "subject_concept":
+        if attachment_count <= 0:
+            return (
+                "Generate one clean subject-only concept suitable as a Hunyuan3D source image, with neutral/simple background and the full object visible. "
+                "Use only the prompt's explicit verified identity traits and source-backed visual details for named characters."
+            )
         return (
             "Image 1 is the user-provided subject reference. Preserve identity, silhouette, proportions, major colors, materials, and defining details. "
             "Generate one clean subject-only concept suitable as a Hunyuan3D source image, with neutral/simple background and the full object visible."

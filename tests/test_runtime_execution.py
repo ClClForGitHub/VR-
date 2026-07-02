@@ -586,6 +586,51 @@ def test_scene_spec_compiler_context_ignores_stale_scene_interpreter_turn(tmp_pa
     assert context["context_issue"] == "SceneInterpreter candidate output is not persisted yet."
 
 
+def test_concept_prompt_planner_context_includes_search_contract_and_identity_research(tmp_path: Path) -> None:
+    run_dir = tmp_path / "outputs" / "runs" / "run_identity_context"
+    run_dir.mkdir(parents=True)
+    identity_row = {
+        "ok": True,
+        "requested_name": "Q版弗洛洛",
+        "resolved_identity": "Phrolova / 弗洛洛",
+        "source_urls": ["https://wutheringwaves.kurogames.com/en/main/news/detail/2907"],
+        "visual_traits": ["violet visual identity", "dark outfit", "theatrical musician motif"],
+        "subject_id_hint": "subject_phrolova_chibi",
+    }
+    (run_dir / "identity_research.jsonl").write_text(json.dumps(identity_row, ensure_ascii=False) + "\n", encoding="utf-8")
+    state = AgentProjectState(
+        project_id="p",
+        thread_id="t",
+        phase=WorkflowPhase.SCENE_SPEC_READY,
+        scene_spec=SceneSpec(
+            scene_id="scene_001",
+            title="demo",
+            user_goal="demo",
+            style=StyleSpec(rendering_style="chibi"),
+            environment=EnvironmentSpec(environment_type="studio", description="simple studio"),
+            lighting=LightingSpec(description="soft light"),
+            camera=CameraSpec(shot_type="full body"),
+            subjects=[
+                SubjectSpec(
+                    subject_id="subject_phrolova_chibi",
+                    display_name="Q版弗洛洛",
+                    category="character",
+                    description="Wuthering Waves Phrolova in chibi style.",
+                    needs_2d_concept=True,
+                )
+            ],
+        ),
+    )
+    job = [item for item in build_and_save_runtime_dispatch_plan_for_state(state).runtime_plan.jobs if item.node_name == "ConceptPromptPlanner"][0]
+
+    context = build_llm_node_context(state, job, run_dir=run_dir)
+
+    assert context["identity_research"] == [identity_row]
+    assert context["provider_web_search"]["provider"] == "qwen"
+    assert context["provider_web_search"]["expected_enabled"] is True
+    assert context["provider_web_search"]["request_body_contract"]["enable_search"] is True
+
+
 def build_and_save_runtime_dispatch_plan_for_state(state: AgentProjectState):
     from agent_runtime.runtime_jobs import build_agent_runtime_plan
     from agent_runtime.controller import build_controller_plan

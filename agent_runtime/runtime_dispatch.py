@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from agent_runtime.artifacts import utc_now_iso
 from agent_runtime.controller import ControllerPlan, build_controller_plan
 from agent_runtime.runtime_jobs import AgentRuntimePlan, build_agent_runtime_plan
-from agent_runtime.runtime_profiles import RuntimeServiceConfig
+from agent_runtime.runtime_profiles import Hunyuan3DProfileSelectionPolicy, RuntimeServiceConfig
 from agent_runtime.state import AgentProjectState
 
 
@@ -34,6 +34,7 @@ def build_and_save_runtime_dispatch_plan(
     *,
     service_config: RuntimeServiceConfig | None = None,
     hunyuan3d_profile_id: str | None = None,
+    hunyuan3d_profile_policy: Hunyuan3DProfileSelectionPolicy | None = None,
     prefer_sub_agents_for_long_jobs: bool = True,
 ) -> RuntimeDispatchPlanResult:
     path = Path(run_dir).expanduser().resolve()
@@ -47,6 +48,7 @@ def build_and_save_runtime_dispatch_plan(
         controller=controller,
         service_config=service_config,
         hunyuan3d_profile_id=hunyuan3d_profile_id,
+        hunyuan3d_profile_policy=hunyuan3d_profile_policy,
         prefer_sub_agents_for_long_jobs=prefer_sub_agents_for_long_jobs,
         frontend_status_path=str(path / "frontend_status.json") if (path / "frontend_status.json").exists() else None,
         delivery_handoff_path=str(path / "delivery_handoff.json") if (path / "delivery_handoff.json").exists() else None,

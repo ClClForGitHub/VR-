@@ -39,6 +39,7 @@ class ConceptImageExecutionRequest(BaseModel):
 
 class ConceptImageExecutionCallRecord(BaseModel):
     requirement_id: str
+    concept_version: int | None = None
     output_type: ConceptOutputType
     generation_mode: ConceptGenerationMode
     prompt: str
@@ -51,6 +52,7 @@ class ConceptImageExecutionCallRecord(BaseModel):
     started_at: str
     finished_at: str | None = None
     output_image_path: str | None = None
+    artifact_id: str | None = None
     ok: bool = False
     issues: list[str] = Field(default_factory=list)
 
@@ -283,6 +285,7 @@ def execute_concept_image_handoff(
         )
 
     requirements = _requirements_in_order(concept_generation)
+    concept_version = _positive_int(concept_generation.get("concept_version"))
     preflight_issues = _handoff_backend_selection_issues(capability, requirements)
     generated_paths: dict[str, str] = {}
     image_results: list[dict[str, Any]] = []
@@ -295,6 +298,7 @@ def execute_concept_image_handoff(
             output_dir=output_dir,
             requirement=requirement,
             index=index,
+            concept_version=concept_version,
             backend=backend,
             capability=capability,
             generated_paths=generated_paths,
@@ -338,6 +342,7 @@ def _execute_requirement(
     output_dir: Path,
     requirement: dict[str, Any],
     index: int,
+    concept_version: int | None,
     backend: ConceptImageBackend,
     capability: ConceptImageBackendCapability,
     generated_paths: dict[str, str],
@@ -361,10 +366,12 @@ def _execute_requirement(
         output_type=output_type,
     )
     started_at = utc_now_iso()
-    output_path = output_dir / f"{index:02d}_{_safe_name(requirement_id)}.png"
+    round_output_dir = output_dir / (f"v{concept_version:02d}" if concept_version is not None else "unversioned")
+    artifact_id = _concept_artifact_id(requirement_id=requirement_id, concept_version=concept_version)
+    output_path = round_output_dir / f"{index:02d}_{_safe_name(requirement_id)}.png"
     attachment_manifest, view_prep_issues = prepare_viewable_attachment_manifest(
         attachment_manifest,
-        view_dir=output_dir / "reference_views" / _safe_name(requirement_id),
+        view_dir=round_output_dir / "reference_views" / _safe_name(requirement_id),
     )
     issues = list(preflight_issues)
     issues.extend(input_issues)
@@ -378,6 +385,7 @@ def _execute_requirement(
 
     record = ConceptImageExecutionCallRecord(
         requirement_id=requirement_id,
+        concept_version=concept_version,
         output_type=output_type,
         generation_mode=generation_mode,
         prompt=prompt,
@@ -388,6 +396,7 @@ def _execute_requirement(
         attachment_manifest=[_model_to_dict(item) for item in attachment_manifest],
         backend=capability.backend_name,
         started_at=started_at,
+        artifact_id=artifact_id,
         issues=_unique(issues),
     )
     if issues:
@@ -425,9 +434,10 @@ def _execute_requirement(
         "output_type": output_type,
         "requirement_id": requirement_id,
         "target_id": requirement.get("target_id"),
-        "artifact_id": f"live_{_safe_name(requirement_id)}",
+        "artifact_id": artifact_id,
         "final_preview": output_type == "target_render",
         "metadata": {
+            "concept_version": concept_version,
             "generation_mode": generation_mode,
             "backend": record.backend,
             "input_reference_image_ids": input_reference_ids,
@@ -554,6 +564,21 @@ def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if item is not None]
+
+
+def _positive_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _concept_artifact_id(*, requirement_id: str, concept_version: int | None) -> str:
+    safe_requirement = _safe_name(requirement_id)
+    if concept_version is None or concept_version <= 1:
+        return f"live_{safe_requirement}"
+    return f"live_v{concept_version}_{safe_requirement}"
 
 
 def _safe_name(value: str) -> str:

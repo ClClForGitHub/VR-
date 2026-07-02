@@ -139,7 +139,7 @@ def test_named_identity_requires_evidence_or_clarification() -> None:
     assert "missing_identity_research_evidence:subject_named_character" in result.issues
 
 
-def test_named_identity_accepts_explicit_identity_notes() -> None:
+def test_named_identity_rejects_notes_without_search_evidence() -> None:
     result, _updated = apply_concept_prompt_planner_output(
         state=AgentProjectState(
             project_id="project_round03",
@@ -152,6 +152,41 @@ def test_named_identity_accepts_explicit_identity_notes() -> None:
             "subject_prompts": {"subject_named_character": "A chibi named character with verified outfit."},
             "scene_prompts": ["Clean themed scene."],
             "identity_notes": ["Verified subject_named_character as Example Game Character from official source."],
+        },
+    )
+
+    assert result.ok is False
+    assert "missing_identity_research_evidence:subject_named_character" in result.issues
+
+
+def test_named_identity_accepts_structured_search_evidence() -> None:
+    result, _updated = apply_concept_prompt_planner_output(
+        state=AgentProjectState(
+            project_id="project_round03",
+            thread_id="thread_round03",
+            phase=WorkflowPhase.SCENE_SPEC_READY,
+            scene_spec=_identity_scene_spec(),
+        ),
+        planner_output={
+            "final_preview_prompt": "Named character in a clean display scene.",
+            "subject_prompts": {"subject_named_character": "A chibi named character with verified green hair, red coat, and gold hair ornament."},
+            "scene_prompts": ["Clean themed scene."],
+            "identity_notes": ["subject_named_character verified from official and wiki sources."],
+            "identity_search_evidence": [
+                {
+                    "subject_id": "subject_named_character",
+                    "requested_name": "Example Game Character",
+                    "resolved_identity": "Example Game Character",
+                    "source_urls": ["https://example.com/official-character"],
+                    "search_queries": ["Example Game Character official appearance"],
+                    "visual_traits": [
+                        "green hair with long side locks",
+                        "red coat with gold trim",
+                        "black gloves and boots",
+                    ],
+                    "confidence": 0.9,
+                }
+            ],
         },
     )
 

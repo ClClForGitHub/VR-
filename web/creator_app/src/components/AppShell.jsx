@@ -1,7 +1,7 @@
-import { ScreenTabs } from './ScreenTabs.jsx';
 import { Button } from './Button.jsx';
+import { screens } from '../data/mockProject.js';
 
-export function AppShell({ screenId, onChangeScreen, viewModel, runtimeState, onSelectRun, onRefreshRuntime, children }) {
+export function AppShell({ screenId, onChangeScreen, viewModel, runtimeState, onSelectRun, onRefreshRuntime, onOpenAssetMemory, children }) {
   const project = viewModel.project;
   const runs = runtimeState.runs || [];
   const sourceLabel = viewModel.source === 'backend'
@@ -21,7 +21,7 @@ export function AppShell({ screenId, onChangeScreen, viewModel, runtimeState, on
           {viewModel.error && <div className="project-warning">{viewModel.error}</div>}
         </div>
         <div className="topbar-actions">
-          <Button onClick={() => onChangeScreen('asset-memory')}>资产记忆</Button>
+          <Button onClick={onOpenAssetMemory}>资产记忆</Button>
           {runs.length > 0 ? (
             <label className="run-select-label">
               <span>项目中心</span>
@@ -44,9 +44,44 @@ export function AppShell({ screenId, onChangeScreen, viewModel, runtimeState, on
         </div>
       </header>
       <div className="workspace-body">
-        <ScreenTabs current={screenId} onChange={onChangeScreen} />
+        <aside className="process-rail" aria-label="image23D 创作流程">
+          <div className="process-rail__header">
+            <span>Flow</span>
+            <strong>6 步创作链路</strong>
+          </div>
+          <nav className="process-rail__list">
+            {screens.map((screen) => (
+              <button
+                key={screen.id}
+                type="button"
+                className={currentClass(screenId, screen.id)}
+                onClick={() => onChangeScreen(screen.id)}
+              >
+                <span className="process-rail__index">0{screen.stage}</span>
+                <span className="process-rail__label">{screen.label}</span>
+                <span className="process-rail__state">{screenState(screenId, screen.id)}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="process-rail__footer">
+            <span>当前运行</span>
+            <strong>{viewModel.source === 'backend' ? viewModel.runKey || 'Backend Run' : 'Mock Preview'}</strong>
+          </div>
+        </aside>
         <main className="main-stage">{children}</main>
       </div>
     </div>
   );
+}
+
+function currentClass(current, id) {
+  return current === id ? 'is-active' : '';
+}
+
+function screenState(current, id) {
+  if (current === id) return '当前';
+  const currentIndex = screens.findIndex((screen) => screen.id === current);
+  const itemIndex = screens.findIndex((screen) => screen.id === id);
+  if (currentIndex > itemIndex) return '已完成';
+  return '待处理';
 }

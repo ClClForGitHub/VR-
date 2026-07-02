@@ -323,6 +323,7 @@ def test_runtime_delegation_subject_asset_prompt_includes_concept_artifact_and_p
     assert "subject_robot_concept_001" in prompt
     assert str(concept_path) in prompt
     assert "fast_shape_50k_768" in prompt
+    assert "hunyuan3d_profiles_by_subject" in prompt
     assert "Do not edit state.json" in prompt
     assert "workflow_runner/Hunyuan3D service path" in prompt
 

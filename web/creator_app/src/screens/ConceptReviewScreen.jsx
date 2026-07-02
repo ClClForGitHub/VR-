@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import { AssetMemoryPanel } from '../components/AssetMemoryPanel.jsx';
 import { ConceptSelectionBoard } from '../components/ConceptSelectionBoard.jsx';
 import { FeedbackDrawer } from '../components/FeedbackDrawer.jsx';
-import { Panel } from '../components/Panel.jsx';
 import { ScreenHeading } from '../components/ScreenHeading.jsx';
-import { Button } from '../components/Button.jsx';
 import { VersionCompareModal } from '../components/VersionCompareModal.jsx';
 
-export function ConceptReviewScreen({ onNavigate, viewModel, onStartGeneration }) {
-  const { concepts, references, entities, assetVersions, approvedConceptSelection, referenceSlots } = viewModel;
+export function ConceptReviewScreen({ viewModel, onStartGeneration }) {
+  const { concepts, entities, assetVersions, approvedConceptSelection, referenceSlots } = viewModel;
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [activeSelection, setActiveSelection] = useState(null);
@@ -38,24 +35,17 @@ export function ConceptReviewScreen({ onNavigate, viewModel, onStartGeneration }
           onFeedback={openFeedback}
           onConfirmSelection={openCompare}
         />
-        <aside className="stack concept-memory-column">
-          <AssetMemoryPanel viewModel={viewModel} onOpen={() => onNavigate('asset-memory')} />
-          <Panel title="快捷审稿标签">
-            <div className="tag-row">
-              {['保留整体', '重做主体', '替换场景', '强化光影', '优化构图'].map((tag) => <Button key={tag} variant="chip">{tag}</Button>)}
-            </div>
-          </Panel>
-        </aside>
       </div>
       <FeedbackDrawer
         open={feedbackOpen}
+        mode="concept"
         selection={activeSelection}
         entities={entities}
+        assetVersions={assetVersions}
         referenceSlots={referenceSlots}
-        references={references}
         onClose={() => setFeedbackOpen(false)}
         onOpenCompare={() => setCompareOpen(true)}
-        onRegenerate={() => {
+        onSubmit={() => {
           setFeedbackOpen(false);
           onStartGeneration?.('concept-feedback');
         }}

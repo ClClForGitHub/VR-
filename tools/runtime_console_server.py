@@ -124,7 +124,13 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
             if route in {"/app.js", "/styles.css", "/polish.css", "/ui18_final.css", "/ui19_public.css", "/ui25_creator.css"}:
                 return self._send_static(route.lstrip("/"))
             if route == "/api/runs":
-                return self._send_json([_model_to_dict(item) for item in discover_runtime_runs(root=self.root)])
+                query = parse_qs(parsed.query)
+                collection = _query_string(query, "collection")
+                limit = _safe_int(_query_string(query, "limit"), default=50, minimum=1, maximum=500)
+                return self._send_json([
+                    _model_to_dict(item)
+                    for item in discover_runtime_runs(root=self.root, limit=limit, collection=collection)
+                ])
             if route.startswith("/api/runs/"):
                 return self._handle_run_get(route, parse_qs(parsed.query))
             self._send_error(HTTPStatus.NOT_FOUND, f"not found: {route}")
@@ -452,21 +458,34 @@ class RuntimeConsoleHandler(BaseHTTPRequestHandler):
                 "filename": payload["filename"],
                 "content": base64.b64decode(payload["content_base64"]),
                 "mime_type": payload.get("mime_type"),
+                "metadata": payload.get("metadata") or {},
             }
         if not content_type.startswith("multipart/form-data"):
             raise ValueError("upload requires multipart/form-data or application/json")
         message = BytesParser(policy=policy.default).parsebytes(
             f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8") + body
         )
+        fields = {}
+        file_payload = None
         for part in message.iter_parts():
-            if part.get_param("name", header="content-disposition") != "file":
+            name = part.get_param("name", header="content-disposition")
+            if name != "file":
+                if name:
+                    fields[name] = part.get_content()
                 continue
             filename = part.get_filename() or "upload.bin"
-            return {
+            file_payload = {
                 "filename": filename,
                 "content": part.get_payload(decode=True) or b"",
                 "mime_type": part.get_content_type(),
             }
+        if file_payload is not None:
+            file_payload["metadata"] = {
+                key: value
+                for key, value in fields.items()
+                if key in {"binding_role", "slot_id", "entity_id", "mention", "display_label"}
+            }
+            return file_payload
         raise ValueError("multipart upload did not include a file field")
 
     def _send_json(self, payload, *, status: HTTPStatus = HTTPStatus.OK):
@@ -500,6 +519,22 @@ def _safe_float(value, *, default: float, minimum: float, maximum: float) -> flo
     except (TypeError, ValueError):
         parsed = default
     return max(minimum, min(maximum, parsed))
+
+
+def _safe_int(value, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
+
+def _query_string(query: dict, key: str) -> str | None:
+    values = query.get(key) or []
+    if not values:
+        return None
+    value = str(values[0]).strip()
+    return value or None
 
 
 def _runtime_event_signature(run_dir: Path, effective_dir: Path) -> dict:

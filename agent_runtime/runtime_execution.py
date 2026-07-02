@@ -305,6 +305,8 @@ def _execute_job(
         env=values,
         dry_run=dry_run,
         response_text=response_text,
+        timeout=_llm_timeout_for_node(job.node_name),
+        max_tokens=_llm_max_tokens_for_node(job.node_name),
     )
     output_path = _write_execution_output(
         run_dir,
@@ -338,6 +340,20 @@ def _is_blender_edit_domain_tool(job: RuntimeJobSpec) -> bool:
 
 def _is_runtime_script_domain_tool(job: RuntimeJobSpec) -> bool:
     return job.domain_tool_name in RUNTIME_SCRIPT_DOMAIN_TOOLS
+
+
+def _llm_timeout_for_node(node_name: str) -> float:
+    if node_name in {"SceneSpecCompiler", "ConceptPromptPlanner", "BlenderAssemblyPlanner"}:
+        return 180
+    return 60
+
+
+def _llm_max_tokens_for_node(node_name: str) -> int:
+    if node_name == "SceneSpecCompiler":
+        return 5000
+    if node_name in {"ConceptPromptPlanner", "BlenderAssemblyPlanner", "BlenderEditRouter"}:
+        return 4000
+    return 1200
 
 
 def _execute_runtime_script_domain_tool_job(
@@ -1265,13 +1281,18 @@ def build_llm_node_context(
             "reference_bindings": [_model_to_dict(item) for item in state.reference_bindings],
             "previous_scene_spec": _model_to_dict(state.scene_spec) if state.scene_spec is not None else None,
             "latest_user_turn": _model_to_dict(latest_turn) if latest_turn is not None else None,
+            "identity_research": _read_identity_research_context(run_dir),
+            "provider_web_search": _provider_web_search_context(node_name),
             "context_issue": None if interpretation is not None else "SceneInterpreter candidate output is not persisted yet.",
         }
     if node_name == "ConceptPromptPlanner":
-        return _context_or_issue(
+        context = _context_or_issue(
             lambda: build_concept_prompt_planner_context(state),
             fallback={"scene_spec": _model_to_dict(state.scene_spec) if state.scene_spec is not None else None},
         )
+        context["identity_research"] = _read_identity_research_context(run_dir)
+        context["provider_web_search"] = _provider_web_search_context(node_name)
+        return context
     if node_name == "ConceptVisualQA":
         return {
             "scene_spec": _model_to_dict(state.scene_spec) if state.scene_spec is not None else None,
@@ -1387,6 +1408,52 @@ def _latest_user_text_from_run(run_dir: str | Path | None) -> str | None:
     except Exception:
         return None
     return state.user_turns[-1].text if state.user_turns else ""
+
+
+def _read_identity_research_context(run_dir: str | Path | None) -> list[dict[str, Any]]:
+    if run_dir is None:
+        return []
+    path = Path(run_dir).expanduser().resolve() / "identity_research.jsonl"
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            rows.append({"ok": False, "issues": ["identity_research_json_parse_failed"], "error": str(exc)})
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def _provider_web_search_context(node_name: str) -> dict[str, Any]:
+    values = load_agent_llm_env()
+    enabled = str(values.get("QWEN_ENABLE_SEARCH", "true")).strip().lower() not in {"0", "false", "off", "no"}
+    nodes = {
+        item.strip()
+        for item in values.get(
+            "AGENT_LLM_WEB_SEARCH_NODES",
+            "SceneSpecCompiler,ConceptPromptPlanner",
+        ).split(",")
+        if item.strip()
+    }
+    forced = str(values.get("QWEN_FORCED_SEARCH", "true")).strip().lower() not in {"0", "false", "off", "no"}
+    return {
+        "provider": "qwen",
+        "expected_enabled": bool(enabled and node_name in nodes),
+        "request_body_contract": {
+            "enable_search": bool(enabled and node_name in nodes),
+            "search_options": {
+                "forced_search": forced,
+                "search_strategy": values.get("QWEN_SEARCH_STRATEGY", "max"),
+            },
+        },
+        "identity_research_jsonl_fallback_allowed": True,
+    }
 
 
 def _delivery_package_id(state: AgentProjectState, job: RuntimeJobSpec) -> str | None:

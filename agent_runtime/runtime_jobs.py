@@ -13,11 +13,13 @@ from pydantic import BaseModel, Field
 
 from agent_runtime.controller import ControllerAction, ControllerPlan, build_controller_plan
 from agent_runtime.runtime_profiles import (
+    Hunyuan3DProfileSelectionPolicy,
     RuntimeExecutor,
     RuntimeServiceConfig,
     get_hunyuan3d_profile,
+    select_hunyuan3d_profiles_for_subjects,
 )
-from agent_runtime.state import AgentProjectState, ArtifactType, WorkflowPhase
+from agent_runtime.state import AgentProjectState, ArtifactType, SubjectSpec, WorkflowPhase
 from agent_runtime.viewer import build_viewer_urls
 
 
@@ -82,6 +84,7 @@ def build_agent_runtime_plan(
     controller: ControllerPlan | None = None,
     service_config: RuntimeServiceConfig | None = None,
     hunyuan3d_profile_id: str | None = None,
+    hunyuan3d_profile_policy: Hunyuan3DProfileSelectionPolicy | None = None,
     prefer_sub_agents_for_long_jobs: bool = True,
     frontend_status_path: str | None = None,
     delivery_handoff_path: str | None = None,
@@ -94,7 +97,13 @@ def build_agent_runtime_plan(
         _job_from_action(
             index=index,
             action=action,
+            state=state,
             hunyuan3d_profile_id=hunyuan3d_profile_id or config.default_hunyuan3d_profile_id,
+            hunyuan3d_profile_policy=(
+                "global"
+                if hunyuan3d_profile_id is not None
+                else hunyuan3d_profile_policy or config.default_hunyuan3d_profile_policy
+            ),
             prefer_sub_agents_for_long_jobs=prefer_sub_agents_for_long_jobs,
         )
         for index, action in enumerate(controller_plan.actions)
@@ -156,7 +165,9 @@ def _job_from_action(
     *,
     index: int,
     action: ControllerAction,
+    state: AgentProjectState,
     hunyuan3d_profile_id: str,
+    hunyuan3d_profile_policy: Hunyuan3DProfileSelectionPolicy,
     prefer_sub_agents_for_long_jobs: bool,
 ) -> RuntimeJobSpec:
     if action.action_type in {"ask_user", "await_user_approval"}:
@@ -188,7 +199,9 @@ def _job_from_action(
         return _domain_tool_job(
             index=index,
             action=action,
+            state=state,
             hunyuan3d_profile_id=hunyuan3d_profile_id,
+            hunyuan3d_profile_policy=hunyuan3d_profile_policy,
             prefer_sub_agents_for_long_jobs=prefer_sub_agents_for_long_jobs,
         )
     if action.action_type == "deliver":
@@ -218,7 +231,9 @@ def _domain_tool_job(
     *,
     index: int,
     action: ControllerAction,
+    state: AgentProjectState,
     hunyuan3d_profile_id: str,
+    hunyuan3d_profile_policy: Hunyuan3DProfileSelectionPolicy,
     prefer_sub_agents_for_long_jobs: bool,
 ) -> RuntimeJobSpec:
     tool = action.domain_tool_name or "domain_tool"
@@ -230,10 +245,29 @@ def _domain_tool_job(
     profile_id = None
 
     if tool == "build_subject_asset":
-        profile = get_hunyuan3d_profile(hunyuan3d_profile_id)
+        subject_profiles = _subject_hunyuan_profile_plan(
+            state,
+            action=action,
+            profile_id=hunyuan3d_profile_id,
+            policy=hunyuan3d_profile_policy,
+        )
+        primary_profile_id = _primary_hunyuan_profile_id(subject_profiles, fallback=hunyuan3d_profile_id)
+        profile = get_hunyuan3d_profile(primary_profile_id)
         profile_id = profile.profile_id
         tool_arguments = {**profile.payload_kwargs(), **tool_arguments}
         metadata["hunyuan3d_profile"] = _model_to_dict(profile)
+        metadata["hunyuan3d_profile_policy"] = hunyuan3d_profile_policy
+        if subject_profiles:
+            tool_arguments["hunyuan3d_profile_policy"] = hunyuan3d_profile_policy
+            tool_arguments["subject_hunyuan_profiles"] = {
+                subject_id: selection.profile_id for subject_id, selection in subject_profiles.items()
+            }
+            tool_arguments["subject_hunyuan_profile_kwargs"] = {
+                subject_id: dict(selection.payload_kwargs) for subject_id, selection in subject_profiles.items()
+            }
+            metadata["subject_hunyuan_profile_plan"] = {
+                subject_id: _model_to_dict(selection) for subject_id, selection in subject_profiles.items()
+            }
         timeout_seconds = 600 if profile.duration_class == "long" else 300
         executor = profile.suggested_executor
         if prefer_sub_agents_for_long_jobs and profile.duration_class in {"medium", "long"}:
@@ -325,6 +359,44 @@ def _command_hint(tool: str, *, profile_id: str | None) -> str | None:
     }:
         return f"workflow_runner blender-edit --tool {tool}"
     return None
+
+
+def _subject_hunyuan_profile_plan(
+    state: AgentProjectState,
+    *,
+    action: ControllerAction,
+    profile_id: str,
+    policy: Hunyuan3DProfileSelectionPolicy,
+) -> dict[str, Any]:
+    subjects = _subject_specs_for_subject_asset_action(state, action)
+    if not subjects:
+        return {}
+    return select_hunyuan3d_profiles_for_subjects(subjects, policy=policy, default_profile_id=profile_id)
+
+
+def _subject_specs_for_subject_asset_action(
+    state: AgentProjectState,
+    action: ControllerAction,
+) -> list[SubjectSpec]:
+    if state.scene_spec is None:
+        return []
+    payload_ids = action.payload.get("subject_ids") if isinstance(action.payload, dict) else None
+    subject_ids = {str(item) for item in payload_ids if item} if isinstance(payload_ids, list) else None
+    subjects = [
+        subject
+        for subject in state.scene_spec.subjects
+        if subject.needs_3d_asset and subject.asset_strategy in {"hunyuan3d_img2asset", "existing_asset"}
+    ]
+    if subject_ids is None:
+        return subjects
+    return [subject for subject in subjects if subject.subject_id in subject_ids]
+
+
+def _primary_hunyuan_profile_id(subject_profiles: dict[str, Any], *, fallback: str) -> str:
+    if not subject_profiles:
+        return fallback
+    first = next(iter(subject_profiles.values()))
+    return str(first.profile_id)
 
 
 def _model_to_dict(model: Any) -> dict[str, Any]:

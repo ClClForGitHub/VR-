@@ -165,6 +165,9 @@ def test_subject_asset_handoff_carries_selected_concept_profile_and_output_schem
     assert subject_payload["selected_subject_concepts"][0]["artifact_id"] == "concept_selected"
     assert subject_payload["source_subject_concepts"][0]["uri"] == str(concept_path)
     assert subject_payload["profile_id"] == "fast_shape_50k_768"
+    assert subject_payload["hunyuan3d_profile_policy"] == "global"
+    assert subject_payload["hunyuan3d_profiles_by_subject"] == {"subject_robot": "fast_shape_50k_768"}
+    assert subject_payload["hunyuan3d_profile_kwargs_by_subject"]["subject_robot"]["face_count"] == 50000
     assert "asset_results" in subject_payload["apply_result_schema"]
     assert result.record.result_summary["subject_asset_source_count"] == 1
 

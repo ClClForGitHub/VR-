@@ -14,6 +14,40 @@ from pydantic import BaseModel, Field
 
 RuntimeExecutor = Literal["main_runtime", "background_worker", "sub_agent", "user", "external_service"]
 RuntimeDurationClass = Literal["interactive", "short", "medium", "long"]
+Hunyuan3DProfileSelectionPolicy = Literal["global", "balanced_per_subject", "throughput_per_subject"]
+
+HUNYUAN3D_REQUEST_PAYLOAD_FIELDS = frozenset(
+    {
+        "image",
+        "remove_background",
+        "texture",
+        "seed",
+        "randomize_seed",
+        "octree_resolution",
+        "num_inference_steps",
+        "guidance_scale",
+        "num_chunks",
+        "face_count",
+    }
+)
+HUNYUAN3D_SERVICE_START_FIELDS = frozenset(
+    {
+        "model_path",
+        "subfolder",
+        "texgen_model_path",
+        "dino_ckpt_path",
+        "texture_resolution",
+        "max_num_view",
+        "low_vram_mode",
+        "cache_path",
+        "device",
+        "mc_algo",
+        "enable_flashvdm",
+        "compile",
+        "host",
+        "port",
+    }
+)
 
 
 class RuntimeServiceConfig(BaseModel):
@@ -31,6 +65,8 @@ class RuntimeServiceConfig(BaseModel):
     hunyuan3d_start_max_num_view: int = 8
     hunyuan3d_low_vram_mode: bool = True
     default_hunyuan3d_profile_id: str = "hq_textured_1m_768"
+    default_hunyuan3d_profile_policy: Hunyuan3DProfileSelectionPolicy = "global"
+    hunyuan3d_safe_concurrency_limit: int = 1
 
 
 class Hunyuan3DGenerationProfile(BaseModel):
@@ -68,6 +104,31 @@ class Hunyuan3DGenerationProfile(BaseModel):
         }
         data.update({key: value for key, value in overrides.items() if value is not None})
         return data
+
+
+class Hunyuan3DProfileRestartImpact(BaseModel):
+    """Whether a profile can run against the currently started FastAPI service."""
+
+    profile_id: str
+    restart_required: bool
+    request_payload_fields: list[str]
+    service_start_fields: list[str]
+    service_start_contract: dict[str, Any]
+    reason: str
+    concurrency_note: str
+
+
+class Hunyuan3DSubjectProfileSelection(BaseModel):
+    """Per-subject Hunyuan3D profile routing decision."""
+
+    subject_id: str
+    profile_id: str
+    category: str | None = None
+    priority: str | None = None
+    policy: Hunyuan3DProfileSelectionPolicy
+    payload_kwargs: dict[str, Any]
+    restart_required: bool
+    reason: str
 
 
 HUNYUAN3D_GENERATION_PROFILES: dict[str, Hunyuan3DGenerationProfile] = {
@@ -142,6 +203,7 @@ def hunyuan3d_profile_public_summary(profile_id: str | None = None) -> dict[str,
     profile = get_hunyuan3d_profile(profile_id)
     data = profile.model_dump(mode="json") if hasattr(profile, "model_dump") else profile.dict()
     data["payload_defaults"] = profile.payload_kwargs()
+    data["restart_impact"] = hunyuan3d_profile_restart_impact(profile.profile_id).model_dump(mode="json")
     return data
 
 
@@ -150,3 +212,136 @@ def resolve_hunyuan3d_generation_kwargs(profile_id: str | None = None, **overrid
 
     profile = get_hunyuan3d_profile(profile_id)
     return profile.payload_kwargs(**overrides)
+
+
+def hunyuan3d_profile_restart_impact(
+    profile_id: str | None = None,
+    *,
+    service_config: RuntimeServiceConfig | None = None,
+) -> Hunyuan3DProfileRestartImpact:
+    """Report whether a profile changes service-start-only Hunyuan3D settings."""
+
+    config = service_config or RuntimeServiceConfig()
+    profile = get_hunyuan3d_profile(profile_id)
+    payload = profile.payload_kwargs()
+    request_fields = sorted(key for key in payload if key in HUNYUAN3D_REQUEST_PAYLOAD_FIELDS)
+    return Hunyuan3DProfileRestartImpact(
+        profile_id=profile.profile_id,
+        restart_required=False,
+        request_payload_fields=request_fields,
+        service_start_fields=sorted(HUNYUAN3D_SERVICE_START_FIELDS),
+        service_start_contract={
+            "texture_resolution": config.hunyuan3d_start_texture_resolution,
+            "max_num_view": config.hunyuan3d_start_max_num_view,
+            "low_vram_mode": config.hunyuan3d_low_vram_mode,
+            "base_url": config.hunyuan3d_base_url,
+        },
+        reason=(
+            "Current Hunyuan3D profiles only set request payload fields accepted by "
+            "/send and do not override model path, texgen model path, texture "
+            "resolution, max view count, cache path, or device startup options."
+        ),
+        concurrency_note=(
+            "The local /send endpoint accepts multiple requests by starting threads, "
+            "but ModelWorker.generate does not acquire a real queue/semaphore. Keep "
+            "the safe default at one active Hunyuan3D job per service unless a live "
+            "bounded concurrency canary proves otherwise."
+        ),
+    )
+
+
+def select_hunyuan3d_profile_for_subject(
+    subject: Any,
+    *,
+    policy: Hunyuan3DProfileSelectionPolicy = "balanced_per_subject",
+    default_profile_id: str | None = None,
+) -> Hunyuan3DSubjectProfileSelection:
+    """Select a request-level Hunyuan3D profile for one SceneSpec-like subject."""
+
+    subject_id = str(_subject_attr(subject, "subject_id", "subject"))
+    category = _optional_str(_subject_attr(subject, "category", None))
+    priority = _optional_str(_subject_attr(subject, "priority", None)) or "important"
+    fallback = default_profile_id or RuntimeServiceConfig().default_hunyuan3d_profile_id
+    profile_id, reason = _profile_id_for_subject(
+        category=category,
+        priority=priority,
+        policy=policy,
+        fallback_profile_id=fallback,
+    )
+    profile = get_hunyuan3d_profile(profile_id)
+    impact = hunyuan3d_profile_restart_impact(profile.profile_id)
+    return Hunyuan3DSubjectProfileSelection(
+        subject_id=subject_id,
+        profile_id=profile.profile_id,
+        category=category,
+        priority=priority,
+        policy=policy,
+        payload_kwargs=profile.payload_kwargs(),
+        restart_required=impact.restart_required,
+        reason=reason,
+    )
+
+
+def select_hunyuan3d_profiles_for_subjects(
+    subjects: list[Any],
+    *,
+    policy: Hunyuan3DProfileSelectionPolicy = "balanced_per_subject",
+    default_profile_id: str | None = None,
+) -> dict[str, Hunyuan3DSubjectProfileSelection]:
+    """Build a stable subject_id -> profile decision map."""
+
+    return {
+        selection.subject_id: selection
+        for selection in (
+            select_hunyuan3d_profile_for_subject(
+                subject,
+                policy=policy,
+                default_profile_id=default_profile_id,
+            )
+            for subject in subjects
+        )
+    }
+
+
+def _profile_id_for_subject(
+    *,
+    category: str | None,
+    priority: str,
+    policy: Hunyuan3DProfileSelectionPolicy,
+    fallback_profile_id: str,
+) -> tuple[str, str]:
+    if policy == "global":
+        return fallback_profile_id, "global profile override"
+
+    if policy == "throughput_per_subject":
+        if priority == "hero" and category in {"character", "animal", "vehicle"}:
+            return "hq_shape_1m_768", "throughput policy keeps hero geometry high but skips texture"
+        if category in {"character", "animal", "vehicle", "furniture"} and priority != "background":
+            return "fast_shape_50k_768", "throughput policy uses fast shape for non-hero articulated subjects"
+        return "draft_shape_100k_512", "throughput policy uses draft shape for background/simple assets"
+
+    if priority == "hero" and category in {"character", "animal"}:
+        return "hq_textured_1m_768", "balanced policy keeps hero organic subjects textured"
+    if priority == "hero" and category == "vehicle":
+        return "hq_shape_1m_768", "balanced policy keeps hero vehicle geometry high without texture"
+    if category in {"character", "animal"}:
+        return "hq_shape_1m_768", "balanced policy skips texture for non-hero organic subjects to reduce runtime"
+    if category in {"vehicle", "furniture"}:
+        return "fast_shape_50k_768", "balanced policy uses fast shape for non-hero vehicle/furniture assets"
+    if category in {"prop", "architecture_part", "environment_asset"}:
+        if priority == "background":
+            return "draft_shape_100k_512", "balanced policy uses draft shape for background/simple assets"
+        return "fast_shape_50k_768", "balanced policy uses fast shape for simple scene assets"
+    return fallback_profile_id, "balanced policy fallback profile"
+
+
+def _subject_attr(subject: Any, key: str, default: Any) -> Any:
+    if isinstance(subject, dict):
+        return subject.get(key, default)
+    return getattr(subject, key, default)
+
+
+def _optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value)

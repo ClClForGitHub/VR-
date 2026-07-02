@@ -85,6 +85,7 @@ def run_llm_node(
         )
 
     messages = _messages_for_prompt(prompt)
+    extra_body = _provider_extra_body_for_node(config, node_name=node_name, env=env)
     request_summary = {
         "provider": config.provider,
         "model": config.model,
@@ -93,6 +94,17 @@ def run_llm_node(
         "key_suffix": config.api_key_suffix,
         "node_name": node_name,
     }
+    if extra_body:
+        request_summary["extra_body_keys"] = sorted(extra_body)
+        if "enable_search" in extra_body:
+            request_summary["enable_search"] = bool(extra_body.get("enable_search"))
+        search_options = extra_body.get("search_options")
+        if isinstance(search_options, dict):
+            request_summary["search_options"] = {
+                key: value
+                for key, value in search_options.items()
+                if key in {"forced_search", "search_strategy"}
+            }
     if dry_run:
         return LLMNodeExecutionResult(
             ok=True,
@@ -134,6 +146,7 @@ def run_llm_node(
         temperature=0.0,
         max_tokens=max_tokens,
         response_format_json=True,
+        extra_body=extra_body,
     )
     if not chat_result.ok or chat_result.content is None:
         return _failed_provider_result(
@@ -177,6 +190,57 @@ def _select_provider_config(
         if not require_key or api_key_for_provider(config, env=env):
             return config
     return None
+
+
+def _provider_extra_body_for_node(
+    config: LLMProviderConfig,
+    *,
+    node_name: str,
+    env: dict[str, str] | None,
+) -> dict[str, Any] | None:
+    if config.provider != "qwen":
+        return None
+    values = env or {}
+    enabled = _env_bool(values.get("QWEN_ENABLE_SEARCH"), default=True)
+    if not enabled:
+        return None
+    nodes = {
+        item.strip()
+        for item in values.get(
+            "AGENT_LLM_WEB_SEARCH_NODES",
+            "SceneSpecCompiler,ConceptPromptPlanner",
+        ).split(",")
+        if item.strip()
+    }
+    if node_name not in nodes:
+        return None
+    search_options = _search_options(values)
+    return {
+        "enable_search": True,
+        "search_options": search_options,
+    }
+
+
+def _search_options(values: dict[str, str]) -> dict[str, Any]:
+    raw = values.get("QWEN_SEARCH_OPTIONS_JSON")
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            payload.setdefault("forced_search", True)
+            return payload
+    return {
+        "forced_search": _env_bool(values.get("QWEN_FORCED_SEARCH"), default=True),
+        "search_strategy": values.get("QWEN_SEARCH_STRATEGY", "max"),
+    }
+
+
+def _env_bool(value: str | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _failed_provider_result(
@@ -289,4 +353,3 @@ def _model_dump(model: BaseModel) -> dict[str, Any]:
     if hasattr(model, "model_dump"):
         return model.model_dump(mode="json")
     return model.dict()
-

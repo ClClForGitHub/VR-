@@ -4,7 +4,7 @@ import { ModelViewerStage } from '../components/ModelViewerStage.jsx';
 import { Panel } from '../components/Panel.jsx';
 import { ScreenHeading } from '../components/ScreenHeading.jsx';
 
-export function FinalReviewScreen({ onNavigate, viewModel }) {
+export function FinalReviewScreen({ onNavigate, onOpenAssetMemory, viewModel }) {
   const { cameraPresets, sceneObjects } = viewModel;
   const finalScene = viewModel.finalScene || {};
   const [activeCameraId, setActiveCameraId] = useState(cameraPresets[0]?.id);
@@ -40,10 +40,6 @@ export function FinalReviewScreen({ onNavigate, viewModel }) {
       <ScreenHeading title="最终 Blender 场景验收 / 导演台" subtitle="最终场景合成已完成，请进行镜头检查、构图评审与最终验收" />
       <div className="final-review-layout">
         <aside className="stack">
-          <Panel title="资产记忆">
-            <img className="wide-thumb" src={finalScene.image} alt={finalScene.title || '最终场景'} />
-            <Button className="full-width">打开资产记忆库 →</Button>
-          </Panel>
           <Panel title="镜头预设">
             <div className="preset-grid">
               {cameraPresets.map((preset) => (
@@ -57,6 +53,10 @@ export function FinalReviewScreen({ onNavigate, viewModel }) {
                 </Button>
               ))}
             </div>
+          </Panel>
+          <Panel title="资产记忆">
+            <p className="panel-copy">概念、模型版本和参考来源保留在全局资产记忆中，不占用导演台主舞台。</p>
+            <Button className="full-width" onClick={onOpenAssetMemory}>打开资产记忆库</Button>
           </Panel>
           <Panel title="焦点控制">
             {hasSceneObjects ? (

@@ -42,3 +42,17 @@ assets/mmd_motions/*
 *.blend1
 
 codex_generated_images_contact_sheet.jpg
+
+# Local design/reference bundles with large screenshots or user-provided images.
+# Keep lightweight correction docs trackable; keep bulky handoff packages local.
+docs/image23d_frontend_FULL_design_handoff_v0_5/
+docs/image23d_frontend_v0_5_2_full_flow_correction/image23d_frontend_v0_5_2_correction_docs/image23d_frontend_v0_5_3_product_ui_correction.zip
+docs/image23d_frontend_v0_5_3_product_ui_correction.zip
+docs/image23d_frontend_v0_5_3_product_ui_correction/
+docs/image23d_round05_correction_plan/
+docs/round_02_backend_asset_library_selection_package/
+docs/round_03_core_pipeline_semantics_package/
+docs/round_04c_image2_reference_generation_mandatory_package/
+docs/test/
+docs/agent_execution_harness/creator_app_backend_contract_v0_5_3.md
+docs/agent_execution_harness/round_04f_hunyuan_profile_dispatch.md

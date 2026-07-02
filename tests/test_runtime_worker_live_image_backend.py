@@ -1,4 +1,5 @@
 import json
+import base64
 from pathlib import Path
 
 from agent_runtime.artifacts import utc_now_iso
@@ -22,6 +23,11 @@ from agent_runtime.state import (
     StyleSpec,
     SubjectSpec,
     WorkflowPhase,
+)
+
+
+PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
 
 
@@ -79,7 +85,7 @@ class _FakeConceptBackend(ConceptImageBackend):
         self.calls.append(request)
         output = Path(request.output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(request.requirement_id.encode("utf-8"))
+        output.write_bytes(PNG_BYTES)
         return ConceptImageBackendGenerationResult(ok=True, backend=self.backend_name, output_image_path=str(output))
 
 

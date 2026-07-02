@@ -1096,6 +1096,50 @@
           "identity_notes": [
             "Fixture identity note: subject_phoebe_chibi maps to 鸣潮 角色 菲比 / Phoebe for dry-run prompt validation; live official-source research is deferred to Round04.",
             "Fixture identity note: subject_florollo_chibi maps to 鸣潮 角色 弗洛洛 / Florollo and user wording 弗糯糯 for dry-run prompt validation; live official-source research is deferred to Round04."
+          ],
+          "identity_search_evidence": [
+            {
+              "subject_id": "subject_phoebe_chibi",
+              "requested_name": "菲比",
+              "resolved_identity": "鸣潮 角色 菲比 / Phoebe",
+              "source_urls": [
+                "fixture://identity/wuthering-waves-phoebe"
+              ],
+              "source_titles": [
+                "Dry-run fixture identity evidence for Phoebe"
+              ],
+              "search_queries": [
+                "鸣潮 菲比 Phoebe character appearance fixture"
+              ],
+              "visual_traits": [
+                "bright fantasy hair simplified for chibi silhouette",
+                "readable eyes and cute chibi face",
+                "light fantasy outfit with simplified sleeves and accessories",
+                "pastel beach-scene color accents"
+              ],
+              "confidence": 0.82
+            },
+            {
+              "subject_id": "subject_florollo_chibi",
+              "requested_name": "弗糯糯",
+              "resolved_identity": "鸣潮 角色 弗洛洛 / Florollo",
+              "source_urls": [
+                "fixture://identity/wuthering-waves-florollo"
+              ],
+              "source_titles": [
+                "Dry-run fixture identity evidence for Florollo"
+              ],
+              "search_queries": [
+                "鸣潮 弗洛洛 Florollo character appearance fixture"
+              ],
+              "visual_traits": [
+                "soft chibi hair mass with simplified shape language",
+                "playful eyes and round face proportions",
+                "fantasy outfit with clean sleeve and accessory shapes",
+                "warm pastel beach-scene color accents"
+              ],
+              "confidence": 0.72
+            }
           ]
         }
       }
@@ -1288,6 +1332,29 @@
           "negative_prompt": "cropped face, hidden character, too many tiny unreadable pieces, photoreal human, messy board",
           "identity_notes": [
             "Fixture identity note: subject_little_gwen maps to 英雄联盟 小小格温 / Little Gwen for dry-run prompt validation; live official-source research is deferred to Round04."
+          ],
+          "identity_search_evidence": [
+            {
+              "subject_id": "subject_little_gwen",
+              "requested_name": "小小格温",
+              "resolved_identity": "英雄联盟 小小格温 / Little Gwen",
+              "source_urls": [
+                "fixture://identity/league-of-legends-little-gwen"
+              ],
+              "source_titles": [
+                "Dry-run fixture identity evidence for Little Gwen"
+              ],
+              "search_queries": [
+                "英雄联盟 小小格温 Little Gwen appearance fixture"
+              ],
+              "visual_traits": [
+                "cyan blue twin-tail hair",
+                "large bright eyes and cute chibi face",
+                "blue fantasy dress outfit with simplified sleeve details",
+                "magical blue scissor-like energy accessory"
+              ],
+              "confidence": 1.0
+            }
           ]
         }
       }

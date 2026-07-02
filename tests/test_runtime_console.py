@@ -54,7 +54,29 @@ def test_save_console_upload_sanitizes_file_and_updates_input_image_state(tmp_pa
     assert read_console_uploads(result.run_dir)[0].upload_id == upload.upload_id
 
 
+def test_save_console_upload_records_reference_slot_metadata(tmp_path: Path) -> None:
+    result = create_runtime_console_run(root=tmp_path, run_id="run_001")
+    upload = save_console_upload(
+        result.run_dir,
+        filename="scene.png",
+        content=b"fake-png",
+        mime_type="image/png",
+        metadata={
+            "binding_role": "scene",
+            "slot_id": "scene_slot_1",
+            "entity_id": "scene_1",
+            "mention": "@场景1",
+            "display_label": "场景1",
+        },
+    )
+    state = json.loads((Path(result.run_dir) / "state.json").read_text())
+
+    assert upload.metadata["slot_id"] == "scene_slot_1"
+    assert state["artifacts"][0]["metadata"]["binding_role"] == "scene"
+    assert state["artifacts"][0]["metadata"]["entity_id"] == "scene_1"
+    assert state["input_images"][0]["user_declared_label"] == "场景1"
+
+
 def test_resolve_runtime_console_run_dir_blocks_unsafe_ids(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unsafe run_id"):
         resolve_runtime_console_run_dir(root=tmp_path, run_id="../escape")
-

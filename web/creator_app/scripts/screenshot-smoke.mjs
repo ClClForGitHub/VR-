@@ -13,15 +13,16 @@ const outputDir = process.env.CREATOR_APP_SCREENSHOT_DIR
   ? path.resolve(process.env.CREATOR_APP_SCREENSHOT_DIR)
   : path.join(repoRoot, 'run_logs', 'frontend_checks', `creator_app_round05_${stamp}`);
 
-const pages = ['intake', 'concept-review', 'final-review', 'delivery'];
+const pages = ['intake', 'concept-review', 'model-review', 'final-review', 'delivery'];
 const expectedText = {
   intake: '输入创作需求',
   'concept-review': '概念选择审稿',
+  'model-review': '模型验收',
   'final-review': '最终 Blender 场景验收',
   delivery: '交付完成',
 };
 const viewports = [
-  { name: 'desktop', width: 1440, height: 1000 },
+  { name: 'desktop', width: 1440, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
 ];
 
@@ -86,7 +87,10 @@ async function auditLayout(page) {
       '.asset-card__meta',
       '.reference-card div',
       '.reference-tray-card',
+      '.reference-slot-card',
       '.concept-option',
+      '.mention-chip-grid button',
+      '.asset-memory-drawer__grid .asset-card',
       '.model-viewer-status span',
     ];
     const overflowingElements = [];
@@ -114,6 +118,13 @@ async function auditLayout(page) {
       overflowingElements,
     };
   });
+}
+
+async function waitForImages(page) {
+  await page.waitForFunction(() => (
+    Array.from(document.images).every((image) => image.complete && image.naturalWidth > 0)
+  ), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(250);
 }
 
 let serverProcess;
@@ -151,6 +162,7 @@ try {
       if (errors.length > 0) {
         throw new Error(`Page errors for ${url}: ${errors.join('; ')}`);
       }
+      await waitForImages(page);
       const screenshotPath = path.join(outputDir, `${viewport.name}_${pageId}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: true });
       const audit = await auditLayout(page);

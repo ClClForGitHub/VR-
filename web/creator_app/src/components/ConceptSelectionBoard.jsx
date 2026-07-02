@@ -60,14 +60,15 @@ export function ConceptSelectionBoard({ entities = [], assetVersions = [], appro
         </section>
       </Panel>
 
-      <section className="stack">
-        <HeroStage image={activeAsset?.image_url} title={activeAsset?.title} caption={activeAsset?.note} className="concept-hero">
-          <div className="concept-hero__badge">
-            <span className="pill pill-ok">{activeEntity?.display_label}</span>
-            <strong>{activeAsset?.version_label} · {activeAsset?.title}</strong>
-          </div>
-        </HeroStage>
-        <Panel title="当前已选组合" className="selection-summary-panel">
+      <HeroStage image={activeAsset?.image_url} title={activeAsset?.title} caption={activeAsset?.note} className="concept-hero">
+        <div className="concept-hero__badge">
+          <span className="pill pill-ok">{activeEntity?.display_label}</span>
+          <strong>{activeAsset?.version_label} · {activeAsset?.title}</strong>
+        </div>
+      </HeroStage>
+
+      <aside className="concept-review-sidepanel">
+        <Panel title="当前已选组合" className="selection-summary-panel concept-side-summary">
           {conceptEntities.map((entity) => {
             const asset = conceptVersions.find((item) => item.asset_id === selection[entity.entity_id]);
             return (
@@ -79,18 +80,18 @@ export function ConceptSelectionBoard({ entities = [], assetVersions = [], appro
             );
           })}
         </Panel>
-      </section>
 
-      <Panel title="审稿动作" eyebrow="Review Actions" className="concept-action-panel">
-        <p className="panel-copy">
-          接受后会按“整体 + 多主体 + 场景”的混选组合提交模型生成。
-        </p>
-        <Button className="full-width" onClick={() => onFeedback?.(approvedPayload)}>提出修改意见</Button>
-        <Button className="full-width" onClick={() => onConfirmSelection?.(approvedPayload)}>查看已选组合</Button>
-        <Button variant="primary" className="full-width big-action" onClick={() => onApprove?.(approvedPayload)}>
-          接受组合，生成模型
-        </Button>
-      </Panel>
+        <Panel title="审稿动作" eyebrow="Review Actions" className="concept-action-panel">
+          <p className="panel-copy">
+            接受后会按“整体 + 多主体 + 场景”的混选组合提交模型生成。
+          </p>
+          <Button className="full-width" onClick={() => onFeedback?.(approvedPayload)}>提出修改意见</Button>
+          <Button className="full-width" onClick={() => onConfirmSelection?.(approvedPayload)}>查看已选组合</Button>
+          <Button variant="primary" className="full-width big-action" onClick={() => onApprove?.(approvedPayload)}>
+            接受组合，生成模型
+          </Button>
+        </Panel>
+      </aside>
     </div>
   );
 }

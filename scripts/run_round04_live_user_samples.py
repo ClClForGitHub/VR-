@@ -24,6 +24,7 @@ from agent_runtime.reference_intake import ReferenceBindingPlan, build_reference
 from agent_runtime.round04_live_samples import (
     Round04CaseManifest,
     Round04ReferenceImage,
+    Round04ScriptedUserAction,
     load_round04_case_manifests,
     round04_case_run_dir,
     validate_round04_case_manifests,
@@ -42,6 +43,7 @@ from agent_runtime.state import (
     EnvironmentSpec,
     LightingSpec,
     ReferenceBinding,
+    ReviewPatch,
     SceneInterpreterContext,
     SceneSpec,
     StyleSpec,
@@ -154,29 +156,73 @@ def run_case(
     _write_json(run_dir / "summary.json", summary)
     _write_frontend_status(run_dir)
 
-    runtime_image_ids = _simulate_user_turns_and_uploads(run_dir, case_dir=case_dir, manifest=manifest)
-    _apply_reference_bindings(run_dir, manifest=manifest, runtime_image_ids=runtime_image_ids)
-    _apply_scene_spec(run_dir, manifest=manifest, runtime_image_ids=runtime_image_ids)
-    _apply_prompt_pack(run_dir, manifest=manifest)
-    build_and_save_runtime_dispatch_plan(run_dir)
-    _append_stage(run_dir, "reference_upload_binding")
-    _append_stage(run_dir, "scene_spec")
-    _append_stage(run_dir, "concept_prompt_pack")
+    runtime_image_ids: dict[str, str] = {}
+    _simulate_initial_request(run_dir, case_dir=case_dir, manifest=manifest, runtime_image_ids=runtime_image_ids)
+    _prepare_concept_round(
+        run_dir,
+        manifest=manifest,
+        runtime_image_ids=runtime_image_ids,
+        visible_subject_ids=_visible_subject_ids_through_action(manifest, action_index=-1),
+    )
 
     if live:
         if live_llm_intake:
             issues.append("live_llm_intake_not_executed_provider_unavailable_or_not_wired")
-        live_result = _run_live_concept_worker(
+        applied_rounds = 0
+        concept_regens = 0
+        initial_result = _run_live_concept_worker(
             run_dir,
             concept_image_backend=concept_image_backend,
         )
-        issues.extend(live_result["issues"])
-        summary = _read_json(run_dir / "summary.json") or {}
-        summary["live_concept_worker"] = live_result
-        _write_json(run_dir / "summary.json", summary)
-        if live_result["concept_generation_applied"]:
+        _record_live_concept_worker(run_dir, initial_result, trigger="initial_request", action_index=None)
+        issues.extend(initial_result["issues"])
+        if initial_result["concept_generation_applied"]:
+            applied_rounds += 1
             _append_stage(run_dir, "live_generation")
-            issues.append("live_execution_blocked: downstream Hunyuan3D/HY-World/Blender stages are not started by the Round04B concept canary")
+        else:
+            status = "blocked"
+
+        if initial_result["concept_generation_applied"]:
+            for action_index, action in enumerate(manifest.scripted_user_actions):
+                message_id = _simulate_scripted_user_action(
+                    run_dir,
+                    case_dir=case_dir,
+                    manifest=manifest,
+                    action=action,
+                    action_index=action_index,
+                    runtime_image_ids=runtime_image_ids,
+                )
+                if _action_approves_concept(action):
+                    _apply_concept_approval(run_dir, action=action)
+                    continue
+                if not _action_requests_concept_regeneration(action):
+                    continue
+                if concept_regens >= max_concept_regens:
+                    issues.append(f"max_concept_regens_reached:{manifest.case_id}:{action_index + 1}")
+                    continue
+                concept_regens += 1
+                _append_review_patch(run_dir, action=action, action_index=action_index, source_turn_id=message_id)
+                _prepare_concept_round(
+                    run_dir,
+                    manifest=manifest,
+                    runtime_image_ids=runtime_image_ids,
+                    visible_subject_ids=_visible_subject_ids_through_action(manifest, action_index=action_index),
+                )
+                live_result = _run_live_concept_worker(
+                    run_dir,
+                    concept_image_backend=concept_image_backend,
+                )
+                _record_live_concept_worker(run_dir, live_result, trigger=action.action, action_index=action_index)
+                issues.extend(live_result["issues"])
+                if live_result["concept_generation_applied"]:
+                    applied_rounds += 1
+                    _mark_pending_review_patches_applied(run_dir)
+                    _append_stage(run_dir, "live_generation")
+                else:
+                    break
+
+        if applied_rounds:
+            issues.append("live_execution_blocked: downstream Hunyuan3D/HY-World/Blender stages are not started by the Round04 concept-only runner")
             status = "partial"
         else:
             status = "blocked"
@@ -257,6 +303,104 @@ def _initial_state(manifest: Round04CaseManifest) -> AgentProjectState:
         created_at=now,
         updated_at=now,
     )
+
+
+def _simulate_initial_request(
+    run_dir: Path,
+    *,
+    case_dir: Path,
+    manifest: Round04CaseManifest,
+    runtime_image_ids: dict[str, str],
+) -> None:
+    initial_images = [image for image in manifest.reference_images if image.upload_stage == "initial_request"]
+    initial_attachments = _upload_stage_images(run_dir, case_dir, manifest, initial_images, runtime_image_ids)
+    append_console_message(
+        run_dir,
+        role="user",
+        text=manifest.initial_user_request,
+        attachment_ids=initial_attachments,
+        metadata={"round04_case_id": manifest.case_id, "stage": "initial_request", "chronological_turn": 1},
+    )
+    _write_frontend_status(run_dir)
+
+
+def _simulate_scripted_user_action(
+    run_dir: Path,
+    *,
+    case_dir: Path,
+    manifest: Round04CaseManifest,
+    action: Round04ScriptedUserAction,
+    action_index: int,
+    runtime_image_ids: dict[str, str],
+) -> str:
+    attachments = _upload_stage_images(
+        run_dir,
+        case_dir,
+        manifest,
+        [image for image in manifest.reference_images if image.image_id in action.reference_image_ids],
+        runtime_image_ids,
+    )
+    message = append_console_message(
+        run_dir,
+        role="user",
+        text=action.text,
+        attachment_ids=attachments,
+        metadata={
+            "round04_case_id": manifest.case_id,
+            "gate": action.gate,
+            "action": action.action,
+            "expected_next_phase": action.expected_next_phase,
+            "chronological_turn": action_index + 2,
+        },
+    )
+    _write_frontend_status(run_dir)
+    return message.message_id
+
+
+def _prepare_concept_round(
+    run_dir: Path,
+    *,
+    manifest: Round04CaseManifest,
+    runtime_image_ids: dict[str, str],
+    visible_subject_ids: set[str],
+) -> None:
+    _apply_reference_bindings(run_dir, manifest=manifest, runtime_image_ids=runtime_image_ids)
+    _apply_scene_spec(
+        run_dir,
+        manifest=manifest,
+        runtime_image_ids=runtime_image_ids,
+        visible_subject_ids=visible_subject_ids,
+    )
+    _apply_prompt_pack(run_dir, manifest=manifest)
+    build_and_save_runtime_dispatch_plan(run_dir)
+    _append_stage(run_dir, "reference_upload_binding")
+    _append_stage(run_dir, "scene_spec")
+    _append_stage(run_dir, "concept_prompt_pack")
+
+
+def _record_live_concept_worker(
+    run_dir: Path,
+    live_result: dict[str, Any],
+    *,
+    trigger: str,
+    action_index: int | None,
+) -> None:
+    state = _read_state(run_dir)
+    summary = _read_json(run_dir / "summary.json") or {}
+    round_record = {
+        "trigger": trigger,
+        "action_index": action_index,
+        "concept_version": state.concept_bundle.concept_version if state.concept_bundle is not None else None,
+        "concept_generation_applied": live_result["concept_generation_applied"],
+        "worker_status": (live_result.get("worker") or {}).get("record", {}).get("status"),
+        "artifact_ids": (live_result.get("worker") or {}).get("record", {}).get("applied_artifact_ids", []),
+        "issues": list(live_result.get("issues") or []),
+    }
+    summary.setdefault("live_concept_workers", []).append(live_result)
+    summary.setdefault("concept_rounds", []).append(round_record)
+    summary["live_concept_worker"] = live_result
+    _write_json(run_dir / "summary.json", summary)
+    _write_frontend_status(run_dir)
 
 
 def _simulate_user_turns_and_uploads(
@@ -390,6 +534,7 @@ def _apply_scene_spec(
     *,
     manifest: Round04CaseManifest,
     runtime_image_ids: dict[str, str],
+    visible_subject_ids: set[str] | None = None,
 ) -> None:
     state = _read_state(run_dir)
     scene_reference_ids = [
@@ -399,6 +544,8 @@ def _apply_scene_spec(
     ]
     subject_specs = []
     for subject in manifest.expected_subjects:
+        if visible_subject_ids is not None and subject.subject_id not in visible_subject_ids:
+            continue
         reference_ids = [runtime_image_ids[image_id] for image_id in subject.reference_image_ids if image_id in runtime_image_ids]
         subject_specs.append(
             SubjectSpec(
@@ -576,6 +723,132 @@ def _write_live_blockers(run_dir: Path, *, manifest: Round04CaseManifest) -> lis
         row["issues"] = issues
     _write_jsonl(run_dir / "live_generation_calls.jsonl", rows)
     return issues
+
+
+def _visible_subject_ids_through_action(manifest: Round04CaseManifest, *, action_index: int) -> set[str]:
+    texts = [manifest.initial_user_request]
+    if action_index >= 0:
+        texts.extend(action.text for action in manifest.scripted_user_actions[: action_index + 1])
+    visible_text = _normalize_visible_text("\n".join(texts))
+    uploaded_manifest_image_ids = _manifest_image_ids_through_action(manifest, action_index=action_index)
+    visible = set()
+    for subject in manifest.expected_subjects:
+        if any(image_id in uploaded_manifest_image_ids for image_id in subject.reference_image_ids):
+            visible.add(subject.subject_id)
+            continue
+        if _subject_mentioned(subject.display_name, visible_text):
+            visible.add(subject.subject_id)
+    if visible:
+        return visible
+    return {subject.subject_id for subject in manifest.expected_subjects}
+
+
+def _manifest_image_ids_through_action(manifest: Round04CaseManifest, *, action_index: int) -> set[str]:
+    image_ids = {image.image_id for image in manifest.reference_images if image.upload_stage == "initial_request"}
+    if action_index >= 0:
+        for action in manifest.scripted_user_actions[: action_index + 1]:
+            image_ids.update(action.reference_image_ids)
+    return image_ids
+
+
+def _subject_mentioned(display_name: str, visible_text: str) -> bool:
+    normalized_name = _normalize_visible_text(display_name)
+    if not normalized_name:
+        return False
+    if normalized_name in visible_text:
+        return True
+    compact_name = normalized_name.replace("皮肤", "")
+    return bool(compact_name and compact_name in visible_text)
+
+
+def _normalize_visible_text(value: str) -> str:
+    return "".join(str(value).casefold().split())
+
+
+def _action_requests_concept_regeneration(action: Round04ScriptedUserAction) -> bool:
+    return action.action in {"request_concept_changes", "request_model_changes"} or action.expected_next_phase == "CONCEPT_GENERATION"
+
+
+def _action_approves_concept(action: Round04ScriptedUserAction) -> bool:
+    return action.gate == "concept_review" and action.action == "approve_concept"
+
+
+def _append_review_patch(
+    run_dir: Path,
+    *,
+    action: Round04ScriptedUserAction,
+    action_index: int,
+    source_turn_id: str,
+) -> None:
+    state = _read_state(run_dir)
+    patch = ReviewPatch(
+        patch_id=f"round04_review_patch_{action_index + 1:02d}",
+        source_turn_id=source_turn_id,
+        phase_created=state.phase,
+        target_type="global",
+        patch_type="add_subject" if "新增" in action.text else "appearance_change",
+        instruction=action.text,
+        structured_delta={
+            "round04_action": action.action,
+            "gate": action.gate,
+            "reference_image_ids": list(action.reference_image_ids),
+            "expected_next_phase": action.expected_next_phase,
+        },
+        affected_artifact_ids=_current_concept_artifact_ids(state),
+        status="pending",
+    )
+    updated = apply_state_updates(
+        state,
+        node_name="Round04ReviewPatchNormalizer",
+        updates={"review_patches": [*state.review_patches, patch]},
+    )
+    _persist_control_update(run_dir, updated, stage="review_patch", node_name="Round04ReviewPatchNormalizer")
+
+
+def _mark_pending_review_patches_applied(run_dir: Path) -> None:
+    state = _read_state(run_dir)
+    changed = False
+    for patch in state.review_patches:
+        if patch.status == "pending":
+            patch.status = "applied"
+            changed = True
+    if changed:
+        _persist_control_update(run_dir, state, stage="review_patch_applied", node_name="Round04RegenerationRouter")
+
+
+def _apply_concept_approval(run_dir: Path, *, action: Round04ScriptedUserAction) -> None:
+    state = _read_state(run_dir)
+    if state.concept_bundle is None:
+        return
+    state.concept_bundle.approved = True
+    state.concept_bundle.approved_at = utc_now_iso()
+    state.phase = _workflow_phase_from_action(action, fallback=WorkflowPhase.CONCEPT_APPROVED)
+    _persist_control_update(run_dir, state, stage="concept_approval", node_name="Round04ConceptApprovalGate")
+
+
+def _workflow_phase_from_action(
+    action: Round04ScriptedUserAction,
+    *,
+    fallback: WorkflowPhase,
+) -> WorkflowPhase:
+    if not action.expected_next_phase:
+        return fallback
+    try:
+        return WorkflowPhase(action.expected_next_phase)
+    except ValueError:
+        return fallback
+
+
+def _current_concept_artifact_ids(state: AgentProjectState) -> list[str]:
+    if state.concept_bundle is None:
+        return []
+    artifact_ids: list[str] = []
+    for ids in state.concept_bundle.subject_concept_images.values():
+        artifact_ids.extend(ids)
+    artifact_ids.extend(state.concept_bundle.scene_concept_image_ids)
+    if state.concept_bundle.final_preview_image_id:
+        artifact_ids.append(state.concept_bundle.final_preview_image_id)
+    return list(dict.fromkeys(artifact_ids))
 
 
 def _persist_control_update(run_dir: Path, state: AgentProjectState, *, stage: str, node_name: str) -> None:

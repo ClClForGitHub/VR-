@@ -60,6 +60,7 @@ class OpenAICompatibleChatClient:
         temperature: float = 0.0,
         max_tokens: int = 1024,
         response_format_json: bool = False,
+        extra_body: dict[str, Any] | None = None,
         dry_run: bool = False,
     ) -> LLMChatResult:
         selected_model = model or self.config.model
@@ -71,6 +72,8 @@ class OpenAICompatibleChatClient:
         }
         if response_format_json:
             payload["response_format"] = {"type": "json_object"}
+        if extra_body:
+            payload.update(extra_body)
         request_summary = {
             "url": self.config.chat_completions_url,
             "model": selected_model,
@@ -78,6 +81,17 @@ class OpenAICompatibleChatClient:
             "response_format_json": response_format_json,
             "key_suffix": self.config.api_key_suffix,
         }
+        if extra_body:
+            request_summary["extra_body_keys"] = sorted(extra_body)
+            if "enable_search" in extra_body:
+                request_summary["enable_search"] = bool(extra_body.get("enable_search"))
+            search_options = extra_body.get("search_options")
+            if isinstance(search_options, dict):
+                request_summary["search_options"] = {
+                    key: value
+                    for key, value in search_options.items()
+                    if key in {"forced_search", "search_strategy"}
+                }
         if dry_run:
             return LLMChatResult(
                 ok=True,
