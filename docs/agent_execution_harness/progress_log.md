@@ -470,6 +470,11 @@ Verification:
   reference-slot context: `cd web/creator_app && npm run build` -> passed;
   `cd web/creator_app && npm run smoke:backend-readonly` -> passed; evidence
   `run_logs/frontend_checks/creator_app_backend_readonly_20260702T095307Z`.
+- Follow-up Creator App intake/backend check after wiring backend-context
+  intake messages and local `/chat` + `/upload` endpoints:
+  `cd web/creator_app && npm run build` -> passed;
+  `cd web/creator_app && npm run smoke:backend-readonly` -> passed; evidence
+  `run_logs/frontend_checks/creator_app_backend_readonly_20260702T095440Z`.
 
 ## 2026-07-02 - Creator App 5173 contract doc sweep
 

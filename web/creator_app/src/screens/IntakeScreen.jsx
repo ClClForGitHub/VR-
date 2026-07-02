@@ -4,10 +4,8 @@ import { Composer } from '../components/Composer.jsx';
 import { Button } from '../components/Button.jsx';
 import { ReferenceTray } from '../components/ReferenceTray.jsx';
 
-const initialUserPrompt = '创建一个古老遗迹中的机械巨兽守护者，场景在日落时分，光线穿透破损的拱门，地面有反射水洼，氛围史诗、神秘、宏大。';
-
 export function IntakeScreen({ viewModel, onStartGeneration, onUploadReference, onSendRuntimeChat }) {
-  const { referenceSlots } = viewModel;
+  const { referenceSlots, intake } = viewModel;
   const [submittedTurns, setSubmittedTurns] = useState([]);
   const [pendingAttachmentIds, setPendingAttachmentIds] = useState([]);
   const conversationScrollRef = useRef(null);
@@ -23,35 +21,51 @@ export function IntakeScreen({ viewModel, onStartGeneration, onUploadReference, 
     () => [...uploadedSubjectSlots, ...uploadedSceneSlots].map((slot) => slot.mention),
     [uploadedSubjectSlots, uploadedSceneSlots],
   );
+  const backendTurns = intake?.userTurns || [];
+  const taskTitle = taskTitleForPhase(viewModel.phase);
+  const taskText = taskTextForPhase(viewModel.phase, intake);
   const conversationTurns = useMemo(() => [
     {
       id: 'assistant-intake',
       role: 'assistant',
       label: 'image23D Agent',
-      meta: '初始需求整理',
-      text: `我已经进入输入/绑定阶段。右侧资源库会作为本轮对话上下文：已绑定 ${uploadedSubjectSlots.length} 个主体参考和 ${uploadedSceneSlots.length} 个场景参考。`,
-      tags: ['等待用户确认', '可继续补充描述', '@ 可插入语义引用'],
+      meta: viewModel.publicPhaseLabel || '项目上下文',
+      text: `当前项目「${viewModel.project.title}」已加载后端上下文：${intake?.subjectNames?.length || uploadedSubjectSlots.length} 个主体，${intake?.environment ? '1 个场景' : `${uploadedSceneSlots.length} 个场景参考`}。`,
+      tags: [
+        `${uploadedSubjectSlots.length}/5 主体参考`,
+        `${uploadedSceneSlots.length}/1 场景参考`,
+        ...(intake?.styleKeywords?.slice(0, 2) || []),
+      ],
     },
     {
       id: 'backend-task',
       role: 'backend',
       label: 'Runtime',
-      meta: '后端任务提示',
-      title: '建议任务：生成第一轮概念图',
-      text: '当前信息足够形成 ConceptPromptPack；提交后在本页显示后台进度，完成后弹出揭幕 Overlay。',
-      tags: ['concept_generation', '95%-99% 等待后端完成'],
+      meta: '后端任务状态',
+      title: taskTitle,
+      text: taskText,
+      tags: [viewModel.phase || 'runtime', viewModel.runtime?.status || '等待后端状态'],
       compact: true,
     },
-    {
-      id: 'user-initial',
-      role: 'user',
-      label: '用户',
-      meta: '本轮新信息',
-      text: initialUserPrompt,
-      mentions: activeMentions,
-    },
+    ...backendTurns.map((turn) => ({
+      ...turn,
+      mentions: turn.mentions?.length > 0 ? turn.mentions : activeMentionsForTurn(turn, activeMentions),
+    })),
     ...submittedTurns,
-  ], [activeMentions, submittedTurns, uploadedSceneSlots.length, uploadedSubjectSlots.length]);
+  ], [
+    activeMentions,
+    backendTurns,
+    intake,
+    submittedTurns,
+    taskText,
+    taskTitle,
+    uploadedSceneSlots.length,
+    uploadedSubjectSlots.length,
+    viewModel.phase,
+    viewModel.project.title,
+    viewModel.publicPhaseLabel,
+    viewModel.runtime?.status,
+  ]);
 
   useLayoutEffect(() => {
     const scrollNode = conversationScrollRef.current;
@@ -164,10 +178,10 @@ export function IntakeScreen({ viewModel, onStartGeneration, onUploadReference, 
           <div className="generation-launch-strip">
             <div>
               <strong>生成任务</strong>
-              <span>当前对话会作为本轮概念图生成上下文；启动后仍停留在本页显示后台进度。</span>
+              <span>{taskText}</span>
             </div>
             <Button variant="primary" className="big-action" onClick={() => onStartGeneration?.('concept')}>
-              开始生成概念图
+              {viewModel.source === 'backend' ? '提交当前上下文' : '开始生成概念图'}
             </Button>
           </div>
         </section>
@@ -175,4 +189,27 @@ export function IntakeScreen({ viewModel, onStartGeneration, onUploadReference, 
       </div>
     </>
   );
+}
+
+function taskTitleForPhase(phase) {
+  if (phase === 'SUBJECT_ASSET_GENERATION' || phase === 'SCENE_ASSET_GENERATION') return '当前任务：生成主体/场景模型';
+  if (phase === 'CONCEPT_REVIEW' || phase === 'CONCEPT_APPROVED') return '当前任务：确认概念组合';
+  if (phase === 'BLENDER_ASSEMBLY_EXECUTION') return '当前任务：组装 Blender 场景';
+  return '建议任务：整理需求并生成概念图';
+}
+
+function taskTextForPhase(phase, intake) {
+  if (phase === 'SUBJECT_ASSET_GENERATION' || phase === 'SCENE_ASSET_GENERATION') {
+    return '概念组合已经确认，后端正在生成主体和场景资产；你仍可以追加对话或上传参考图进入下一轮反馈。';
+  }
+  if (phase === 'CONCEPT_REVIEW' || phase === 'CONCEPT_APPROVED') {
+    return '后端已经产出概念候选；本页对话、资源槽和显式 @ 引用会继续作为后续反馈上下文。';
+  }
+  if (intake?.conversationSummary) return intake.conversationSummary;
+  return '当前对话会作为本轮概念图生成上下文；启动后仍停留在本页显示后台进度。';
+}
+
+function activeMentionsForTurn(turn, activeMentions) {
+  if (turn.attachmentIds?.length > 0) return [];
+  return turn.id === 'scene-spec-fallback' ? activeMentions : [];
 }

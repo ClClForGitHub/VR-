@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,10 +34,6 @@ export function creatorBackendPlugin(options = {}) {
         }
 
         try {
-          if (request.method !== 'GET') {
-            sendJson(response, 405, { ok: false, error: 'creator backend currently exposes read-only GET endpoints' });
-            return;
-          }
           await handleCreatorApi({ request, response, parsedUrl, repoRoot, runsRoot });
         } catch (error) {
           sendJson(response, 500, { ok: false, error: error.message || String(error) });
@@ -46,7 +43,7 @@ export function creatorBackendPlugin(options = {}) {
   };
 }
 
-async function handleCreatorApi({ response, parsedUrl, repoRoot, runsRoot }) {
+async function handleCreatorApi({ request, response, parsedUrl, repoRoot, runsRoot }) {
   const route = parsedUrl.pathname.replace(/^\/api\/creator\/?/, '');
   const parts = route.split('/').filter(Boolean).map(decodeURIComponent);
 
@@ -66,6 +63,10 @@ async function handleCreatorApi({ response, parsedUrl, repoRoot, runsRoot }) {
   }
 
   if (parts.length === 1) {
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { ok: false, error: 'projects collection supports GET only' });
+      return;
+    }
     const collection = parsedUrl.searchParams.get('collection') || DEFAULT_COLLECTION;
     const limit = clampInt(parsedUrl.searchParams.get('limit'), 1, 500, 100);
     sendJson(response, 200, listProjects({ runsRoot, collection, limit }));
@@ -74,13 +75,26 @@ async function handleCreatorApi({ response, parsedUrl, repoRoot, runsRoot }) {
 
   const projectKey = parts[1];
   const projectDir = resolveProjectDir(runsRoot, projectKey);
-  if (parts.length === 2 || parts[2] === 'bundle') {
+  if (request.method === 'GET' && (parts.length === 2 || parts[2] === 'bundle')) {
     sendJson(response, 200, buildProjectBundle({ runsRoot, projectDir }));
     return;
   }
 
-  if (parts[2] === 'file') {
+  if (request.method === 'GET' && parts[2] === 'file') {
     sendProjectFile({ response, projectDir, relativePath: parsedUrl.searchParams.get('path') || '' });
+    return;
+  }
+
+  if (request.method === 'POST' && parts[2] === 'chat') {
+    const payload = JSON.parse((await readRequestBody(request)).toString('utf8') || '{}');
+    sendJson(response, 201, appendProjectChat({ projectDir, payload }));
+    return;
+  }
+
+  if (request.method === 'POST' && parts[2] === 'upload') {
+    const contentType = request.headers['content-type'] || '';
+    const fields = parseMultipart(await readRequestBody(request), contentType);
+    sendJson(response, 201, saveProjectUpload({ projectDir, projectKey, fields }));
     return;
   }
 
@@ -214,6 +228,159 @@ function sendProjectFile({ response, projectDir, relativePath }) {
   response.setHeader('Content-Type', CONTENT_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
   response.setHeader('Cache-Control', 'no-store');
   fs.createReadStream(filePath).pipe(response);
+}
+
+function appendProjectChat({ projectDir, payload }) {
+  const now = new Date().toISOString();
+  const message = {
+    message_id: `msg_${crypto.randomBytes(6).toString('hex')}`,
+    role: payload.role || 'user',
+    text: payload.text || '',
+    created_at: now,
+    attachment_ids: Array.isArray(payload.attachment_ids) ? payload.attachment_ids : [],
+    metadata: payload.metadata || {},
+  };
+  if (!message.text.trim()) {
+    throw new Error('message text must not be empty');
+  }
+  appendJsonl(path.join(projectDir, 'runtime_console', 'chat.jsonl'), message);
+  const statePath = path.join(projectDir, 'state.json');
+  const state = readJson(statePath);
+  if (state && message.role === 'user') {
+    state.user_turns = Array.isArray(state.user_turns) ? state.user_turns : [];
+    state.user_turns.push({
+      turn_id: message.message_id,
+      text: message.text,
+      image_ids: message.attachment_ids,
+      phase_at_turn: state.phase || null,
+      created_at: now,
+    });
+    state.updated_at = now;
+    writeJson(statePath, state);
+  }
+  return message;
+}
+
+function saveProjectUpload({ projectDir, projectKey, fields }) {
+  const file = fields.file;
+  if (!file?.content?.length) {
+    throw new Error('upload requires a non-empty file field');
+  }
+  const now = new Date().toISOString();
+  const uploadId = `upload_${crypto.randomBytes(6).toString('hex')}`;
+  const safeName = safeFilename(file.filename || 'reference.png');
+  const relativePath = `runtime_console/uploads/${uploadId}_${safeName}`;
+  const targetPath = path.join(projectDir, relativePath);
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, file.content);
+  const sha256 = crypto.createHash('sha256').update(file.content).digest('hex');
+  const metadata = {
+    upload_id: uploadId,
+    original_filename: file.filename || safeName,
+    ...Object.fromEntries(Object.entries(fields).filter(([key]) => key !== 'file').map(([key, value]) => [key, String(value)])),
+  };
+  const artifactId = `artifact_${uploadId}`;
+  const imageId = `image_${uploadId}`;
+  const mimeType = file.contentType || 'application/octet-stream';
+  const result = {
+    ok: true,
+    upload_id: uploadId,
+    artifact_id: mimeType.startsWith('image/') ? artifactId : null,
+    image_id: mimeType.startsWith('image/') ? imageId : null,
+    filename: safeName,
+    uri: `/api/creator/projects/${encodeURIComponent(projectKey)}/file?path=${encodeURIComponent(relativePath)}`,
+    mime_type: mimeType,
+    size_bytes: file.content.length,
+    sha256,
+    created_at: now,
+    metadata,
+  };
+  appendJsonl(path.join(projectDir, 'runtime_console', 'uploads.jsonl'), result);
+
+  const statePath = path.join(projectDir, 'state.json');
+  const state = readJson(statePath);
+  if (state && mimeType.startsWith('image/')) {
+    state.artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
+    state.input_images = Array.isArray(state.input_images) ? state.input_images : [];
+    state.artifacts.push({
+      artifact_id: artifactId,
+      artifact_type: 'INPUT_IMAGE',
+      uri: targetPath,
+      mime_type: mimeType,
+      semantic_role: 'creator_app_upload',
+      size_bytes: file.content.length,
+      sha256,
+      created_at: now,
+      metadata,
+    });
+    state.input_images.push({
+      image_id: imageId,
+      artifact_id: artifactId,
+      uri: targetPath,
+      mime_type: mimeType,
+      user_declared_label: metadata.display_label || null,
+      notes: metadata.mention || 'Uploaded through Creator App.',
+      width: null,
+      height: null,
+    });
+    state.updated_at = now;
+    writeJson(statePath, state);
+  }
+  return result;
+}
+
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    request.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    request.on('end', () => resolve(Buffer.concat(chunks)));
+    request.on('error', reject);
+  });
+}
+
+function parseMultipart(body, contentType) {
+  const boundaryMatch = String(contentType).match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!boundaryMatch) throw new Error('multipart upload missing boundary');
+  const boundary = boundaryMatch[1] || boundaryMatch[2];
+  const sections = body.toString('binary').split(`--${boundary}`);
+  const fields = {};
+  for (const section of sections) {
+    if (!section || section === '--\r\n' || section === '--') continue;
+    const normalized = section.replace(/^\r\n/, '').replace(/\r\n--$/, '').replace(/\r\n$/, '');
+    const splitIndex = normalized.indexOf('\r\n\r\n');
+    if (splitIndex < 0) continue;
+    const rawHeaders = normalized.slice(0, splitIndex);
+    const rawBody = normalized.slice(splitIndex + 4);
+    const disposition = rawHeaders.match(/content-disposition:\s*form-data;([^\r\n]+)/i)?.[1] || '';
+    const name = disposition.match(/name="([^"]+)"/i)?.[1];
+    if (!name) continue;
+    const filename = disposition.match(/filename="([^"]*)"/i)?.[1];
+    if (filename !== undefined) {
+      const contentTypeHeader = rawHeaders.match(/content-type:\s*([^\r\n]+)/i)?.[1]?.trim();
+      fields[name] = {
+        filename,
+        contentType: contentTypeHeader,
+        content: Buffer.from(rawBody, 'binary'),
+      };
+    } else {
+      fields[name] = rawBody;
+    }
+  }
+  return fields;
+}
+
+function appendJsonl(filePath, payload) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.appendFileSync(filePath, `${JSON.stringify(payload)}\n`, 'utf8');
+}
+
+function writeJson(filePath, payload) {
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+}
+
+function safeFilename(filename) {
+  const basename = path.basename(filename || 'upload.bin').replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^[._]+|[._]+$/g, '');
+  return basename || 'upload.bin';
 }
 
 function artifactCounts(artifacts) {
