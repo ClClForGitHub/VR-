@@ -4506,6 +4506,110 @@ body {
   }
 }
 
+/* Backend image review: avoid hard-cropping portrait or very large generated images. */
+.hero-stage.hero-stage--fit .hero-stage__image,
+.concept-hero.hero-stage--fit .hero-stage__image {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  object-fit: contain;
+  opacity: 1;
+  background: transparent;
+  pointer-events: none;
+}
+
+.hero-stage.hero-stage--fill .hero-stage__image,
+.concept-hero.hero-stage--fill .hero-stage__image {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.concept-hero .hero-stage__backdrop {
+  filter: blur(24px) saturate(.88);
+  opacity: .32;
+  transform: scale(1.05);
+}
+
+.hero-stage__controls {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 8px;
+  background: rgba(4, 8, 11, .72);
+  backdrop-filter: blur(14px);
+}
+
+.hero-stage__controls button,
+.hero-image-modal__bar button {
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 7px;
+  padding: 5px 10px;
+  color: #d5e2e6;
+  background: rgba(255, 255, 255, .055);
+}
+
+.hero-stage__controls button.is-active {
+  border-color: rgba(77, 235, 243, .56);
+  color: var(--glow);
+  background: rgba(77, 235, 243, .13);
+}
+
+.hero-image-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: rgba(2, 5, 7, .94);
+}
+
+.hero-image-modal__bar {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+}
+
+.hero-image-modal__bar strong {
+  min-width: 0;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
+.hero-image-modal__viewport {
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+}
+
+.hero-image-modal__viewport img {
+  display: block;
+  max-width: none;
+  max-height: none;
+  margin: 0 auto;
+  border-radius: 8px;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, .46);
+}
+
 /* Model review correction: large center viewer, left preview versions, right actions. */
 .model-layout.model-layout--review {
   min-height: calc(100vh - 210px);
