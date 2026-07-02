@@ -100,6 +100,13 @@ and documentation updates in the final report.
 The user has authorized this conversation to spawn any number of sub-agents when
 useful.
 
+Default to parallel sub-agent acceleration for non-trivial work whenever the
+task can be split safely. Prefer using multiple narrow sub-agents in parallel
+for read-only discovery, disjoint implementation slices, independent
+verification, repo hygiene checks, and service-readiness checks. The main agent
+remains responsible for integration, user-facing decisions, live-service command
+boundaries, and the final report.
+
 Agents may independently spawn sub-agents for:
 
 - read-only audits of existing code, scripts, docs, and runtime state;
